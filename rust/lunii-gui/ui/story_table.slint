@@ -1,0 +1,186 @@
+// Story list (port of the QTreeWidget `tree_stories`).
+
+import { ListView, Palette } from "std-widgets.slint";
+import { StoryRow, Theme } from "common.slint";
+
+component HeaderCell inherits Text {
+    vertical-alignment: center;
+    font-weight: 600;
+    overflow: elide;
+}
+
+export component StoryTable inherits Rectangle {
+    in property <[StoryRow]> rows;
+    in property <bool> show-nm: true;
+    in property <bool> show-size: false;
+    in property <bool> interactive: true;
+    in property <int> current-row: -1;
+    in property <bool> drop-hover: false;
+    // text shown when there is no story
+    in property <string> placeholder;
+
+    // left click (ctrl, shift) or right click on a row
+    callback row-pointer(row: int, ctrl: bool, shift: bool, right: bool);
+    // arrow keys / page keys
+    callback key-nav(delta: int, shift: bool);
+    callback select-all();
+
+    property <length> row-height: 26px;
+    property <length> col-flag: 30px;
+    property <length> col-uuid: 300px;
+    property <length> col-size: 80px;
+
+    border-width: 1px;
+    border-color: root.drop-hover ? Theme.selection : Palette.border;
+    border-radius: 2px;
+    background: Palette.alternate-background;
+    opacity: root.interactive ? 1 : 0.6;
+
+    public function ensure-visible(row: int) {
+        if (row < 0) {
+            return;
+        }
+        if (row * root.row-height < -list.content-y) {
+            list.content-y = -row * root.row-height;
+        } else if ((row + 1) * root.row-height > -list.content-y + list.visible-height) {
+            list.content-y = -((row + 1) * root.row-height - list.visible-height);
+        }
+    }
+
+    focus-scope := FocusScope {
+        enabled: root.interactive;
+        key-pressed(event) => {
+            if (event.modifiers.alt || (event.modifiers.control && event.text != "a")) {
+                return reject;
+            }
+            if (event.text == Key.UpArrow) {
+                root.key-nav(-1, event.modifiers.shift);
+                return accept;
+            }
+            if (event.text == Key.DownArrow) {
+                root.key-nav(1, event.modifiers.shift);
+                return accept;
+            }
+            if (event.text == Key.PageUp) {
+                root.key-nav(-10, event.modifiers.shift);
+                return accept;
+            }
+            if (event.text == Key.PageDown) {
+                root.key-nav(10, event.modifiers.shift);
+                return accept;
+            }
+            if (event.text == Key.Home) {
+                root.key-nav(-100000, event.modifiers.shift);
+                return accept;
+            }
+            if (event.text == Key.End) {
+                root.key-nav(100000, event.modifiers.shift);
+                return accept;
+            }
+            if (event.text == "a" && event.modifiers.control) {
+                root.select-all();
+                return accept;
+            }
+            reject
+        }
+
+        VerticalLayout {
+            // header
+            Rectangle {
+                height: root.row-height;
+                background: Palette.control-background;
+                HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    spacing: 4px;
+                    HeaderCell { text: @tr("Story Name"); horizontal-stretch: 1; }
+                    if root.show-nm: HeaderCell { text: @tr("NM"); width: root.col-flag; horizontal-alignment: center; }
+                    HeaderCell { text: @tr("DB"); width: root.col-flag; horizontal-alignment: center; }
+                    HeaderCell { text: "UUID"; width: root.col-uuid; }
+                    if root.show-size: HeaderCell { text: @tr("Size"); width: root.col-size; horizontal-alignment: right; }
+                }
+                Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
+            }
+
+            list := ListView {
+                for row[index] in root.rows: Rectangle {
+                    height: root.row-height;
+                    background: row.selected ? Theme.selection : (index == root.current-row && focus-scope.has-focus ? #8883 : transparent);
+                    property <color> fg: row.selected ? white : (row.hidden ? Theme.hidden-text : Palette.foreground);
+
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        spacing: 4px;
+                        Text {
+                            text: row.name;
+                            color: fg;
+                            font-italic: row.hidden;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                        if root.show-nm: Rectangle {
+                            width: root.col-flag;
+                            if row.night-mode: Text {
+                                text: "☾";
+                                color: fg;
+                                font-size: 16px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                        Text {
+                            text: row.official ? "O" : "T";
+                            color: fg;
+                            width: root.col-flag;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: row.uuid;
+                            color: fg;
+                            width: root.col-uuid;
+                            font-family: Theme.mono-font;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        if root.show-size: Text {
+                            text: row.size;
+                            color: fg;
+                            width: root.col-size;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    TouchArea {
+                        enabled: root.interactive;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.down) {
+                                focus-scope.focus();
+                                if (event.button == PointerEventButton.left) {
+                                    root.row-pointer(index, event.modifiers.control || event.modifiers.meta, event.modifiers.shift, false);
+                                } else if (event.button == PointerEventButton.right) {
+                                    root.row-pointer(index, false, false, true);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if root.rows.length == 0: Text {
+        y: root.row-height;
+        height: parent.height - root.row-height;
+        width: parent.width;
+        text: root.placeholder;
+        color: Theme.hidden-text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        wrap: word-wrap;
+    }
+}

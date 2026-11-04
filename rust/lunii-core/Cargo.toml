@@ -1,0 +1,35 @@
+[package]
+name = "lunii-core"
+description = "Core library to manage Lunii and Flam storytellers (port of Lunii.QT pkg/api)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aes = "0.9"
+anyhow = "1"
+base64 = "0.23"
+deunicode = "1"
+dirs = "7"
+fs4 = "1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
+indexmap = "2"
+log = "0.4"
+serde_json = { version = "1", features = ["preserve_order"] }
+sevenz-rust2 = "0.24"
+thiserror = "2"
+unicode-normalization = "0.1"
+ureq = { version = "3", features = ["json"] }
+uuid = "1"
+walkdir = "2"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+sysinfo = { version = "0.40", default-features = false, features = ["disk"] }
+
+[dev-dependencies]
+tempfile = "3"
+walkdir = "2"
+zip = { version = "9", default-features = false, features = ["deflate"] }

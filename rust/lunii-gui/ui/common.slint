@@ -1,0 +1,71 @@
+// Shared types and small widgets.
+
+export struct StoryRow {
+    name: string,
+    uuid: string,
+    size: string,
+    night-mode: bool,
+    official: bool,
+    hidden: bool,
+    selected: bool,
+}
+
+export struct LogLine {
+    text: string,
+    // 0: debug, 1: info, 2: warning, 3: error
+    level: int,
+}
+
+export enum DialogKind {
+    none,
+    confirm-remove,
+    login,
+    night-mode,
+    about,
+}
+
+export global Theme {
+    out property <color> hidden-text: #808080;
+    out property <color> warning: #d32f2f;
+    out property <color> selection: #3584e4;
+    out property <color> status-text: #808080;
+    in property <string> mono-font: "monospace";
+}
+
+/// Flat button showing an icon (refresh, DB...).
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <length> icon-size: 22px;
+    in property <length> icon-width: self.icon-size;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    width: self.icon-width + 8px;
+    height: self.icon-size + 8px;
+    border-radius: 4px;
+    background: area.has-hover && root.enabled ? #8882 : transparent;
+    opacity: root.enabled ? 1 : 0.4;
+
+    Image {
+        source: root.icon;
+        width: root.icon-width;
+        height: root.icon-size;
+        image-fit: contain;
+    }
+
+    area := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+/// Clickable text link.
+export component Link inherits Text {
+    callback clicked();
+    color: #3584e4;
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}

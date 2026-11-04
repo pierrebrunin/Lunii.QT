@@ -1,0 +1,471 @@
+// Main window (port of pkg/ui/main.ui + pkg/main_window.py).
+
+import { ComboBox, LineEdit, ProgressIndicator, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
+import { StoryRow, LogLine, DialogKind, Theme, IconButton } from "common.slint";
+import { StoryTable } from "story_table.slint";
+import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog } from "dialogs.slint";
+import { LogPanel } from "log_panel.slint";
+
+export { Theme, StoryRow, LogLine, DialogKind }
+
+component StatusText inherits Text {
+    color: Theme.status-text;
+    vertical-alignment: center;
+    font-size: 12px;
+}
+
+component StatusSeparator inherits Rectangle {
+    width: 1px;
+    background: Palette.border;
+}
+
+export component MainWindow inherits Window {
+    in property <string> app-version;
+    in property <image> device-icon: @image-url("img/lunii.png");
+
+    // devices
+    in property <[string]> devices;
+    in-out property <int> device-index: -1;
+    in-out property <string> device-value;
+    in property <string> device-placeholder;
+    callback device-selected(index: int);
+
+    // night mode button
+    in property <bool> nm-available;
+    in property <bool> nm-active;
+
+    // filter
+    in-out property <string> filter;
+    callback filter-edited();
+
+    // stories
+    in property <[StoryRow]> rows;
+    in property <int> current-row: -1;
+    in property <bool> show-nm: true;
+    in-out property <bool> show-size: false;
+    in-out property <bool> show-details: true;
+    in property <string> list-placeholder;
+    in property <bool> drop-hover;
+    callback row-pointer(row: int, ctrl: bool, shift: bool, right: bool);
+    callback key-nav(delta: int, shift: bool);
+    callback select-all();
+
+    // details panel
+    in property <bool> details-visible;
+    in property <image> picture;
+    in property <bool> has-picture;
+    in property <string> description;
+    in property <bool> details-dimmed;
+
+    // progress
+    in property <bool> busy;
+    in property <string> total-text;
+    in property <float> total-progress;
+    in property <bool> total-visible;
+    in property <string> story-text;
+    in property <float> story-progress;
+    in property <bool> story-visible;
+    in property <float> file-progress;
+    in property <bool> file-visible;
+    in property <bool> abort-visible;
+    callback abort();
+
+    // status bar
+    in property <string> status;
+    in property <string> snu;
+    in property <string> hw-version;
+    in property <string> free-space;
+    in property <bool> low-space;
+    in property <string> story-count;
+    callback device-info-clicked();
+
+    // log panel
+    in property <[LogLine]> log-lines;
+    in-out property <bool> log-visible;
+    in-out property <length> log-height: 170px;
+    in-out property <int> log-level-index: 2;
+    in-out property <string> log-filter;
+    in property <string> log-file-path;
+    // highest level logged while the panel was hidden (0: nothing, 2: warning, 3: error)
+    in property <int> log-alert;
+    // incremented to scroll the panel to the last line
+    in property <int> log-scroll-token;
+    callback log-filter-changed();
+    callback log-clear();
+    callback log-copy();
+    callback log-open-folder();
+
+    // menu states
+    in property <bool> device-ready;
+    in property <bool> is-flam;
+    in property <bool> can-import;
+    in property <bool> has-selection;
+    in property <bool> can-export;
+    in property <bool> can-export-all;
+    in property <bool> ffmpeg-present;
+    in property <bool> update-available;
+    in property <string> latest-version;
+    // every menu entry goes through this callback, with the action name
+    callback action(name: string);
+
+    // dialogs
+    in-out property <DialogKind> dialog: DialogKind.none;
+    in property <string> confirm-message;
+    in-out property <string> login-email;
+    in-out property <string> login-password;
+    in-out property <bool> nm-enabled;
+    in-out property <bool> nm-limit;
+    in-out property <bool> nm-autoplay;
+    in-out property <int> nm-max-stories: 3;
+    in-out property <bool> nm-turnoff;
+    callback confirm-remove-accepted();
+    callback login-accepted();
+    callback night-mode-accepted();
+    callback open-url(url: string);
+
+    title: "Lunii Qt-Manager " + root.app-version;
+    icon: root.device-icon;
+    preferred-width: 665px;
+    preferred-height: 600px;
+    min-width: 500px;
+    min-height: 400px;
+
+    public function ensure-visible(row: int) {
+        table.ensure-visible(row);
+    }
+
+    property <bool> story-actions: root.device-ready && !root.busy;
+    property <bool> selection-actions: root.story-actions && root.has-selection;
+
+    MenuBar {
+        Menu {
+            title: @tr("File");
+            MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: !root.busy; activated => { root.action("open-device"); } }
+            MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: !root.busy; activated => { root.action("refresh-devices"); } }
+            MenuSeparator { }
+            MenuItem { title: @tr("Import STUdio DB"); enabled: !root.busy; activated => { root.action("import-db"); } }
+            MenuItem { title: @tr("Refresh official DB"); enabled: !root.busy; activated => { root.action("refresh-db"); } }
+            MenuSeparator { }
+            MenuItem { title: @tr("Exit"); shortcut: @keys(Control + Q); activated => { root.action("exit"); } }
+        }
+        Menu {
+            title: @tr("Stories");
+            MenuItem { title: @tr("Move Top"); shortcut: @keys(Control + UpArrow); enabled: root.selection-actions; activated => { root.action("move-top"); } }
+            MenuItem { title: @tr("Move Up"); shortcut: @keys(Alt + UpArrow); enabled: root.selection-actions; activated => { root.action("move-up"); } }
+            MenuItem { title: @tr("Move Down"); shortcut: @keys(Alt + DownArrow); enabled: root.selection-actions; activated => { root.action("move-down"); } }
+            MenuItem { title: @tr("Move Bottom"); shortcut: @keys(Control + DownArrow); enabled: root.selection-actions; activated => { root.action("move-bottom"); } }
+            MenuSeparator { }
+            MenuItem { title: @tr("Hide / Show"); shortcut: @keys(Control + H); enabled: root.selection-actions; activated => { root.action("hide"); } }
+            MenuItem { title: @tr("Force Night Mode"); shortcut: @keys(Control + N); enabled: root.selection-actions && !root.is-flam; activated => { root.action("night-mode"); } }
+            MenuSeparator { }
+            MenuItem { title: @tr("Import"); shortcut: @keys(Control + I); enabled: root.story-actions && root.can-import; activated => { root.action("import"); } }
+            MenuItem { title: @tr("Export"); shortcut: @keys(Control + S); enabled: root.selection-actions && root.can-export; activated => { root.action("export"); } }
+            MenuItem { title: @tr("Export All"); shortcut: @keys(Control + Shift + S); enabled: root.story-actions && root.can-export-all; activated => { root.action("export-all"); } }
+            MenuItem { title: @tr("Remove"); shortcut: @keys(Delete); enabled: root.selection-actions; activated => { root.action("remove"); } }
+        }
+        Menu {
+            title: @tr("Tools");
+            MenuItem { title: @tr("Show size"); checkable: true; checked <=> root.show-size; activated => { root.action("show-size"); } }
+            MenuItem { title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action("show-details"); } }
+            MenuSeparator { }
+            MenuItem { title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action("show-log"); } }
+            MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action("get-firmware"); } }
+            MenuSeparator { }
+            Menu {
+                title: @tr("Lost stories");
+                enabled: root.story-actions;
+                MenuItem { title: @tr("Find"); activated => { root.action("find-lost"); } }
+                MenuItem { title: @tr("Recover"); activated => { root.action("recover-lost"); } }
+                MenuItem { title: @tr("Remove"); activated => { root.action("remove-lost"); } }
+            }
+            MenuSeparator { }
+            MenuItem {
+                title: root.ffmpeg-present ? @tr("FFMPEG detected") : @tr("FFMPEG is missing (📥)");
+                checked: root.ffmpeg-present;
+                enabled: !root.busy;
+                activated => { root.action("ffmpeg"); }
+            }
+        }
+        Menu {
+            title: root.update-available ? @tr("[ Help ]") : @tr("Help");
+            if root.update-available: MenuItem { title: @tr("Update to {}", root.latest-version); activated => { root.action("update"); } }
+            MenuItem { title: @tr("About"); shortcut: @keys(F1); activated => { root.action("about"); } }
+        }
+        if root.update-available: Menu {
+            title: @tr("Update is available");
+            MenuItem { title: @tr("Update to {}", root.latest-version); activated => { root.action("update"); } }
+        }
+    }
+
+    VerticalLayout {
+        padding: 6px;
+        spacing: 6px;
+
+        // ---------------------------------------------------------------- top bar
+        HorizontalLayout {
+            spacing: 4px;
+            IconButton {
+                icon: @image-url("../../../res/refresh.png");
+                enabled: !root.busy;
+                clicked => { root.action("refresh-devices"); }
+            }
+            Rectangle {
+                max-width: 220px;
+                min-width: 150px;
+                combo := ComboBox {
+                    width: parent.width;
+                    model: root.devices;
+                    current-index <=> root.device-index;
+                    current-value <=> root.device-value;
+                    enabled: !root.busy && root.devices.length > 0;
+                    selected => { root.device-selected(self.current-index); }
+                }
+                if root.device-index < 0: Text {
+                    x: 10px;
+                    width: parent.width - 36px;
+                    text: root.device-placeholder;
+                    color: Theme.hidden-text;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            IconButton {
+                icon: root.nm-active ? @image-url("../../../res/mode_night.png") : @image-url("../../../res/mode_day.png");
+                icon-size: 22px;
+                icon-width: 47px;
+                enabled: root.nm-available && !root.busy;
+                clicked => { root.action("night-mode-settings"); }
+            }
+            Rectangle { min-width: 20px; max-width: 80px; horizontal-stretch: 0.2; }
+            LineEdit {
+                text <=> root.filter;
+                placeholder-text: @tr("(Story Name or UUID filter text)");
+                edited => { root.filter-edited(); }
+                horizontal-stretch: 1;
+            }
+            IconButton {
+                icon: @image-url("../../../res/refresh_db.png");
+                enabled: !root.busy;
+                clicked => { root.action("refresh-db"); }
+            }
+        }
+
+        // ---------------------------------------------------------------- stories
+        ContextMenuArea {
+            enabled: root.story-actions;
+            Menu {
+                MenuItem { title: @tr("Move Top"); enabled: root.selection-actions; activated => { root.action("move-top"); } }
+                MenuItem { title: @tr("Move Up"); enabled: root.selection-actions; activated => { root.action("move-up"); } }
+                MenuItem { title: @tr("Move Down"); enabled: root.selection-actions; activated => { root.action("move-down"); } }
+                MenuItem { title: @tr("Move Bottom"); enabled: root.selection-actions; activated => { root.action("move-bottom"); } }
+                MenuSeparator { }
+                MenuItem { title: @tr("Hide / Show"); enabled: root.selection-actions; activated => { root.action("hide"); } }
+                MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions && !root.is-flam; activated => { root.action("night-mode"); } }
+                MenuSeparator { }
+                MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action("import"); } }
+                MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action("export"); } }
+                MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action("export-all"); } }
+                MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action("remove"); } }
+            }
+
+            table := StoryTable {
+                min-height: 150px;
+                vertical-stretch: 1;
+                rows: root.rows;
+                current-row: root.current-row;
+                show-nm: root.show-nm;
+                show-size: root.show-size;
+                interactive: !root.busy;
+                drop-hover: root.drop-hover;
+                placeholder: root.list-placeholder;
+                row-pointer(row, ctrl, shift, right) => { root.row-pointer(row, ctrl, shift, right); }
+                key-nav(delta, shift) => { root.key-nav(delta, shift); }
+                select-all => { root.select-all(); }
+            }
+        }
+
+        // ---------------------------------------------------------------- progress
+        if root.total-visible || root.story-visible: HorizontalLayout {
+            spacing: 6px;
+            VerticalLayout {
+                spacing: 4px;
+                if root.total-visible: HorizontalLayout {
+                    spacing: 6px;
+                    Text { text: root.total-text; min-width: 90px; horizontal-alignment: center; vertical-alignment: center; }
+                    ProgressIndicator { progress: root.total-progress; height: 10px; y: (parent.height - self.height) / 2; }
+                }
+                if root.story-visible: HorizontalLayout {
+                    spacing: 6px;
+                    Text {
+                        text: root.story-text;
+                        min-width: 90px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        font-family: Theme.mono-font;
+                        font-size: 12px;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 2px;
+                        ProgressIndicator { progress: root.story-progress; height: 10px; }
+                        if root.file-visible: ProgressIndicator { progress: root.file-progress; height: 6px; }
+                    }
+                }
+            }
+            if root.abort-visible: IconButton {
+                icon: @image-url("../../../res/remove.png");
+                icon-size: 24px;
+                clicked => { root.abort(); }
+            }
+        }
+
+        // ---------------------------------------------------------------- details
+        if root.details-visible: HorizontalLayout {
+            spacing: 6px;
+            height: 192px;
+            opacity: root.details-dimmed ? 0.5 : 1;
+            if root.has-picture: Image {
+                source: root.picture;
+                width: 192px;
+                height: 192px;
+                image-fit: contain;
+            }
+            TextEdit {
+                text: root.description;
+                read-only: true;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+        }
+
+        // ---------------------------------------------------------------- log
+        if root.log-visible: VerticalLayout {
+            spacing: 0px;
+            // drag handle resizing the panel
+            Rectangle {
+                height: 6px;
+                Rectangle {
+                    width: 40px;
+                    height: 2px;
+                    border-radius: 1px;
+                    background: handle.has-hover || handle.pressed ? Palette.foreground : Palette.border;
+                }
+                handle := TouchArea {
+                    mouse-cursor: ns-resize;
+                    moved => {
+                        root.log-height = clamp(root.log-height - (self.mouse-y - self.pressed-y), 80px, max(80px, root.height - 320px));
+                    }
+                }
+            }
+            panel := LogPanel {
+                height: root.log-height;
+                lines: root.log-lines;
+                level-index <=> root.log-level-index;
+                filter <=> root.log-filter;
+                file-path: root.log-file-path;
+                filter-changed => { root.log-filter-changed(); }
+                clear-clicked => { root.log-clear(); }
+                copy-clicked => { root.log-copy(); }
+                open-folder-clicked => { root.log-open-folder(); }
+                close-clicked => { root.log-visible = false; }
+                init => { self.scroll-to-bottom(); }
+            }
+            // a property change, as the conditional panel can't be called from outside
+            property <int> scroll-token: root.log-scroll-token;
+            changed scroll-token => { panel.scroll-to-bottom(); }
+        }
+
+        // ---------------------------------------------------------------- status bar
+        HorizontalLayout {
+            height: 20px;
+            spacing: 8px;
+            Text {
+                text: root.status;
+                overflow: elide;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                font-size: 12px;
+            }
+            if root.snu != "": Rectangle {
+                HorizontalLayout {
+                    spacing: 8px;
+                    StatusSeparator { }
+                    StatusText { text: "SNU: " + root.snu; }
+                    StatusSeparator { }
+                    StatusText { text: root.hw-version; }
+                    StatusSeparator { }
+                    StatusText {
+                        text: @tr("Free :") + " " + root.free-space;
+                        color: root.low-space ? Theme.warning : Theme.status-text;
+                    }
+                    if root.story-count != "": StatusSeparator { }
+                    if root.story-count != "": StatusText { text: root.story-count; }
+                }
+                // device details: click to copy them to the clipboard
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.device-info-clicked(); }
+                }
+            }
+            StatusSeparator { }
+            // log panel toggle, with a dot for warnings / errors not seen yet
+            Rectangle {
+                width: 20px;
+                Image {
+                    source: @image-url("../../../res/debug_log.png");
+                    width: 16px;
+                    height: 16px;
+                    opacity: root.log-visible || log-toggle.has-hover ? 1 : 0.6;
+                }
+                if root.log-alert >= 2: Rectangle {
+                    x: parent.width - 7px;
+                    y: 1px;
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 3.5px;
+                    background: root.log-alert >= 3 ? Theme.warning : #c77700;
+                }
+                log-toggle := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.action("show-log"); }
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------- dialogs
+    if root.dialog == DialogKind.confirm-remove: ConfirmRemoveDialog {
+        width: root.width;
+        height: root.height;
+        message: root.confirm-message;
+        close => { root.dialog = DialogKind.none; }
+        accepted => { root.dialog = DialogKind.none; root.confirm-remove-accepted(); }
+    }
+    if root.dialog == DialogKind.login: LoginDialog {
+        width: root.width;
+        height: root.height;
+        email <=> root.login-email;
+        password <=> root.login-password;
+        close => { root.dialog = DialogKind.none; }
+        accepted => { root.dialog = DialogKind.none; root.login-accepted(); }
+    }
+    if root.dialog == DialogKind.night-mode: NightModeDialog {
+        width: root.width;
+        height: root.height;
+        nm-enabled <=> root.nm-enabled;
+        nm-limit <=> root.nm-limit;
+        nm-autoplay <=> root.nm-autoplay;
+        nm-max-stories <=> root.nm-max-stories;
+        nm-turnoff <=> root.nm-turnoff;
+        close => { root.dialog = DialogKind.none; }
+        accepted => { root.dialog = DialogKind.none; root.night-mode-accepted(); }
+        open-guide => { root.open-url(@tr("https://support.lunii.com/hc/en-gb/categories/4404826574353-The-Night-Mode")); }
+    }
+    if root.dialog == DialogKind.about: AboutDialog {
+        width: root.width;
+        height: root.height;
+        version: root.app-version;
+        close => { root.dialog = DialogKind.none; }
+        open-url(url) => { root.open-url(url); }
+    }
+}

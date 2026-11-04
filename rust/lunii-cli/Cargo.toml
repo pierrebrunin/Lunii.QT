@@ -1,0 +1,21 @@
+[package]
+name = "lunii-cli"
+description = "Command line tool to manage Lunii and Flam storytellers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "lunii-cli"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+lunii-core = { path = "../lunii-core" }
+rpassword = "7"
+uuid = "1"
+walkdir = "2"

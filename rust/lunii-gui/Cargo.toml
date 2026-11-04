@@ -1,0 +1,32 @@
+[package]
+name = "lunii-gui"
+description = "Lunii.QT graphical interface (Slint)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "lunii-qt"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+arboard = { version = "3", default-features = false }
+jiff = "0.2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
+log = "0.4"
+lunii-core = { path = "../lunii-core" }
+open = "5"
+rfd = "0.17"
+slint = { version = "~1.18", default-features = false, features = ["std", "compat-1-2", "accessibility", "backend-winit", "renderer-femtovg", "renderer-software", "unstable-winit-030"] }
+sys-locale = "0.3"
+uuid = "1"
+
+[build-dependencies]
+slint-build = "~1.18"
+
+[features]
+# development tool: headless rendering of the screens (see src/screenshot.rs)
+screenshot = ["slint/software-renderer-systemfonts"]

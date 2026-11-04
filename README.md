@@ -7,7 +7,7 @@
 
 # Lunii.QT
 
-Une application Python QT pour gérer sa fabrique à histoires (fah) <u>Lunii</u> et <u>Flam</u>, avec les opérations de  **organisation** / **importation** / **exportation** / **téléchargement du firmware**   
+Une application (Rust, interface Slint) pour gérer sa fabrique à histoires (fah) <u>Lunii</u> et <u>Flam</u>, avec les opérations de  **organisation** / **importation** / **exportation** / **téléchargement du firmware**   
 pour Windows 11 / MacOs (11 BigSur => 26 Tahoe) / Linux   
 (compatible avec les archives STUdio, **avec** support de la conversion audio)
 > **FAQ :** Veuillez consulter les questions déjà posées dans la section [Discussions](https://github.com/o-daneel/Lunii.QT/discussions), ou les [Issues](https://github.com/o-daneel/Lunii.QT/issues?q=is%3Aissue%20label%3A%22good%20first%20issue%22) pertinentes.
@@ -46,7 +46,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
   - [Formats d'archives pris en charge](#formats-darchives-pris-en-charge)
     - [pour Lunii](#pour-lunii)
     - [pour Flam](#pour-flam)
-  - [Python ? Guide Pratique](#python--guide-pratique)
+  - [Compilation](#compilation)
     - [Préparation de l'environnement](#préparation-de-lenvironnement)
     - [Génération des UI](#génération-des-ui)
     - [Génération des fichiers de tranduction](#génération-des-fichiers-de-tranduction)
@@ -331,69 +331,16 @@ Lunii.QT vous offre la possibilité de sauvegarder la dernière version du Firmw
 * Fichier de configuration pour sauvegarder la configuration du menu (tailles / détails)
 * Ajout d'une image à la liste des arbres ?
 
-## Python ? Guide Pratique
+## Compilation
 
-### Préparation de l'environnement
-
-Commencer par cloner le dépot.  
-Préparer l'environnement virtuel pour le projet et installer les dépendances.
-```bash
-$ python3 -m venv venv
-```
-
-Passez à votre venv
-* sous Linux   
-   `source venv/bin/activate`
-* sous Windows   
-  `.\venv\Scripts\activate.bat`
-
-Installer les dépendances
-```
-$ pip install -r requirements.txt
-```
-
-**Linux** a besoin d'une dépendance supplémentaire.
+L'application est écrite en Rust (interface [Slint](https://slint.dev)). Le code
+est dans le dossier [`rust/`](rust/README.md), qui décrit la compilation, les
+variables d'environnement utiles et la génération des traductions.
 
 ```bash
-$ apt install libxcb-cursor0
-```
-### Génération des UI
-```bash
-$ pyside6-uic pkg/ui/main.ui -o pkg/ui/main_ui.py
-$ pyside6-uic pkg/ui/nm.ui   -o pkg/ui/nm_ui.py
-```
-### Génération des fichiers de tranduction
-```bash
-$ pyside6-lupdate ./pkg/ui/main.ui ./pkg/ui/nm.ui ./pkg/ui/about_ui.py ./pkg/ui/debug_ui.py ./pkg/ui/login_ui.py ./pkg/nm_window.py ./pkg/main_window.py ./pkg/ierWorker.py ./pkg/versionWorker.py ./pkg/api/devices.py ./pkg/api/device_flam.py ./pkg/api/device_lunii.py -ts ./locales/fr_FR.ts
-$ pyside6-linguist -style WindowsVista ./locales/fr_FR.ts  # optionnaly, update translations
-$ pyside6-lrelease ./locales/fr_FR.ts ./locales/fr_FR.qm  
-```
-### Génération du fichier de ressource
-```bash
-$ pyside6-rcc resources.qrc -o resources_rc.py
-```
-### Exécution
-```bash
-$ python lunii-qt.py
-```
-
-### Générer un exécutable GUI
-**NOTE :** PyInstaller by its design generates executables that are flagged by AntiViruses. Those are false positives. cx_Freeze is an alternative that allows to avoid such false positives.
-
-#### PyInstaller 👎
-```bash
-$ pip install pyinstaller
-$ pyinstaller lunii-qt.spec
-...
-$ dist\lunii-qt
-```
-
-#### cx_Freeze 👍
-```bash
-$ pip install cx_Freeze
-$ python setup.py build_exe
-...
-$ build/exe.win-amd64/lunii-qt
+cd rust
+cargo build --release
+./target/release/lunii-qt
 ```
 
 ## Astuces

@@ -1,0 +1,776 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+
+# Converted from locales/fr_FR.ts by tools/ts2po.py
+
+msgid "About"
+msgstr "A propos"
+
+msgid "\n<h2><b>Lunii Qt-Manager</b></h2>\n<br />\n\n\nThis application is a PoC that allows to manage the contents of your own Lunii Storyteller,\nincluding changing stories order, backup (for personal usage only), restore, and downloading \nyour latest Lunii firmware (to eventually restore from a broken device).<br />\n  \n<br />Powered by Python 3.11, PySide 6.7<br />\n<br />\n\nIcons are provided freely by <a href=\"https://icons8.com\">icon8</a><br />\n \nLogos are provided by <b>malexxx</b><br /><br />\n\n<b>URL : </b><a href=\"https://github.com/o-daneel/Lunii.QT\">https://github.com/o-daneel/Lunii.QT</a>\n"
+msgstr "\n<h2><b>Lunii Qt-Manager</b></h2>\n<br />\n\nCette application est une preuve de concept (PoC) qui permet de gérer le contenu de votre \nFabrique à histoires Lunii, modifier l’ordre des histoires, effectuer une sauvegarde \n(à usage strictement personnel), restaurer et télécharger la dernière version du firmware Lunii \n(afin de pouvoir éventuellement restaurer un appareil défectueux).<br />\n  \n<br />Développé avec Python 3.11, PySide 6.7<br />\n<br />\n\nLes icônes sont fournies gratuitement par <a href=\"https://icons8.com\">icon8</a><br />\n \nLes logos sont fournis par <b>malexxx</b><br /><br />\n\n<b>URL : </b><a href=\"https://github.com/o-daneel/Lunii.QT\">https://github.com/o-daneel/Lunii.QT</a>\n"
+
+msgid "Debug Log"
+msgstr "Journal de debug"
+
+msgid "(Log filter text)"
+msgstr "(texte pour filter le log)"
+
+msgid "Try \"error\" or \"fail\"."
+msgstr "Essayer \"erreur\" ou \"echec\"."
+
+msgid "Application Log Empty ..."
+msgstr "Le journal de l'application est vide ..."
+
+msgid "Close"
+msgstr "Fermer"
+
+msgid "Clear"
+msgstr "Vider"
+
+msgid "Save"
+msgstr "Enregistrer"
+
+msgid "Save Log"
+msgstr "Enregistrer le journal"
+
+msgid "Text Files (*.txt);;All Files (*)"
+msgstr "Fichiers texte (*.txt);;Tous les fichiers (*)"
+
+msgid "Not a valid UUID - {}"
+msgstr "UUID non valide - {}"
+
+msgid "Recovered - {} - {}"
+msgstr "Récupéré - {} - {}"
+
+msgid "Found - {} - {}"
+msgstr "Trouvé - {} - {}"
+
+msgid "Skipping lost story (seems broken/incomplete) - {} - {}"
+msgstr "On ignore cette histoire (semble corrompue ou incomplète) - {} - {}"
+
+msgid "Already in list but invalid - {} - {}"
+msgstr "Déjà dans la liste, mais invalide - {} - {}"
+
+msgid "Already in list - {} - {}"
+msgstr "Déjà dans la liste - {} - {}"
+
+msgid "Deleting - {}"
+msgstr "Supression - {}"
+
+msgid "Failed to delete - {}"
+msgstr "Impossible de supprimer - {}"
+
+msgid "🚧 Loading {}..."
+msgstr "🚧 Chargement de {}..."
+
+msgid "Not enough space left on Flam (only {}MB)"
+msgstr "Pas assez de place restant sur la Flam (reste {}Mo)"
+
+msgid "Please update your Flam with v2.x.x to support Lunii Stories"
+msgstr "Veuillez mettre à jour votre Flam avec la v2.x.x pour bénéfiier des histoires officielles Lunii"
+
+msgid "No UUID file found in archive. Unable to add this story."
+msgstr "Fichier UUID introuvable dans l'archive. Impossible de charger cette histoire."
+
+msgid "'{}' is already loaded !"
+msgstr "'{}' est déjà chargée !"
+
+msgid "Import aborted, performing cleanup on current story..."
+msgstr "Chargement interrompu, nettoyage en cours..."
+
+msgid "File {}/{} > {}"
+msgstr "Fichier {}/{} > {}"
+
+msgid "Authorization file creation..."
+msgstr "Création du fichier d'autorisation..."
+
+msgid "Transciphering Flam story"
+msgstr "Transchiffrement de l'histoire Flam"
+
+msgid "Flam story backup is incomplete, missing key file."
+msgstr "Sauvegarde incomplète d'une histoire Flam, le fichier key est manquant."
+
+msgid "Restoring Flam story backup"
+msgstr "Restauration de la sauvegarde d'une histoire Flam"
+
+msgid "Lunii story from Flam personnal backup can't be imported on this device (SNU mismatch)."
+msgstr "Cette sauvegarde personnelle Lunii sur Flam ne peut être importée (le SNU ne correspond pas)."
+
+msgid "Restoring Lunii story from Flam personnal backup..."
+msgstr "Restauration d'une sauvegarde personnelle Lunii sur Flam..."
+
+msgid "> Adding UUID ..."
+msgstr "> Ajout de l'UUID ..."
+
+msgid "UUID directory is missing in archive !"
+msgstr "L'archive ne contient pas le dossier UUID !"
+
+msgid "Archive seems to be made of Lunii story (Flam story expected)"
+msgstr "Cette archive semble être une histoire Lunii (attendu une histoire Flam)"
+
+msgid "'{}' is already loaded, aborting !"
+msgstr "'{}' est déjà chargée, annulation !"
+
+msgid "Transciphering file {}"
+msgstr "Transchiffrement du ficiher {}"
+
+msgid "UUID parse error {}"
+msgstr "Erreur de lecture de l'UUID {}"
+
+msgid "Reading 7zip archive... (takes time)"
+msgstr "Lecture de l'archive 7zip... (prend du temps)"
+
+msgid "Corrupted file format. Unable to add this story."
+msgstr "Archive corrompue. Impossible de charger cette histoire."
+
+msgid "plain.pk format detected ! Unable to add this story."
+msgstr "Format plain.pk détecté, au lieu de STUdio ! Impossible de charger cette histoire."
+
+msgid "missing 'story.json'. Unable to add this story."
+msgstr "Fichier 'story.json' manquant. Impossible de charger cette histoire."
+
+msgid "STUdio story with non MP3 audio file. You need FFMPEG tool to import such kind of story, refer to README.md"
+msgstr "Histoire STUdio avec des audio non MP3. L'outil FFMPEG est nécessaire pour ce type d'histoire, consulter README.md"
+
+msgid "⌛ Removing tags from audio {}"
+msgstr "⌛ Suppression des tags de l'audio {}"
+
+msgid "Night mode file creation..."
+msgstr "Création du fichier Mode Nuit..."
+
+msgid "🚧 Exporting {} - {}"
+msgstr "🚧 Export de {} - {}"
+
+msgid "> Zipping story ..."
+msgstr "> Compression de l'histoire ..."
+
+msgid "failed to create ZIP - {}"
+msgstr "Erreur pendant la création du ZIP - {}"
+
+msgid "> Adding thumbnail ..."
+msgstr "> Ajout de la vignette ..."
+
+msgid "> Adding metadata ..."
+msgstr "> Ajout des metadata ..."
+
+msgid "at least {} match your pattern. Try a longer UUID."
+msgstr "au moins {} correspondances trouvées. Essayez avec un bout d'UUID plus long."
+
+msgid "This story format is not supported for export."
+msgstr "Ce format d'histoire n'est pas exportable."
+
+msgid "This story is not present on your storyteller"
+msgstr "Cette histoire n'est pas présente sur votre appareil"
+
+msgid "🚧 Removing {} - {}..."
+msgstr "🚧 Suppresion {} - {}..."
+
+msgid "Reading Flam loaded stories..."
+msgstr "Lecture des histoires chargées dans la Flam..."
+
+msgid "Found duplicate story, cleaning..."
+msgstr "Histoire dupliquée identifiée, nettoyage..."
+
+msgid "Read {} stories"
+msgstr "{} histoires lues"
+
+msgid "Read {} hidden stories"
+msgstr "{} histoires cachées lues"
+
+msgid "LuniiStore credentials"
+msgstr "Informations de connexion"
+
+msgid "Password:"
+msgstr "Mot de passe :"
+
+msgid "No backup of v{:d} metadata file found, creating one..."
+msgstr "Aucune sauvegarde trouvée pour le fichier metadata v{:d}, copie en cours..."
+
+msgid "Forging story keys for v6 metadata file"
+msgstr "Préparation des clés histoire au format v6"
+
+msgid "Forging story keys for v7+ metadata file"
+msgstr "Préparation des clés histoire au format v7"
+
+msgid "v3 key file read from {}"
+msgstr "Fichier clé appareil v3 lu depuis {}"
+
+msgid ".md v{:d} file found ({})"
+msgstr ".md v{:d} fichier lu ({})"
+
+msgid ".md file is not v{:d} ({})"
+msgstr "Le fichier .md n'est pas une v{:d} ({})"
+
+msgid ".md file SNU mismatch ({}) vs. ({})"
+msgstr "Le SNU du fichier ne correspond pas ({}) vs. ({})"
+
+msgid "no .md v{:d} file found ({})"
+msgstr ".md v{:d} fichier introuvable ({})"
+
+msgid "🛑 corrupted metadata file ? (maybe SD corruption)"
+msgstr "🛑 Fichier metadata corrompu ? (peut être une SD défectueuse)"
+
+msgid "⚠️ Unsupported or corrupted metadata file v{:d}, checking for backups..."
+msgstr "⚠️ Fichier metadata v{:d} non supporté ou corrompu, vérification d'une sauvegarde..."
+
+msgid "🛑 no keys at all, unable to import stories. See README on Github for help."
+msgstr "🛑 pas de clés, impossible d'importer des histoires. Lisez le README sur Github."
+
+msgid "✅ story keys found, import supported."
+msgstr "✅ clés histoires trouvées, import possible."
+
+msgid "Missing {} in {}"
+msgstr "{} manquant dans {}"
+
+msgid "Bad authorization file bt in {}"
+msgstr "Mauvais fichier d'autorisation bt dans {}"
+
+msgid "Missing rf/{} in {}"
+msgstr "rf/{} manquant dans {}"
+
+msgid "Missing sf/{} in {}"
+msgstr "sf/{} manquant dans {}"
+
+msgid "Failed to decode ri or si file"
+msgstr "Echec de déchiffrement du fichier ri ou si"
+
+msgid "Importing {} archives..."
+msgstr "Import de {} archives..."
+
+msgid "Not enough space left on Lunii (only {}MB)"
+msgstr "Pas assez de place restant sur la Lunii (reste {}Mo)"
+
+msgid "⌛ Transcoding audio {} : {} KB ..."
+msgstr "⌛ Transcodage audio {} : {} Ko ..."
+
+msgid "Lunii v3 requires Device Key for genuine story export."
+msgstr "Une Lunii v3 nécessite des clés de l'appareil pour exporter une histoire."
+
+msgid "Lunii v3 personnal backup can't be imported on this device (SNU mismatch)."
+msgstr "Cette sauvegarde personnelle Lunii v3 ne peut être importée (le SNU ne correspond pas)."
+
+msgid "Restoring Lunii v3 personnal backup..."
+msgstr "Restauration d'une sauvegarde personnelle Lunii v3..."
+
+msgid "Story directory not found ({})"
+msgstr "Dossier de l'histoire introuvable ({})"
+
+msgid "Read {} {}stories"
+msgstr "{} histoires lues"
+
+msgid "Reading Lunii loaded stories..."
+msgstr "Lecture des histoires chargées dans la Lunii..."
+
+msgid "Config file not found, using default values"
+msgstr "Fichier de configuration manquant, utilisation des valeurs par défaut"
+
+msgid "🛑 Unsupported config version {}, using default values"
+msgstr "🛑 Version du fichier de configuration non supporté {}, utilisation des valeurs par défaut"
+
+msgid "Reading Lunii config..."
+msgstr "Lecture de la configuration de la Lunii..."
+
+msgid "Lunii Qt-Manager"
+msgstr "Lunii Qt-Manager"
+
+msgid "Exit"
+msgstr "Quitter"
+
+msgid "Import"
+msgstr "Importer"
+
+msgid "Export"
+msgstr "Exporter"
+
+msgid "Export All"
+msgstr "Tout Exporter"
+
+msgid "Move Up"
+msgstr "Déplacer vers le haut"
+
+msgid "Move Down"
+msgstr "Déplacer vers le bas"
+
+msgid "Remove"
+msgstr "Supprimer"
+
+msgid "Show size"
+msgstr "Afficher les tailles"
+
+msgid "Show size for each stories"
+msgstr "Afficher les tailles pour chaques histoires"
+
+msgid "Get FW Update"
+msgstr "Récupérer le firmware"
+
+msgid "Get firmaware update for current Lunii"
+msgstr "Récupérer la mise à jour du firmware pour la Lunii connectée"
+
+msgid "Show story details"
+msgstr "Détails des histoires"
+
+msgid "Move Top"
+msgstr "Déplacer en haut"
+
+msgid "Move Bottom"
+msgstr "Déplacer en bas"
+
+msgid "Open device"
+msgstr "Ouvrir"
+
+msgid "Open Lunii or Flam device"
+msgstr "Ouvre une Lunii ou une Flam"
+
+msgid "Show Log"
+msgstr "Afficher le journal"
+
+msgid "Update to v2.X.X"
+msgstr "Mise à jour vers v2.X.X"
+
+msgid "FFMPEG detected"
+msgstr "FFMPEG détecté"
+
+msgid "Recover"
+msgstr "Récupérer"
+
+msgid "Factory Reset"
+msgstr "Réinitialisation"
+
+msgid "Find"
+msgstr "Rechercher"
+
+msgid "Hide / Show"
+msgstr "Cacher / Montrer"
+
+msgid "Import STUdio DB"
+msgstr "Importer une DB STUdio"
+
+msgid "Refresh official DB"
+msgstr "Rafraichir la DB officielle"
+
+msgid "Force Night Mode"
+msgstr "Force le mode nuit"
+
+msgid "Night Mode"
+msgstr "Mode nuit"
+
+msgid "Refresh connected devices"
+msgstr "Rafraichir les appareils"
+
+msgid "Select your Lunii"
+msgstr "Sélectionner votre Lunii"
+
+msgid "(Story Name or UUID filter text)"
+msgstr "(filtre \"Nom d'une histoire\"  ou  \"UUID\")"
+
+msgid "Force official Lunii DB to be refreshed"
+msgstr "Forcer la base officielle Lunii a être rechargée"
+
+msgid "Size"
+msgstr "Taille"
+
+msgid "Story Name"
+msgstr "Nom de l'histoire"
+
+msgid "Database source (Official / Third Party)"
+msgstr "Base d'origine (Officielle / Tierce)"
+
+msgid "Total"
+msgstr "Total"
+
+msgid "Operation progress"
+msgstr "Avancement de l'opération"
+
+msgid "Writing speed"
+msgstr "Vitesse d'écriture"
+
+msgid "Story progress"
+msgstr "Histoire en cours"
+
+msgid "File progress"
+msgstr "Fichier en cours"
+
+msgid "Abort current process"
+msgstr "Annuler la tâche en cours"
+
+msgid "No Thumb"
+msgstr "Pas d'image"
+
+msgid "Story description"
+msgstr "Description de l'histoire"
+
+msgid "&File"
+msgstr "&Fichier"
+
+msgid "File"
+msgstr "Fichier"
+
+msgid "&Tools"
+msgstr "&Outils"
+
+msgid "Tools"
+msgstr "Outils"
+
+msgid "Lost stories"
+msgstr "Histoires perdues"
+
+msgid "&Stories"
+msgstr "&Histoires"
+
+msgid "Stories"
+msgstr "Histoires"
+
+msgid "Update 2.2.X is released"
+msgstr "Mise à jour v2.X.X disponible"
+
+msgid "Help"
+msgstr "Aide"
+
+msgid "FFMPEG is missing (📥)"
+msgstr "FFMPEG absent (📥)"
+
+msgid "No Lunii detected 😥, try File/Open"
+msgstr "Aucune Lunii détectée 😥, essayer Fichier/Ouvrir"
+
+msgid "No Lunii detected 😥"
+msgstr "Aucune Lunii détectée 😥"
+
+msgid "🛑 PermissionError : Unable to open this device"
+msgstr "🛑 PermissionError : Impossible d'ouvrir cet appareil"
+
+msgid "Failed to fetch BMP file."
+msgstr "Echec durant la récupération de l'image."
+
+msgid "Fetching official Lunii DB..."
+msgstr "Récupération de la base officielle Lunii..."
+
+msgid "👍 Lunii DB refreshed."
+msgstr "👍 Lunii DB récupérée."
+
+msgid "🛑 Lunii DB failed."
+msgstr "🛑 Erreur Lunii DB."
+
+msgid "Device info sent to clipboard."
+msgstr "Information copiées dans le presse papier."
+
+msgid "Open Lunii device"
+msgstr "Ouvrir un appareil"
+
+msgid "Not a Lunii, nor Flam or unsupported one 😥"
+msgstr "Ni une Lunii, ni une Flam, ou alors non reconnue 😥"
+
+msgid "Open STUdio DB"
+msgstr "Ouvrir une base STUdio"
+
+msgid "⚠️ Login failed, please check your credentials"
+msgstr "⚠️ Echec de l'identification, vérifiez vos informations"
+
+msgid "Login success..."
+msgstr "Identifié...."
+
+msgid "✅ Firmware downloaded to"
+msgstr "✅ Firmware téléchargé dans"
+
+msgid "🛑 Fail to download update"
+msgstr "🛑 Echec du téléchargement de la mise à jour"
+
+msgid "🛑 Network error..."
+msgstr "🛑 Erreur reseau..."
+
+msgid "Latest Github release"
+msgstr "Dernière mise à jour Github"
+
+msgid "🛑 Unable to fetch version from Github"
+msgstr "🛑 Impossible de récupérer l'information de la dernière version sur Github"
+
+msgid "[ Help ]"
+msgstr "[ Aide ]"
+
+msgid "Update is available"
+msgstr "Mise à jour disponible"
+
+msgid "Update to {}"
+msgstr "Mettre à jour en {}"
+
+msgid "Story is hidden for LuniiStore synchronization"
+msgstr "Histoire masquée pour une synchronisation LuniiStore"
+
+msgid "Free :"
+msgstr "Libre :"
+
+msgid "stories"
+msgstr "histoires"
+
+msgid "Delete stories"
+msgstr "Supprimer les histoires"
+
+msgid "You are requesting to delete : \n"
+msgstr "Souhaitez vous supprimer : \n"
+
+msgid "\n(and too many others)\n"
+msgstr "\n(et plusieurs autres)\n"
+
+msgid "\nDo you want to proceed ?"
+msgstr "\nVoulez-vous continuer ?"
+
+msgid "🛑 Export cancelled"
+msgstr "🛑 Export annulé"
+
+msgid "🛑 Export All cancelled"
+msgstr "🛑 Tout exporter annulé"
+
+msgid "🛑 Unable to update story ..."
+msgstr "🛑 Impossible de mettre à jour l'histoire..."
+
+msgid "✅ Stories updated..."
+msgstr "✅ Histoire(s) mise(s) à jour..."
+
+msgid "Open Stories"
+msgstr "Ouvrir une histoire"
+
+msgid "Importing stories..."
+msgstr "Import d'histoires..."
+
+msgid "🛑 Unable to import story, missing story key for Lunii v3"
+msgstr "🛑 Impossible d'importer des histroires, pas de clés histoires pour la Lunii v3"
+
+msgid "Abort requested, please wait..."
+msgstr "Annulation demandée, patientez..."
+
+msgid "🛑 Aborted"
+msgstr "🛑 Annulé"
+
+msgid "🛑 Critical error : {}"
+msgstr "🛑 Erreur critique : {}"
+
+msgid "😮‍💨 This process is veeeeeeeeery long due to Flam firmware. 😴 Be patient ..."
+msgstr "😮‍💨 Cette opération est très loooooooongue à cause de la Flam 😴 Soyez patient ..."
+
+msgid "Time to import : {}"
+msgstr "Durée de l'import : {}"
+
+msgid "👍 New story imported : '{}'"
+msgstr "👍 Nouvelle histoire importée : '{}'"
+
+msgid "🛑 Failed to import : '{}'"
+msgstr "🛑 Echec de l'import : '{}'"
+
+msgid "✅ Import done : {}/{}"
+msgstr "✅ Import terminé : {}/{}"
+
+msgid "👍 Story exported to '{}'"
+msgstr "👍 Histoire exportée vers '{}'"
+
+msgid "🛑 Failed to export : '{}'"
+msgstr "🛑 Echec de l'export : '{}'"
+
+msgid "✅ Export done : {}/{}"
+msgstr "✅ Export terminé : {}/{}"
+
+msgid "👍 Story removed: '{}'"
+msgstr "👍 Histoire supprimée : '{}'"
+
+msgid "🛑 Failed to remove : '{}'"
+msgstr "🛑 Impossible de supprimer : '{}'"
+
+msgid "✅ {} stories removed"
+msgstr "✅ {} histoires supprimées"
+
+msgid "✅ Stories parsed, sizes updated"
+msgstr "✅ Histoires analysées, tailles mises à jour"
+
+msgid "🚧 Analyzing storage ..."
+msgstr "🚧 En cours d'analyse ..."
+
+msgid "✅ Storage parsed, {} lost stories {}"
+msgstr "✅ Appareil analysé, {} histoires perdues {}"
+
+msgid "found (try to recover them)"
+msgstr "trouvées (essayez de les récupérer)"
+
+msgid "recovered"
+msgstr "récupérées"
+
+msgid "✅ Storage parsed, {} lost stories removed, {} MB recovered"
+msgstr "✅ Appareil analysé, {} histoires perdues supprimées, {} Mo récupérés"
+
+msgid "✅ STUdio DB imported ({}/{})."
+msgstr "✅ Base STUdio importée ({}/{})."
+
+msgid "✅ Downloaded {} items."
+msgstr "✅ {} éléments téléchargés."
+
+msgid "🛑 You must rely on your Linux package manager to install FFMPEG."
+msgstr "🛑 Installez FFMPEG en utilisant le gestionnaire de paquets de votre distribution Linux."
+
+msgid "e.g., on Ubuntu/Debian: sudo apt install ffmpeg"
+msgstr "par exemple, sur Ubuntu/Debian : sudo apt install ffmpeg"
+
+msgid "🛑 Unsupported OS."
+msgstr "🛑 OS non supporté."
+
+msgid "Downloading FFmpeg for {}..."
+msgstr "Téléchargement de FFmpeg pour {}..."
+
+msgid "Downloading {:,}MB"
+msgstr "Téléchargement de {:,}Mo"
+
+msgid "🛑 Failed to download {}: {}"
+msgstr "🛑 Echec du téléchargement {}: {}"
+
+msgid "FFmpeg archive downloaded, extracting..."
+msgstr "Archive de FFmpeg téléchargée, extraction..."
+
+msgid "🛑 Failed to extract ffmpeg executable"
+msgstr "🛑 Impossible d'extraire l'éxécutable ffmpeg"
+
+msgid "✅ FFMPEG installed."
+msgstr "✅ FFMPEG est installé."
+
+msgid "🚧 Cleaning storage ..."
+msgstr "🚧 Nettoyage de l'appareil ..."
+
+msgid "✅ Factory reset performed, device is empty"
+msgstr "✅ Retour usine effectué, l'appareil est désormais vide"
+
+msgid "🛑 Failed to import DB (wrong file ?)"
+msgstr "🛑 Eched de l'import de la base (mauvais fichier ?)"
+
+msgid "Night mode settings"
+msgstr "Paramètres du mode nuit"
+
+msgid "<h2>Configure<br>Night Mode</h2>"
+msgstr "<h2>Configurer<br>le mode nuit</h2>"
+
+msgid "<a href=https://support.lunii.com/hc/en-gb/categories/4404826574353-The-Night-Mode>Official Lunii Guide</a>"
+msgstr "<a href=https://support.lunii.com/hc/fr/categories/4404826574353-Le-Mode-Nuit>Guide officiel de Lunii</a>"
+
+msgid "<h4>Night mode"
+msgstr "<h4>Mode nuit"
+
+msgid "<h4>Limit Volume"
+msgstr "<h4>Limiter le volume"
+
+msgid "The volume will be kept low for a calm listening experience conducive to falling asleep."
+msgstr "Le volume sera limité pour une écoute calme et propice à l'endormissement."
+
+msgid "<h4>Keep playing with next"
+msgstr "<h4>Enchainer les histoires"
+
+msgid "You can choose how many stories will be read before the device shuts down."
+msgstr "Vous pouvez choisir combien d'histoires seront lues avant que l'appareil ne s'arrête."
+
+msgid "Max stories to play"
+msgstr "Nombre d'histoires maximum"
+
+msgid "<h4>Turn off after sleep"
+msgstr "<h4>Désactiver après la mise en veille"
+
+msgid "By enabling this feature, the device will automatically return to Day Mode after shutting down."
+msgstr "En activant cette fonction, l'appareil repassera automatiquement en Mode Jour après s'être arrêté."
+
+# Strings specific to the Rust version (tools/extra_fr.po)
+
+msgid "All files"
+msgstr "Tous les fichiers"
+
+msgid "All supported"
+msgstr "Tous les formats pris en charge"
+
+msgid "Archive files"
+msgstr "Archives"
+
+msgid "PK files"
+msgstr "Fichiers PK"
+
+msgid "Text Files"
+msgstr "Fichiers texte"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "NM"
+msgstr "MN"
+
+msgid "DB"
+msgstr "DB"
+
+msgid "Drop your story archives here, or use Stories / Import"
+msgstr "Déposez vos archives d'histoires ici, ou utilisez Histoires / Importer"
+
+msgid "Configure Night Mode"
+msgstr "Configurer le mode nuit"
+
+msgid "Official Lunii Guide"
+msgstr "Guide officiel de Lunii"
+
+msgid "https://support.lunii.com/hc/en-gb/categories/4404826574353-The-Night-Mode"
+msgstr "https://support.lunii.com/hc/fr/categories/4404826574353-Le-Mode-Nuit"
+
+msgid "Night mode"
+msgstr "Mode nuit"
+
+msgid "Limit Volume"
+msgstr "Limiter le volume"
+
+msgid "Keep playing with next"
+msgstr "Enchainer les histoires"
+
+msgid "Turn off after sleep"
+msgstr "Désactiver après la mise en veille"
+
+msgid "This application is a PoC that allows to manage the contents of your own Lunii Storyteller, including changing stories order, backup (for personal usage only), restore, and downloading your latest Lunii firmware (to eventually restore from a broken device)."
+msgstr "Cette application est une preuve de concept qui permet de gérer le contenu de votre propre Fabrique à Histoires Lunii : ordre des histoires, sauvegarde (pour un usage personnel uniquement), restauration, et téléchargement du dernier firmware Lunii (pour éventuellement restaurer un appareil défaillant)."
+
+msgid "Powered by Rust and Slint"
+msgstr "Développé avec Rust et Slint"
+
+msgid "Icons are provided freely by"
+msgstr "Les icônes sont fournies gracieusement par"
+
+msgid "Logos are provided by malexxx"
+msgstr "Les logos sont fournis par malexxx"
+
+msgid "🛑 Unsupported file type"
+msgstr "🛑 Type de fichier non pris en charge"
+
+msgid "🛑 Forbidden to export official story : '{}'"
+msgstr "🛑 Export interdit pour une histoire officielle : '{}'"
+
+msgid "No description found."
+msgstr "Aucune description trouvée."
+
+msgid "Unknown story (maybe a User created story)..."
+msgstr "Histoire inconnue (peut-être une création personnelle)..."
+
+msgid "No authors."
+msgstr "Aucun auteur."
+
+msgid "Metadata UUID mismatch ({})"
+msgstr "UUID des métadonnées incohérent ({})"
+
+msgid "No picture available for this story, thumbnail skipped"
+msgstr "Aucune image pour cette histoire, vignette ignorée"
+
+msgid "Aborted by user"
+msgstr "Interrompu par l'utilisateur"
+
+msgid "Failed to fetch official DB"
+msgstr "Impossible de récupérer la base officielle"
+
+msgid "Log"
+msgstr "Journal"
+
+msgid "Copy"
+msgstr "Copier"
+
+msgid "Open log folder"
+msgstr "Ouvrir le dossier des journaux"
+
+msgid "Also written to {}"
+msgstr "Également enregistré dans {}"
+
+msgid "Log sent to clipboard."
+msgstr "Journal copié dans le presse-papiers."

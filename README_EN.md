@@ -6,7 +6,7 @@
 :fr: [README en français](README.md) :fr:
 
 # Lunii.QT
-A Python QT app to manage <u>Lunii</u> and <u>Flam</u> Storytellers, including **reorder** / **import** / **export** / **hide** / **firmware download**   
+An app (Rust, Slint UI) to manage <u>Lunii</u> and <u>Flam</u> Storytellers, including **reorder** / **import** / **export** / **hide** / **firmware download**   
 for Windows 11 / MacOs (11 BigSur => 26 Tahoe) / Linux   
 (compatible with STUdio archive, **with** transcoding)
 
@@ -45,7 +45,7 @@ Forget about all previous .md and firmware recommendations.
   - [Supported archive formats](#supported-archive-formats)
     - [for Lunii](#for-lunii)
     - [for Flam](#for-flam)
-  - [Python ? HowTo](#python--howto)
+  - [Building](#building)
     - [Prepare env](#prepare-env)
     - [Build UI files](#build-ui-files)
     - [Build Translation files](#build-translation-files)
@@ -324,69 +324,16 @@ Lunii.QT allows you to backup the latest firmware version available from Lunii s
       00000000-0000-0000-0000-000000000000/sounds/*.mp3
       00000000-0000-0000-0000-000000000000/sounds/*.mp3map
 
-## Python ? HowTo
+## Building
 
-### Prepare env
-
-First, clone the git repo   
-Prepare a Virtual environment for your project and install requirements
-```bash
-$ python3 -m venv venv
-```
-
-Switch to your venv 
-* on Linux   
-   `source venv/bin/activate`
-* on Windows   
-  `.\venv\Scripts\activate.bat`
-
-Install dependencies
-```
-$ pip install -r requirements.txt
-```
-
-**Linux** has one more extra dependency to be installed  
+The application is written in Rust (UI made with [Slint](https://slint.dev)). The
+code lives in the [`rust/`](rust/README.md) folder, which documents the build,
+the useful environment variables and the translation workflow.
 
 ```bash
-$ apt install libxcb-cursor0
-```
-### Build UI files
-```bash
-$ pyside6-uic pkg/ui/main.ui -o pkg/ui/main_ui.py
-$ pyside6-uic pkg/ui/nm.ui   -o pkg/ui/nm_ui.py
-```
-### Build Translation files
-```bash
-$ pyside6-lupdate ./pkg/ui/main.ui ./pkg/ui/nm.ui ./pkg/ui/about_ui.py ./pkg/ui/debug_ui.py ./pkg/ui/login_ui.py ./pkg/nm_window.py ./pkg/main_window.py ./pkg/ierWorker.py ./pkg/versionWorker.py ./pkg/api/devices.py -ts ./locales/fr_FR.ts
-$ pyside6-linguist ./locales/fr_FR.ts  # optionnaly, update translations
-$ pyside6-lrelease ./locales/fr_FR.ts ./locales/fr_FR.qm  
-```
-### Build resource files
-```bash
-$ pyside6-rcc resources.qrc -o resources_rc.py
-```
-### Run
-```bash
-$ python lunii-qt.py
-```
-
-### Build GUI executable
-**NOTE :** PyInstaller by its design generates executables that are flagged by AntiViruses. Those are false positives. cx_Freeze is an alternative that allows to avoid such false positives.
-
-#### PyInstaller 👎
-``` bash
-$ pip install pyinstaller
-$ pyinstaller lunii-qt.spec
-...
-$ dist\lunii-qt
-```
-
-#### cx_Freeze 👍
-```bash
-$ pip install cx_Freeze
-$ python setup.py build_exe
-...
-$ build/exe.win-amd64/lunii-qt
+cd rust
+cargo build --release
+./target/release/lunii-qt
 ```
 
 ## Tricks

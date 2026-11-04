@@ -1,0 +1,86 @@
+// Log panel docked at the bottom of the main window (replaces the former
+// separate log window, port of pkg/ui/debug_ui.py).
+
+import { Button, ComboBox, LineEdit, ListView, Palette } from "std-widgets.slint";
+import { LogLine, Theme, IconButton } from "common.slint";
+
+export component LogPanel inherits Rectangle {
+    in property <[LogLine]> lines;
+    // 0: NONE (all), 1: DEBUG, 2: INFO, 3: WARNING, 4: ERROR
+    in-out property <int> level-index: 2;
+    in-out property <string> filter;
+    // path of the log file, shown as a tooltip-like hint
+    in property <string> file-path;
+
+    callback filter-changed();
+    callback clear-clicked();
+    callback copy-clicked();
+    callback open-folder-clicked();
+    callback close-clicked();
+
+    public function scroll-to-bottom() {
+        list.content-y = min(0px, list.visible-height - list.content-height);
+    }
+
+    VerticalLayout {
+        spacing: 4px;
+
+        HorizontalLayout {
+            spacing: 6px;
+            Text {
+                text: @tr("Log");
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+            ComboBox {
+                model: ["NONE", "DEBUG", "INFO", "WARNING", "ERROR"];
+                current-index <=> root.level-index;
+                selected => { root.filter-changed(); }
+                width: 120px;
+            }
+            LineEdit {
+                text <=> root.filter;
+                placeholder-text: @tr("(Log filter text)");
+                edited => { root.filter-changed(); }
+                horizontal-stretch: 1;
+            }
+            Button { text: @tr("Copy"); clicked => { root.copy-clicked(); } }
+            Button { text: @tr("Clear"); clicked => { root.clear-clicked(); } }
+            Button { text: @tr("Open log folder"); clicked => { root.open-folder-clicked(); } }
+            IconButton {
+                icon: @image-url("../../../res/remove.png");
+                icon-size: 18px;
+                y: (parent.height - self.height) / 2;
+                clicked => { root.close-clicked(); }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            border-width: 1px;
+            border-color: Palette.border;
+            background: Palette.alternate-background;
+
+            list := ListView {
+                for line in root.lines: Text {
+                    text: line.text;
+                    wrap: word-wrap;
+                    font-family: Theme.mono-font;
+                    font-size: 12px;
+                    color: line.level == 3 ? Theme.warning : (line.level == 2 ? #c77700 : (line.level == 0 ? Theme.hidden-text : Palette.foreground));
+                }
+            }
+            if root.lines.length == 0: Text {
+                text: @tr("Application Log Empty ...");
+                color: Theme.hidden-text;
+            }
+        }
+
+        if root.file-path != "": Text {
+            text: @tr("Also written to {}", root.file-path);
+            color: Theme.hidden-text;
+            font-size: 11px;
+            overflow: elide;
+        }
+    }
+}

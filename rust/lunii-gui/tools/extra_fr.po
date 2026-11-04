@@ -1,0 +1,101 @@
+msgid "All files"
+msgstr "Tous les fichiers"
+
+msgid "All supported"
+msgstr "Tous les formats pris en charge"
+
+msgid "Archive files"
+msgstr "Archives"
+
+msgid "PK files"
+msgstr "Fichiers PK"
+
+msgid "Text Files"
+msgstr "Fichiers texte"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "NM"
+msgstr "MN"
+
+msgid "DB"
+msgstr "DB"
+
+msgid "Drop your story archives here, or use Stories / Import"
+msgstr "Déposez vos archives d'histoires ici, ou utilisez Histoires / Importer"
+
+msgid "Configure Night Mode"
+msgstr "Configurer le mode nuit"
+
+msgid "Official Lunii Guide"
+msgstr "Guide officiel de Lunii"
+
+msgid "https://support.lunii.com/hc/en-gb/categories/4404826574353-The-Night-Mode"
+msgstr "https://support.lunii.com/hc/fr/categories/4404826574353-Le-Mode-Nuit"
+
+msgid "Night mode"
+msgstr "Mode nuit"
+
+msgid "Limit Volume"
+msgstr "Limiter le volume"
+
+msgid "Keep playing with next"
+msgstr "Enchainer les histoires"
+
+msgid "Turn off after sleep"
+msgstr "Désactiver après la mise en veille"
+
+msgid "This application is a PoC that allows to manage the contents of your own Lunii Storyteller, including changing stories order, backup (for personal usage only), restore, and downloading your latest Lunii firmware (to eventually restore from a broken device)."
+msgstr "Cette application est une preuve de concept qui permet de gérer le contenu de votre propre Fabrique à Histoires Lunii : ordre des histoires, sauvegarde (pour un usage personnel uniquement), restauration, et téléchargement du dernier firmware Lunii (pour éventuellement restaurer un appareil défaillant)."
+
+msgid "Powered by Rust and Slint"
+msgstr "Développé avec Rust et Slint"
+
+msgid "Icons are provided freely by"
+msgstr "Les icônes sont fournies gracieusement par"
+
+msgid "Logos are provided by malexxx"
+msgstr "Les logos sont fournis par malexxx"
+
+msgid "🛑 Unsupported file type"
+msgstr "🛑 Type de fichier non pris en charge"
+
+msgid "🛑 Forbidden to export official story : '{}'"
+msgstr "🛑 Export interdit pour une histoire officielle : '{}'"
+
+msgid "No description found."
+msgstr "Aucune description trouvée."
+
+msgid "Unknown story (maybe a User created story)..."
+msgstr "Histoire inconnue (peut-être une création personnelle)..."
+
+msgid "No authors."
+msgstr "Aucun auteur."
+
+msgid "Metadata UUID mismatch ({})"
+msgstr "UUID des métadonnées incohérent ({})"
+
+msgid "No picture available for this story, thumbnail skipped"
+msgstr "Aucune image pour cette histoire, vignette ignorée"
+
+msgid "Aborted by user"
+msgstr "Interrompu par l'utilisateur"
+
+msgid "Failed to fetch official DB"
+msgstr "Impossible de récupérer la base officielle"
+
+msgid "Log"
+msgstr "Journal"
+
+msgid "Copy"
+msgstr "Copier"
+
+msgid "Open log folder"
+msgstr "Ouvrir le dossier des journaux"
+
+msgid "Also written to {}"
+msgstr "Également enregistré dans {}"
+
+msgid "Log sent to clipboard."
+msgstr "Journal copié dans le presse-papiers."

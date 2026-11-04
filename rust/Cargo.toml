@@ -1,0 +1,19 @@
+[workspace]
+resolver = "3"
+members = ["lunii-core", "lunii-cli", "lunii-gui"]
+
+[workspace.package]
+version = "3.1.4"
+edition = "2024"
+rust-version = "1.95"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/o-daneel/Lunii.QT"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+# Image decoding / crypto are painfully slow in debug builds
+[profile.dev.package."*"]
+opt-level = 2

@@ -1,0 +1,247 @@
+// Modal dialogs, displayed as overlays inside the main window.
+
+import { Button, CheckBox, LineEdit, Palette, SpinBox, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { Link, Theme } from "common.slint";
+
+/// Dimmed background + centered panel. Clicking outside does nothing (modal).
+export component Overlay inherits Rectangle {
+    in property <string> title;
+    in property <length> panel-width: 420px;
+    callback close();
+
+    background: #0008;
+    TouchArea { }   // swallow clicks
+
+    FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.close();
+                return accept;
+            }
+            reject
+        }
+
+        Rectangle {
+            width: root.panel-width;
+            height: min(panel-layout.preferred-height, root.height - 40px);
+            background: Palette.background;
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: Palette.border;
+            drop-shadow-blur: 12px;
+            drop-shadow-color: #0006;
+
+            panel-layout := VerticalLayout {
+                padding: 14px;
+                spacing: 10px;
+                Text {
+                    text: root.title;
+                    font-size: 16px;
+                    font-weight: 700;
+                }
+                @children
+            }
+        }
+    }
+}
+
+export component ConfirmRemoveDialog inherits Overlay {
+    in property <string> message;
+    callback accepted();
+
+    title: @tr("Delete stories");
+
+    Text {
+        text: root.message;
+        wrap: word-wrap;
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: 8px;
+        Button { text: @tr("Cancel"); clicked => { root.close(); } }
+        Button { text: "OK"; primary: true; clicked => { root.accepted(); } }
+    }
+}
+
+export component LoginDialog inherits Overlay {
+    in-out property <string> email;
+    in-out property <string> password;
+    callback accepted();
+
+    title: @tr("LuniiStore credentials");
+    panel-width: 340px;
+
+    Text { text: "Email:"; }
+    email-edit := LineEdit {
+        text <=> root.email;
+        accepted => { password-edit.focus(); }
+    }
+    Text { text: @tr("Password:"); }
+    password-edit := LineEdit {
+        text <=> root.password;
+        input-type: InputType.password;
+        accepted => { root.accepted(); }
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: 8px;
+        Button { text: @tr("Cancel"); clicked => { root.close(); } }
+        Button { text: "Login"; primary: true; clicked => { root.accepted(); } }
+    }
+
+    init => { email-edit.focus(); }
+}
+
+component NmOption inherits VerticalLayout {
+    in property <string> label;
+    in property <string> description;
+    in property <bool> enabled: true;
+    in-out property <bool> checked;
+    spacing: 2px;
+
+    CheckBox {
+        text: root.label;
+        enabled: root.enabled;
+        checked <=> root.checked;
+    }
+    if root.description != "": Text {
+        text: root.description;
+        wrap: word-wrap;
+        font-size: 12px;
+        opacity: root.enabled && root.checked ? 1 : 0.5;
+    }
+}
+
+export component NightModeDialog inherits Overlay {
+    in-out property <bool> nm-enabled;
+    in-out property <bool> nm-limit;
+    in-out property <bool> nm-autoplay;
+    in-out property <int> nm-max-stories: 3;
+    in-out property <bool> nm-turnoff;
+    callback accepted();
+    callback open-guide();
+
+    title: @tr("Night mode settings");
+    panel-width: 520px;
+
+    HorizontalLayout {
+        spacing: 14px;
+        Image {
+            source: root.nm-enabled ? @image-url("../../../res/bg_night_mode.png") : @image-url("../../../res/bg_day_mode.png");
+            width: 150px;
+            height: 150px;
+            image-fit: contain;
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: 8px;
+            Text {
+                text: @tr("Configure Night Mode");
+                font-size: 20px;
+                font-weight: 700;
+                wrap: word-wrap;
+            }
+            Link {
+                text: @tr("Official Lunii Guide");
+                clicked => { root.open-guide(); }
+            }
+        }
+    }
+
+    NmOption {
+        label: @tr("Night mode");
+        checked <=> root.nm-enabled;
+    }
+    NmOption {
+        label: @tr("Limit Volume");
+        description: @tr("The volume will be kept low for a calm listening experience conducive to falling asleep.");
+        enabled: root.nm-enabled;
+        checked <=> root.nm-limit;
+    }
+    NmOption {
+        label: @tr("Keep playing with next");
+        description: @tr("You can choose how many stories will be read before the device shuts down.");
+        enabled: root.nm-enabled;
+        checked <=> root.nm-autoplay;
+    }
+    HorizontalLayout {
+        padding-left: 28px;
+        spacing: 8px;
+        Text {
+            text: @tr("Max stories to play");
+            vertical-alignment: center;
+            opacity: root.nm-enabled && root.nm-autoplay ? 1 : 0.5;
+        }
+        SpinBox {
+            minimum: 1;
+            maximum: 8;
+            value <=> root.nm-max-stories;
+            enabled: root.nm-enabled && root.nm-autoplay;
+            width: 90px;
+        }
+    }
+    NmOption {
+        label: @tr("Turn off after sleep");
+        description: @tr("By enabling this feature, the device will automatically return to Day Mode after shutting down.");
+        enabled: root.nm-enabled;
+        checked <=> root.nm-turnoff;
+    }
+
+    HorizontalLayout {
+        alignment: end;
+        spacing: 8px;
+        Button { text: @tr("Cancel"); clicked => { root.close(); } }
+        Button { text: @tr("Save"); primary: true; clicked => { root.accepted(); } }
+    }
+}
+
+export component AboutDialog inherits Overlay {
+    in property <string> version;
+    callback open-url(url: string);
+
+    title: @tr("About");
+    panel-width: 600px;
+
+    HorizontalLayout {
+        spacing: 16px;
+        Image {
+            source: @image-url("../../../res/lunii_about.png");
+            height: 220px;
+            image-fit: contain;
+        }
+        VerticalLayout {
+            spacing: 8px;
+            alignment: start;
+            Text {
+                text: "Lunii Qt-Manager " + root.version;
+                font-size: 20px;
+                font-weight: 700;
+            }
+            Text {
+                text: @tr("This application is a PoC that allows to manage the contents of your own Lunii Storyteller, including changing stories order, backup (for personal usage only), restore, and downloading your latest Lunii firmware (to eventually restore from a broken device).");
+                wrap: word-wrap;
+            }
+            Text { text: @tr("Powered by Rust and Slint"); }
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: start;
+                Text { text: @tr("Icons are provided freely by"); }
+                Link { text: "icons8"; clicked => { root.open-url("https://icons8.com"); } }
+            }
+            Text { text: @tr("Logos are provided by malexxx"); }
+            HorizontalLayout {
+                spacing: 4px;
+                alignment: start;
+                Text { text: "URL :"; font-weight: 700; }
+                Link {
+                    text: "https://github.com/o-daneel/Lunii.QT";
+                    clicked => { root.open-url("https://github.com/o-daneel/Lunii.QT"); }
+                }
+            }
+        }
+    }
+    HorizontalLayout {
+        alignment: end;
+        Button { text: "OK"; primary: true; clicked => { root.close(); } }
+    }
+}
