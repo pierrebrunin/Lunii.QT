@@ -8,12 +8,14 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+ab_glyph = "0.2"
 aes = "0.9"
 anyhow = "1"
 base64 = "0.23"
 deunicode = "1"
 dirs = "7"
 fs4 = "1"
+id3 = { version = "1", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
 indexmap = "2"
 log = "0.4"
@@ -22,7 +24,7 @@ sevenz-rust2 = "0.24"
 thiserror = "2"
 unicode-normalization = "0.1"
 ureq = { version = "3", features = ["json"] }
-uuid = "1"
+uuid = { version = "1", features = ["v5"] }
 walkdir = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 

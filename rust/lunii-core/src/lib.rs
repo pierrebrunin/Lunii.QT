@@ -8,6 +8,7 @@
 //! [`report::Reporter`], and every long operation can be aborted through
 //! [`report::Context`].
 
+pub mod album;
 pub mod archive;
 pub mod constants;
 pub mod convert;

@@ -1,7 +1,7 @@
 //! Progress / log reporting, replacing the Qt signals of the Python devices.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 pub use log::Level;
 
@@ -36,6 +36,8 @@ impl Reporter for LogReporter {
 pub struct Context {
     reporter: Arc<dyn Reporter>,
     abort: Arc<AtomicBool>,
+    /// bytes of story files written to the device (see [`Context::written`])
+    written: Arc<AtomicU64>,
 }
 
 impl Default for Context {
@@ -49,6 +51,7 @@ impl Context {
         Self {
             reporter,
             abort: Arc::new(AtomicBool::new(false)),
+            written: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -71,6 +74,18 @@ impl Context {
 
     pub fn is_aborted(&self) -> bool {
         self.abort.load(Ordering::SeqCst)
+    }
+
+    /// Counts bytes written to the device (story files).
+    pub fn add_written(&self, bytes: u64) {
+        self.written.fetch_add(bytes, Ordering::Relaxed);
+    }
+
+    /// Bytes of story files written to the device since the creation of the
+    /// context, shared by its clones: lets another thread estimate the
+    /// remaining time of an import.
+    pub fn written(&self) -> u64 {
+        self.written.load(Ordering::Relaxed)
     }
 
     pub fn log(&self, level: Level, message: impl AsRef<str>) {

@@ -62,6 +62,8 @@ export component MainWindow inherits Window {
     in property <string> total-text;
     in property <float> total-progress;
     in property <bool> total-visible;
+    // remaining time of an import
+    in property <string> eta-text;
     in property <string> story-text;
     in property <float> story-progress;
     in property <bool> story-visible;
@@ -159,6 +161,7 @@ export component MainWindow inherits Window {
             MenuItem { title: @tr("Force Night Mode"); shortcut: @keys(Control + N); enabled: root.selection-actions && !root.is-flam; activated => { root.action("night-mode"); } }
             MenuSeparator { }
             MenuItem { title: @tr("Import"); shortcut: @keys(Control + I); enabled: root.story-actions && root.can-import; activated => { root.action("import"); } }
+            MenuItem { title: @tr("Import MP3 album"); shortcut: @keys(Control + Shift + I); enabled: root.story-actions && root.can-import; activated => { root.action("import-album"); } }
             MenuItem { title: @tr("Export"); shortcut: @keys(Control + S); enabled: root.selection-actions && root.can-export; activated => { root.action("export"); } }
             MenuItem { title: @tr("Export All"); shortcut: @keys(Control + Shift + S); enabled: root.story-actions && root.can-export-all; activated => { root.action("export-all"); } }
             MenuItem { title: @tr("Remove"); shortcut: @keys(Delete); enabled: root.selection-actions; activated => { root.action("remove"); } }
@@ -263,6 +266,7 @@ export component MainWindow inherits Window {
                 MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions && !root.is-flam; activated => { root.action("night-mode"); } }
                 MenuSeparator { }
                 MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action("import"); } }
+                MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action("import-album"); } }
                 MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action("export"); } }
                 MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action("export-all"); } }
                 MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action("remove"); } }
@@ -293,6 +297,12 @@ export component MainWindow inherits Window {
                     spacing: 6px;
                     Text { text: root.total-text; min-width: 90px; horizontal-alignment: center; vertical-alignment: center; }
                     ProgressIndicator { progress: root.total-progress; height: 10px; y: (parent.height - self.height) / 2; }
+                    if root.eta-text != "": Text {
+                        text: root.eta-text;
+                        vertical-alignment: center;
+                        font-size: 12px;
+                        color: Theme.status-text;
+                    }
                 }
                 if root.story-visible: HorizontalLayout {
                     spacing: 6px;

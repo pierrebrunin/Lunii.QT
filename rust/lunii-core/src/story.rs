@@ -207,10 +207,14 @@ fn splitext_root(path: &str) -> &str {
 }
 
 /// Last 8 chars, upper case.
+/// Device file name of a STUdio asset: the last 8 characters of its name,
+/// upper case, left padded with `0` when shorter. The devices need exactly 8
+/// characters: `ri` / `si` are tables of fixed 12 bytes entries (`000\XXXXXXXX`).
 fn normalized_name(file: &str) -> String {
     let root: Vec<char> = splitext_root(file).chars().collect();
     let start = root.len().saturating_sub(8);
-    root[start..].iter().collect::<String>().to_uppercase()
+    let name = root[start..].iter().collect::<String>().to_uppercase();
+    format!("{name:0>8}")
 }
 
 fn as_i64(v: &Value) -> Option<i64> {
@@ -621,7 +625,7 @@ mod tests {
         assert_eq!(splitext_root(".hidden"), ".hidden");
         assert_eq!(splitext_root("noext"), "noext");
         assert_eq!(normalized_name("0123456789abcdef.png"), "89ABCDEF");
-        assert_eq!(normalized_name("abc.mp3"), "ABC");
+        assert_eq!(normalized_name("abc.mp3"), "00000ABC");
     }
 
     #[test]
@@ -664,8 +668,9 @@ mod tests {
         assert!(s.compatible);
         assert!(s.nm);
         assert_eq!(s.short_uuid(), "11111111");
-        assert_eq!(s.ri_data(), b"000\\COVER");
-        assert_eq!(s.si_data(), b"000\\TITLE000\\STORY");
+        // short asset names are padded to the 8 characters the devices expect
+        assert_eq!(s.ri_data(), b"000\\000COVER");
+        assert_eq!(s.si_data(), b"000\\000TITLE000\\000STORY");
         assert_eq!(s.li_data(), vec![1, 0, 0, 0, 0, 0, 0, 0]);
         let ni = s.ni_data().unwrap();
         assert_eq!(ni.len(), NI_HEADER_SIZE + 2 * NODE_SIZE);

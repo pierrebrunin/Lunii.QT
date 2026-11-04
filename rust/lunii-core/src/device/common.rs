@@ -63,6 +63,7 @@ pub fn write_with_progress(ctx: &Context, target: &Path, data: &[u8]) -> Result<
     for chunk in data.chunks(BLOCK_SIZE) {
         f.write_all(chunk)?;
         written += chunk.len() as u64;
+        ctx.add_written(chunk.len() as u64);
         let elapsed = last_emit.elapsed().as_secs_f64();
         if elapsed >= TIME_SPAN_S || written == total {
             let speed = if elapsed > 0.0 {

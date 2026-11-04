@@ -69,6 +69,28 @@ d'état (un clic sur le SNU copie les détails de l'appareil), menus et raccourc
 réglages du mode nuit, connexion Luniistore pour le firmware, journal de debug,
 vérification des mises à jour, glisser-déposer d'archives.
 
+### Albums MP3
+
+Histoires / **Importer un album MP3** (Ctrl+Maj+I) transforme un dossier de MP3
+(musique, livre audio…) en histoire. On peut aussi glisser-déposer le dossier.
+
+- **Navigation** : depuis la couverture, OK ouvre un menu avec une entrée par
+  piste, qu'on parcourt à la molette (l'écran affiche le titre). OK lance la
+  piste, et les suivantes s'enchaînent. À la fin, ou avec HOME, on revient au
+  menu. OK pendant la lecture passe à la piste suivante.
+- **Titres et ordre** : ils viennent des tags ID3 (titre, album, artiste, disque,
+  numéro de piste), sinon du nom du fichier et du dossier. La pochette ID3 sert
+  de couverture, sinon elle est générée avec le titre de l'album. Les écrans
+  (320×240, niveaux de gris) sont dessinés avec la police DejaVu Sans Bold
+  embarquée (`res/fonts`).
+- **Audio** : les appareils veulent du MP3 mono 44,1 kHz. Les autres MP3, comme
+  la musique en stéréo, sont convertis par ffmpeg, qui est alors nécessaire.
+- **Identifiant** : l'UUID de l'histoire est dérivé de l'album (v5), donc le même
+  album importé deux fois est refusé.
+
+Le dossier est converti en archive STUdio temporaire (`album.rs`), puis importé
+par le chemin STUdio habituel.
+
 La langue suit le système (français ou anglais) ; `LUNII_QT_LANG=en` ou
 `LUNII_QT_LANG=fr` la force.
 

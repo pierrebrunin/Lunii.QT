@@ -99,3 +99,24 @@ msgstr "Également enregistré dans {}"
 
 msgid "Log sent to clipboard."
 msgstr "Journal copié dans le presse-papiers."
+
+msgid "Time left: {}"
+msgstr "Temps restant : {}"
+
+msgid "Estimating time left..."
+msgstr "Estimation du temps restant..."
+
+msgid "Import MP3 album"
+msgstr "Importer un album MP3"
+
+msgid "Folders of MP3 files"
+msgstr "Dossiers de fichiers MP3"
+
+msgid "🛑 No MP3 file in this folder"
+msgstr "🛑 Aucun fichier MP3 dans ce dossier"
+
+msgid "🎵 MP3 album '{}' : {} tracks"
+msgstr "🎵 Album MP3 '{}' : {} pistes"
+
+msgid "These MP3 files must be converted to mono 44.1 kHz: FFMPEG is required (Tools menu)"
+msgstr "Ces MP3 doivent être convertis en mono 44,1 kHz : FFMPEG est nécessaire (menu Outils)"

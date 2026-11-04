@@ -4,8 +4,8 @@ use anyhow::{Context as _, Result};
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView, ImageFormat};
 
-const LUNII_W: u32 = 320;
-const LUNII_H: u32 = 240;
+pub const LUNII_W: u32 = 320;
+pub const LUNII_H: u32 = 240;
 
 /// Converts an RGB888 pixel to RGB565 (LSB first, to reproduce the Flam behaviour).
 pub fn pixel_to_rgb565(r: u8, g: u8, b: u8) -> [u8; 2] {

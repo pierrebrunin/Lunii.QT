@@ -108,6 +108,15 @@ impl Archive {
         self.entries.iter().find(|e| e.name == name).map(|e| e.size)
     }
 
+    /// Total uncompressed size of the files.
+    pub fn uncompressed_size(&self) -> u64 {
+        self.entries
+            .iter()
+            .filter(|e| !e.is_dir)
+            .map(|e| e.size)
+            .sum()
+    }
+
     /// Reads (and decompresses) an entry.
     pub fn read(&self, name: &str) -> Result<Vec<u8>> {
         match &self.inner {

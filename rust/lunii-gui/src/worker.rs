@@ -3,16 +3,43 @@
 //! A task runs in its own thread and talks to the UI with [`Event`]s, delivered
 //! in order on the Slint event loop.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use lunii_core::constants::DeviceVersion;
 use lunii_core::firmware::{self, AuthToken};
-use lunii_core::{Aborted, Context, Device, Level, Reporter, db, tools};
+use lunii_core::{Aborted, Context, Device, Level, Reporter, album, db, tools};
 use uuid::Uuid;
 
 use crate::i18n::{tr, trf};
+
+/// Bytes an import of `path` should write to the device: the uncompressed size
+/// of the archive (or of the folder). STUdio stories transcoded to MP3 differ a
+/// bit, the remaining time estimation adapts.
+fn expected_size(path: &Path) -> u64 {
+    fn dir_size(dir: &Path) -> u64 {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return 0;
+        };
+        entries
+            .filter_map(Result::ok)
+            .map(|e| match e.file_type() {
+                Ok(t) if t.is_dir() => dir_size(&e.path()),
+                Ok(t) if t.is_file() => e.metadata().map(|m| m.len()).unwrap_or(0),
+                _ => 0,
+            })
+            .sum()
+    }
+
+    if path.is_dir() {
+        return dir_size(path);
+    }
+    lunii_core::archive::Archive::open(path)
+        .map(|a| a.uncompressed_size())
+        .or_else(|_| std::fs::metadata(path).map(|m| m.len()))
+        .unwrap_or(0)
+}
 
 pub type SharedDevice = Arc<Mutex<Box<dyn Device>>>;
 
@@ -52,6 +79,8 @@ pub enum Event {
     Status(String),
     ShowLog,
     Total(usize, usize),
+    /// An import starts: expected number of bytes written to the device
+    ImportPlan(u64),
     Story(String, usize, usize),
     File(String, u64, u64),
     Stories(Vec<StoryInfo>),
@@ -166,12 +195,20 @@ impl Runner {
             self.message(tr("Importing stories..."));
         }
 
+        self.emit(Event::ImportPlan(
+            files.iter().map(|f| expected_size(f)).sum(),
+        ));
+
         let mut success = 0;
         for (index, file) in files.iter().enumerate() {
             lunii_core::report::check_abort(&self.ctx)?;
             self.emit(Event::Total(index, files.len()));
             let start = Instant::now();
-            let result = self.on_device(|d| d.import_story(&self.ctx, file));
+            let result = if album::is_album_dir(file) {
+                self.import_album(file)
+            } else {
+                self.on_device(|d| d.import_story(&self.ctx, file))
+            };
             let name = file.display().to_string();
             match result {
                 Ok(()) => {
@@ -203,6 +240,26 @@ impl Runner {
             &[&success.to_string(), &files.len().to_string()],
         ));
         Ok(())
+    }
+
+    /// A folder of MP3 files: turned into a STUdio story, then imported.
+    fn import_album(&self, dir: &Path) -> anyhow::Result<()> {
+        let album = album::scan(dir)?;
+        self.message(trf(
+            "🎵 MP3 album '{}' : {} tracks",
+            &[&album.title, &album.tracks.len().to_string()],
+        ));
+        if album.needs_transcoding() && !lunii_core::constants::transcoding_supported() {
+            anyhow::bail!(
+                "These MP3 files must be converted to mono 44.1 kHz: FFMPEG is required (Tools menu)"
+            );
+        }
+        let zip = std::env::temp_dir().join(format!("lunii-qt-album-{}.zip", album.uuid()));
+        let result = album
+            .write_studio_zip(&zip)
+            .and_then(|()| self.on_device(|d| d.import_story(&self.ctx, &zip)));
+        let _ = std::fs::remove_file(&zip);
+        result
     }
 
     fn export(&self, uuids: &[String], out: &std::path::Path) -> anyhow::Result<()> {

@@ -2,11 +2,11 @@
 //! and `pkg/ui/debug_ui.py`).
 
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use lunii_core::constants::*;
 use lunii_core::device::{self, common::free_space};
@@ -14,7 +14,7 @@ use lunii_core::{Context, Device, Level};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use uuid::Uuid;
 
-use crate::i18n::{tr, tr_message};
+use crate::i18n::{tr, tr_message, trf};
 use crate::logfile;
 use crate::worker::{self, Event, GuiReporter, SharedDevice, Sink, StoryInfo, Task};
 use crate::{DialogKind, LogLine, MainWindow, StoryRow, Theme};
@@ -42,6 +42,64 @@ pub fn log_from_facade(level: Level, message: &str) {
     match APP.with(|a| a.borrow().clone()) {
         Some(app) => app.log(level, message),
         None => logfile::write(&format!("[{}] {message}", level_name(level_value(level)))),
+    }
+}
+
+/// Remaining time estimation of an import, from the bytes written to the device.
+struct Eta {
+    start: Instant,
+    /// bytes expected for the whole import
+    total: u64,
+    /// `Context::written()` when the import started
+    base: u64,
+    /// (time, bytes written) over the last `ETA_WINDOW`
+    samples: VecDeque<(Instant, u64)>,
+}
+
+/// The speed is measured over this window: reactive, but smoothing the
+/// pauses (file closing, ffmpeg transcoding...).
+const ETA_WINDOW: Duration = Duration::from_secs(20);
+/// No estimation before this delay: the first seconds aren't representative.
+const ETA_WARMUP: Duration = Duration::from_secs(4);
+
+impl Eta {
+    /// Remaining duration, `None` while it can't be estimated yet.
+    fn estimate(&mut self, now: Instant, done: u64) -> Option<Duration> {
+        self.samples.push_back((now, done));
+        while self.samples.len() > 2 && now.duration_since(self.samples[0].0) > ETA_WINDOW {
+            self.samples.pop_front();
+        }
+        let elapsed = now.duration_since(self.start);
+        if elapsed < ETA_WARMUP || done == 0 {
+            return None;
+        }
+        let (t0, d0) = self.samples[0];
+        let window = now.duration_since(t0).as_secs_f64();
+        let mut rate = if window > 1.0 {
+            (done - d0) as f64 / window
+        } else {
+            0.0
+        };
+        if rate <= 0.0 {
+            // nothing written lately (transcoding...): average since the start
+            rate = done as f64 / elapsed.as_secs_f64();
+        }
+        let remaining = self.total.saturating_sub(done) as f64;
+        Some(Duration::from_secs_f64(remaining / rate))
+    }
+}
+
+/// `45 s`, `3 min 20 s`, `1 h 05 min`: rounded, so it doesn't flicker.
+fn format_eta(d: Duration) -> String {
+    let s = d.as_secs();
+    if s < 60 {
+        format!("{} s", s.div_ceil(5).max(1) * 5)
+    } else if s < 3600 {
+        let s = s.div_ceil(10) * 10;
+        format!("{} min {:02} s", s / 60, s % 60)
+    } else {
+        let m = s.div_ceil(60);
+        format!("{} h {:02} min", m / 60, m % 60)
     }
 }
 
@@ -77,6 +135,7 @@ struct State {
     log: Vec<(i32, String)>,
     /// highest level logged while the log panel was hidden
     log_alert: i32,
+    eta: Option<Eta>,
 }
 
 pub struct App {
@@ -86,6 +145,7 @@ pub struct App {
     log_model: Rc<VecModel<LogLine>>,
     state: RefCell<State>,
     drop_timer: slint::Timer,
+    eta_timer: slint::Timer,
 }
 
 fn level_value(level: Level) -> i32 {
@@ -157,6 +217,7 @@ impl App {
             log_model: Rc::new(VecModel::default()),
             state: RefCell::new(State::default()),
             drop_timer: slint::Timer::default(),
+            eta_timer: slint::Timer::default(),
         });
         APP.with(|a| *a.borrow_mut() = Some(app.clone()));
 
@@ -985,6 +1046,21 @@ impl App {
                 };
                 self.import(files);
             }
+            "import-album" => {
+                let Some(dirs) = rfd::FileDialog::new()
+                    .set_title(tr("Folders of MP3 files"))
+                    .pick_folders()
+                else {
+                    return;
+                };
+                let (albums, others): (Vec<_>, Vec<_>) = dirs
+                    .into_iter()
+                    .partition(|d| lunii_core::album::is_album_dir(d));
+                if !others.is_empty() {
+                    self.status(&tr("🛑 No MP3 file in this folder"));
+                }
+                self.import(albums);
+            }
             "export" | "export-all" => {
                 let uuids = if name == "export" {
                     self.selected_uuids()
@@ -1120,7 +1196,10 @@ impl App {
         } else {
             LUNII_SUPPORTED_EXT
         };
-        if !files.iter().all(|f| has_supported_ext(f, extensions)) {
+        if !files
+            .iter()
+            .all(|f| has_supported_ext(f, extensions) || lunii_core::album::is_album_dir(f))
+        {
             self.status(&tr("🛑 Unsupported file type"));
             return;
         }
@@ -1265,6 +1344,73 @@ impl App {
         ui.set_abort_visible(true);
     }
 
+    fn start_eta(self: &Rc<Self>, total: u64) {
+        let Some(base) = self
+            .state
+            .borrow()
+            .worker
+            .as_ref()
+            .map(|(_, c)| c.written())
+        else {
+            return;
+        };
+        if total == 0 {
+            return;
+        }
+        self.state.borrow_mut().eta = Some(Eta {
+            start: Instant::now(),
+            total,
+            base,
+            samples: VecDeque::new(),
+        });
+        self.update_eta();
+        let w = Rc::downgrade(self);
+        self.eta_timer.start(
+            slint::TimerMode::Repeated,
+            Duration::from_secs(1),
+            move || {
+                if let Some(app) = w.upgrade() {
+                    app.update_eta();
+                }
+            },
+        );
+    }
+
+    fn update_eta(&self) {
+        let Some(written) = self
+            .state
+            .borrow()
+            .worker
+            .as_ref()
+            .map(|(_, c)| c.written())
+        else {
+            return;
+        };
+        let text = {
+            let mut st = self.state.borrow_mut();
+            let Some(eta) = st.eta.as_mut() else {
+                return;
+            };
+            let done = written.saturating_sub(eta.base);
+            if done >= eta.total {
+                // last writes, database update...
+                String::new()
+            } else {
+                match eta.estimate(Instant::now(), done) {
+                    Some(d) => trf("Time left: {}", &[&format_eta(d)]),
+                    None => tr("Estimating time left..."),
+                }
+            }
+        };
+        self.ui().set_eta_text(text.into());
+    }
+
+    fn stop_eta(&self) {
+        self.eta_timer.stop();
+        self.state.borrow_mut().eta = None;
+        self.ui().set_eta_text("".into());
+    }
+
     fn abort(&self) {
         if let Some((_, ctx)) = self.state.borrow().worker.as_ref() {
             ctx.request_abort();
@@ -1289,6 +1435,7 @@ impl App {
                     0.0
                 });
             }
+            Event::ImportPlan(total) => self.start_eta(total),
             Event::Story(uuid, current, total) => {
                 ui.set_story_visible(true);
                 ui.set_story_text(uuid.into());
@@ -1336,6 +1483,7 @@ impl App {
             Event::UpdateCheck(version) => self.update_checked(version),
             Event::Details(uuid, desc, picture) => self.details_ready(uuid, desc, picture),
             Event::Finished => {
+                self.stop_eta();
                 if let Some((handle, _)) = self.state.borrow_mut().worker.take() {
                     let _ = handle.join();
                 }
@@ -1411,7 +1559,41 @@ fn flam_icon() -> slint::Image {
 
 #[cfg(test)]
 mod tests {
-    use super::is_newer;
+    use super::{Eta, VecDeque, format_eta, is_newer};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn eta_format() {
+        assert_eq!(format_eta(Duration::from_secs(0)), "5 s");
+        assert_eq!(format_eta(Duration::from_secs(42)), "45 s");
+        assert_eq!(format_eta(Duration::from_secs(200)), "3 min 20 s");
+        assert_eq!(format_eta(Duration::from_secs(201)), "3 min 30 s");
+        assert_eq!(format_eta(Duration::from_secs(3_900)), "1 h 05 min");
+    }
+
+    #[test]
+    fn eta_estimate() {
+        let t = Instant::now();
+        let mut eta = Eta {
+            start: t,
+            total: 10_000_000,
+            base: 0,
+            samples: VecDeque::new(),
+        };
+        let at = |s: u64| t + Duration::from_secs(s);
+        // warm-up: no estimation
+        assert_eq!(eta.estimate(at(0), 0), None);
+        assert_eq!(eta.estimate(at(2), 200_000), None);
+        // 100 KB/s, 9.5 MB left
+        let d = eta.estimate(at(5), 500_000).unwrap();
+        assert_eq!(d.as_secs(), 95);
+        // nothing written for 30 s (transcoding): average since the start
+        let d = eta.estimate(at(35), 500_000).unwrap();
+        assert!(d.as_secs() > 600, "{d:?}");
+        // speed measured on the window, not since the start
+        let d = eta.estimate(at(45), 2_500_000).unwrap();
+        assert!(d.as_secs() < 100, "{d:?}");
+    }
 
     #[test]
     fn versions() {

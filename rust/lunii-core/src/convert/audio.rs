@@ -198,6 +198,84 @@ pub fn mp3_info(data: &[u8]) -> Result<Mp3Info> {
     bail!("can't sync to MPEG frame")
 }
 
+fn samples_per_frame(h: &FrameHeader) -> usize {
+    match (h.layer, h.mpeg1) {
+        (1, _) => 384,
+        (3, false) => 576,
+        _ => 1152,
+    }
+}
+
+/// Offset of the first frame that is followed by another valid one.
+fn first_frame(data: &[u8]) -> Option<usize> {
+    let mut pos = skip_id3v2(data);
+    while pos + 4 <= data.len() {
+        if let Some(h) = parse_frame_header(&data[pos..]) {
+            let next = pos + h.frame_len;
+            let next_ok = next + 4 > data.len() || parse_frame_header(&data[next..]).is_some();
+            if h.frame_len > 0 && next_ok {
+                return Some(pos);
+            }
+        }
+        pos += 1;
+    }
+    None
+}
+
+/// Is the frame at `pos` a Xing / Info / VBRI header (no audio, but the
+/// length of the whole file)?
+fn is_vbr_header_frame(data: &[u8], pos: usize, h: &FrameHeader) -> bool {
+    let side_info = match (h.mpeg1, h.mono) {
+        (true, true) => 17,
+        (true, false) => 32,
+        (false, true) => 9,
+        (false, false) => 17,
+    };
+    let xing = pos + 4 + side_info;
+    matches!(data.get(xing..xing + 4), Some(b"Xing") | Some(b"Info"))
+        || data.get(pos + 36..pos + 40) == Some(b"VBRI")
+}
+
+/// The first `seconds` of an MP3, cut on frame boundaries, without the tags nor
+/// the VBR header frame (it would announce the length of the whole file).
+pub fn mp3_excerpt(data: &[u8], seconds: f32) -> Option<Vec<u8>> {
+    let end = if has_id3v1(data) {
+        data.len() - 128
+    } else {
+        data.len()
+    };
+    let data = &data[..end];
+    let mut pos = first_frame(data)?;
+    let mut out = Vec::new();
+    let mut samples = 0usize;
+    let mut first = true;
+    while let Some(h) = data.get(pos..).and_then(parse_frame_header) {
+        if h.frame_len == 0 || pos + h.frame_len > data.len() {
+            break;
+        }
+        if !(first && is_vbr_header_frame(data, pos, &h)) {
+            out.extend_from_slice(&data[pos..pos + h.frame_len]);
+            samples += samples_per_frame(&h);
+            if samples as f32 >= seconds * h.sample_rate as f32 {
+                break;
+            }
+        }
+        first = false;
+        pos += h.frame_len;
+    }
+    (!out.is_empty()).then_some(out)
+}
+
+/// `seconds` of silence: MPEG-1 layer III, 32 kbps, 44.1 kHz, mono (empty
+/// frames decode to silence).
+pub fn silent_mp3(seconds: f32) -> Vec<u8> {
+    const FRAME_LEN: usize = 144 * 32_000 / 44_100;
+    let mut frame = [0u8; FRAME_LEN];
+    frame[..4].copy_from_slice(&[0xFF, 0xFB, 0x10, 0xC4]);
+    let frames = (seconds * 44_100.0 / 1152.0).ceil().max(1.0) as usize;
+    frame.repeat(frames)
+}
+
 /// Are there ID3 tags to be removed?
 pub fn tags_removal_required(data: &[u8]) -> bool {
     if let Some(size) = id3v2_size(data, 0) {
@@ -311,6 +389,32 @@ pub fn audio_to_mp3(data: &[u8]) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn excerpt_and_silence() {
+        // 1000 frames of 1152 samples at 44.1 kHz: ~26 s
+        let mut data = b"ID3\x03\x00\x00\x00\x00\x00\x0A".to_vec();
+        data.extend([0u8; 10]);
+        let mut xing = frames(true, 1);
+        xing[4 + 17..4 + 21].copy_from_slice(b"Xing");
+        data.extend(xing);
+        data.extend(frames(true, 1000));
+
+        let ex = mp3_excerpt(&data, 5.0).unwrap();
+        // tags and VBR header dropped, 5 s rounded up to whole frames
+        assert_eq!(ex.len(), 192 * 417);
+        assert_eq!(&ex[..2], &[0xFF, 0xFB]);
+        assert!(!transcoding_required("x.mp3", &ex));
+        // shorter file: all of it
+        assert_eq!(mp3_excerpt(&frames(true, 10), 5.0).unwrap().len(), 10 * 417);
+        assert!(mp3_excerpt(b"not an mp3", 5.0).is_none());
+
+        let silence = silent_mp3(1.0);
+        assert_eq!(silence.len(), 39 * 104);
+        let info = mp3_info(&silence).unwrap();
+        assert!(info.mono && info.sample_rate == 44100);
+        assert!(!transcoding_required("s.mp3", &silence));
+    }
 
     /// Builds a minimal MPEG1 Layer3 stream (128kbps, 44.1KHz).
     fn frames(mono: bool, count: usize) -> Vec<u8> {
