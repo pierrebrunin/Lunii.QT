@@ -1,7 +1,7 @@
 // Modal dialogs, displayed as overlays inside the main window.
 
-import { Button, CheckBox, LineEdit, Palette, SpinBox, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
-import { Link, Theme } from "common.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette, SpinBox, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { Link, Theme, EpisodeRow } from "common.slint";
 
 /// Dimmed background + centered panel. Clicking outside does nothing (modal).
 export component Overlay inherits Rectangle {
@@ -243,5 +243,123 @@ export component AboutDialog inherits Overlay {
     HorizontalLayout {
         alignment: end;
         Button { text: "OK"; primary: true; clicked => { root.close(); } }
+    }
+}
+
+/// Podcast import: feed address, then selection of the episodes.
+export component PodcastDialog inherits Overlay {
+    in-out property <string> url;
+    in property <bool> loading;
+    // podcast title and details, or the error
+    in property <string> header;
+    in property <[EpisodeRow]> rows;
+    in property <int> selected-count;
+    in-out property <string> filter;
+    // 0: one album (a menu to choose the episode), 1: one story per episode
+    in-out property <int> mode;
+    callback mode-changed();
+    callback load();
+    callback toggle(index: int);
+    callback select-all(all: bool);
+    callback filter-edited();
+    callback accepted();
+
+    title: @tr("Import a podcast");
+    panel-width: 600px;
+
+    Text {
+        text: @tr("Address of the podcast page (radiofrance.fr...) or of its RSS feed:");
+        wrap: word-wrap;
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        url-edit := LineEdit {
+            text <=> root.url;
+            placeholder-text: "https://www.radiofrance.fr/franceinter/podcasts/...";
+            enabled: !root.loading;
+            accepted => { root.load(); }
+        }
+        Button {
+            text: root.loading ? @tr("Loading...") : @tr("Load");
+            enabled: !root.loading && root.url != "";
+            clicked => { root.load(); }
+        }
+    }
+    if root.header != "": Text {
+        text: root.header;
+        font-weight: 600;
+        wrap: word-wrap;
+    }
+    if root.header != "" && !root.loading: HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: @tr("Import as:");
+            vertical-alignment: center;
+        }
+        ComboBox {
+            model: [@tr("an album (a menu to choose the episode)"), @tr("one story per episode")];
+            current-index <=> root.mode;
+            selected => { root.mode-changed(); }
+            horizontal-stretch: 1;
+        }
+    }
+    if root.rows.length > 0 || root.filter != "": HorizontalLayout {
+        spacing: 8px;
+        LineEdit {
+            text <=> root.filter;
+            placeholder-text: @tr("(Episode filter text)");
+            edited => { root.filter-edited(); }
+        }
+        Button { text: @tr("All"); clicked => { root.select-all(true); } }
+        Button { text: @tr("None"); clicked => { root.select-all(false); } }
+    }
+    if root.rows.length > 0 || root.filter != "": Rectangle {
+        height: 300px;
+        border-width: 1px;
+        border-color: Palette.border;
+        ListView {
+            for row in root.rows: Rectangle {
+                height: 40px;
+                background: area.has-hover && !row.present ? #8882 : transparent;
+                area := TouchArea {
+                    enabled: !row.present;
+                    clicked => { root.toggle(row.index); }
+                }
+                HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    spacing: 6px;
+                    CheckBox {
+                        checked: row.checked || row.present;
+                        enabled: !row.present;
+                        toggled => { root.toggle(row.index); }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: row.title;
+                            overflow: elide;
+                            color: row.present ? Theme.hidden-text : Palette.foreground;
+                        }
+                        Text {
+                            text: row.present ? row.info + " · " + @tr("already on the device") : row.info;
+                            font-size: 11px;
+                            color: Theme.hidden-text;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: 8px;
+        Button { text: @tr("Cancel"); clicked => { root.close(); } }
+        Button {
+            text: @tr("Import ({})", root.selected-count);
+            primary: true;
+            enabled: root.selected-count > 0 && !root.loading;
+            clicked => { root.accepted(); }
+        }
     }
 }

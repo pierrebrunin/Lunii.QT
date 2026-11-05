@@ -1,0 +1,147 @@
+name: Release
+
+# Pushing a `vX.Y.Z` tag builds the packages and publishes them in a draft
+# GitHub release (to be reviewed and published by hand). A manual run only
+# builds them (artifacts of the run).
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: Check the tag against Cargo.toml
+        run: |
+          crate="v$(sed -n 's/^version = "\(.*\)"/\1/p' rust/Cargo.toml | head -1)"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "$crate" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the version in rust/Cargo.toml ($crate)"
+            exit 1
+          fi
+          echo "version=$crate" >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: Linux
+    needs: version
+    # oldest supported runner: the binaries need its glibc (2.35) or newer
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      # Rust toolchain pinned in mise.toml
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev desktop-file-utils
+      - name: Build
+        run: cargo build --release --locked --workspace
+      - name: Package
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: packaging/linux/package.sh ${{ needs.version.outputs.version }} dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: rust/dist/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows
+    needs: version
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      # Rust toolchain pinned in mise.toml
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: rust
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build
+        run: cargo build --release --locked --workspace
+      - name: Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Package
+        shell: pwsh
+        run: ./packaging/windows/package.ps1 -Version ${{ needs.version.outputs.version }} -OutDir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: rust/dist/*
+          if-no-files-found: error
+
+  macos:
+    name: macOS
+    needs: version
+    runs-on: macos-latest
+    env:
+      # oldest supported macOS (Big Sur)
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      # Rust toolchain pinned in mise.toml
+      - uses: jdx/mise-action@v5
+        with:
+          install_args: rust
+      - name: Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build (Apple Silicon)
+        run: cargo build --release --locked --workspace --target aarch64-apple-darwin
+      - name: Build (Intel)
+        run: cargo build --release --locked --workspace --target x86_64-apple-darwin
+      - name: create-dmg
+        run: brew install create-dmg
+      - name: Package
+        run: packaging/macos/package.sh ${{ needs.version.outputs.version }} dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: rust/dist/*
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    needs: [version, linux, windows, macos]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: ls -l dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: Lunii.QT ${{ needs.version.outputs.version }}
+          files: dist/*

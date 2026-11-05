@@ -327,8 +327,9 @@ Lunii.QT allows you to backup the latest firmware version available from Lunii s
 ## Building
 
 The application is written in Rust (UI made with [Slint](https://slint.dev)). The
-code lives in the [`rust/`](rust/README.md) folder, which documents the build,
-the useful environment variables and the translation workflow.
+code lives in the [`rust/`](rust/README.md) folder (in French), which documents
+the prerequisites, the build, the checks to run before pushing, the useful
+environment variables and the translation workflow.
 
 ```bash
 cd rust
@@ -370,27 +371,14 @@ This application will download once for all the official story database and any 
 
 In case of any trouble, just remove this file and directory to force refresh
 
-### Linux missing dependencies
-If you encounter the following error when launching Lunii.QT on Linux:
+### Linux dependencies
+The application only needs the graphics libraries of a standard desktop (X11 or
+Wayland, xkbcommon, fontconfig), already present on common distributions. The
+file dialogs go through `xdg-desktop-portal`. If they don't open, install
+your desktop's portal (e.g. `xdg-desktop-portal-gtk` or
+`xdg-desktop-portal-kde`).
 
-```
-qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
-This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
-
-Available platform plugins are: offscreen, vkkhrdisplay, xcb, minimalegl, vnc, eglfs, minimal, linuxfb, wayland-egl, wayland.
-```
-
-This means that a required system library for the Qt graphical interface is missing.
-
-**Solution:**  
-Install the missing dependency by running the following command in your terminal:
-
-```bash
-sudo apt install libxcb-cursor0
-```
-
-After installing, try launching Lunii.QT again.  
-If you still experience issues, make sure all other Qt dependencies are installed.
+To build the application, see the prerequisites in [`rust/README.md`](rust/README.md#prérequis) (in French).
 
 ### v3 export
 In order to suport story export from Lunii v3 hardware, you must place your device keys in here :

@@ -81,10 +81,21 @@ impl Context {
         self.written.fetch_add(bytes, Ordering::Relaxed);
     }
 
-    /// Bytes of story files written to the device since the creation of the
-    /// context, shared by its clones: lets another thread estimate the
-    /// remaining time of an import.
-    pub fn written(&self) -> u64 {
+    /// A converted file (transcoded audio, image turned into a bitmap...) of
+    /// `source` bytes was written as `written` bytes: counts it as its source
+    /// size, so the progress ends on the size of the imported archive.
+    pub fn count_as_source(&self, source: u64, written: u64) {
+        if source >= written {
+            self.written.fetch_add(source - written, Ordering::Relaxed);
+        } else {
+            self.written.fetch_sub(written - source, Ordering::Relaxed);
+        }
+    }
+
+    /// Progress of the imports since the creation of the context, in bytes of
+    /// the imported archives (see [`Context::count_as_source`]), shared by its
+    /// clones: lets another thread estimate the remaining time.
+    pub fn progress(&self) -> u64 {
         self.written.load(Ordering::Relaxed)
     }
 

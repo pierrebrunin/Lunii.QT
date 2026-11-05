@@ -210,7 +210,7 @@ fn splitext_root(path: &str) -> &str {
 /// Device file name of a STUdio asset: the last 8 characters of its name,
 /// upper case, left padded with `0` when shorter. The devices need exactly 8
 /// characters: `ri` / `si` are tables of fixed 12 bytes entries (`000\XXXXXXXX`).
-fn normalized_name(file: &str) -> String {
+pub(crate) fn normalized_name(file: &str) -> String {
     let root: Vec<char> = splitext_root(file).chars().collect();
     let start = root.len().saturating_sub(8);
     let name = root[start..].iter().collect::<String>().to_uppercase();

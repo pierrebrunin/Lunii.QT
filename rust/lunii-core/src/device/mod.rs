@@ -63,6 +63,22 @@ pub trait Device: Send {
     fn as_lunii(&self) -> Option<&LuniiDevice> {
         None
     }
+
+    /// Number of tracks if `story` is an MP3 album created by Lunii.QT that
+    /// tracks can be appended to (see [`crate::album`]).
+    fn album_track_count(&self, _story: &Story) -> Option<usize> {
+        None
+    }
+
+    /// Appends tracks to an album story, returns the number of added tracks.
+    fn add_album_tracks(
+        &mut self,
+        _ctx: &Context,
+        _uuid: &Uuid,
+        _tracks: &[crate::album::Track],
+    ) -> Result<usize> {
+        bail!("Adding MP3 files to an album is not available on this storyteller")
+    }
     fn as_lunii_mut(&mut self) -> Option<&mut LuniiDevice> {
         None
     }
@@ -90,6 +106,23 @@ pub trait Device: Send {
     }
 
     /// Single story matching `uuid_part`, error if none or ambiguous.
+    /// Error if the story `uuid` is already on the device.
+    fn check_not_loaded(&self, uuid: &Uuid) -> Result<()> {
+        if let Some(s) = self.stories().get(&uuid.to_string()) {
+            bail!("'{}' is already loaded !", s.name());
+        }
+        Ok(())
+    }
+
+    /// Removes the story being imported after an abort, returns the error.
+    fn abort_cleanup(&self, ctx: &Context, uuid: &Uuid) -> anyhow::Error {
+        ctx.warn("Import aborted, performing cleanup on current story...");
+        if let Err(e) = self.clean_up_story_dir(uuid) {
+            ctx.error(e.to_string());
+        }
+        crate::report::Aborted.into()
+    }
+
     fn find_story(&self, uuid_part: &str) -> Result<Story> {
         let list = self.stories().matching(uuid_part);
         match list.len() {

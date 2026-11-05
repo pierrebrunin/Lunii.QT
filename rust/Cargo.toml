@@ -5,7 +5,6 @@ members = ["lunii-core", "lunii-cli", "lunii-gui"]
 [workspace.package]
 version = "3.1.4"
 edition = "2024"
-rust-version = "1.95"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/o-daneel/Lunii.QT"
 

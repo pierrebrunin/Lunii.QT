@@ -334,8 +334,9 @@ Lunii.QT vous offre la possibilité de sauvegarder la dernière version du Firmw
 ## Compilation
 
 L'application est écrite en Rust (interface [Slint](https://slint.dev)). Le code
-est dans le dossier [`rust/`](rust/README.md), qui décrit la compilation, les
-variables d'environnement utiles et la génération des traductions.
+est dans le dossier [`rust/`](rust/README.md), qui décrit les prérequis, la
+compilation, les vérifications avant de pousser, les variables d'environnement
+utiles et la génération des traductions.
 
 ```bash
 cd rust
@@ -379,28 +380,14 @@ Cette application téléchargera une fois pour toutes la base de données des hi
 En cas de problème, il suffit de supprimer ce fichier et ce répertoire pour forcer le rafraîchissement.
 
 
-### Dépendances manquantes sous Linux
-Si vous rencontrez l’erreur suivante lors du lancement de Lunii.QT sous Linux :
+### Dépendances sous Linux
+L'interface a seulement besoin des bibliothèques graphiques d'un bureau standard
+(X11 ou Wayland, xkbcommon, fontconfig), déjà présentes sur les distributions
+courantes. Les boîtes de dialogue d'ouverture de fichiers passent par
+`xdg-desktop-portal`. Si elles ne s'ouvrent pas, installez le portail de votre
+bureau (par exemple `xdg-desktop-portal-gtk` ou `xdg-desktop-portal-kde`).
 
-```
-qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
-This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
-
-Available platform plugins are: offscreen, vkkhrdisplay, xcb, minimalegl, vnc, eglfs, minimal, linuxfb, wayland-egl, wayland.
-```
-
-Cela signifie qu’une bibliothèque système requise pour l’interface graphique Qt est manquante.
-
-**Solution :**  
-Installez la dépendance manquante en exécutant la commande suivante dans votre terminal :
-
-```bash
-sudo apt install libxcb-cursor0
-```
-
-Après l’installation, essayez de relancer Lunii.QT.  
-Si le problème persiste, assurez-vous que toutes les autres dépendances Qt sont installées.
-
+Pour compiler l'application, voir les prérequis dans [`rust/README.md`](rust/README.md#prérequis).
 
 ### Exportation V3
 Afin de supporter l'exportation d'histoires depuis une Luniis v3, vous devez placer vos clés de périphérique ici :

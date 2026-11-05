@@ -1,12 +1,12 @@
 // Main window (port of pkg/ui/main.ui + pkg/main_window.py).
 
 import { ComboBox, LineEdit, ProgressIndicator, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
-import { StoryRow, LogLine, DialogKind, Theme, IconButton } from "common.slint";
+import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, EpisodeRow } from "common.slint";
 import { StoryTable } from "story_table.slint";
-import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog } from "dialogs.slint";
+import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, PodcastDialog } from "dialogs.slint";
 import { LogPanel } from "log_panel.slint";
 
-export { Theme, StoryRow, LogLine, DialogKind }
+export { Action, Theme, StoryRow, LogLine, DialogKind, EpisodeRow }
 
 component StatusText inherits Text {
     color: Theme.status-text;
@@ -43,6 +43,7 @@ export component MainWindow inherits Window {
     in property <int> current-row: -1;
     in property <bool> show-nm: true;
     in-out property <bool> show-size: false;
+    in-out property <bool> normalize-volume: false;
     in-out property <bool> show-details: true;
     in property <string> list-placeholder;
     in property <bool> drop-hover;
@@ -104,11 +105,12 @@ export component MainWindow inherits Window {
     in property <bool> has-selection;
     in property <bool> can-export;
     in property <bool> can-export-all;
+    in property <bool> can-add-to-album;
     in property <bool> ffmpeg-present;
     in property <bool> update-available;
     in property <string> latest-version;
-    // every menu entry goes through this callback, with the action name
-    callback action(name: string);
+    // every menu entry goes through this callback
+    callback action(action: Action);
 
     // dialogs
     in-out property <DialogKind> dialog: DialogKind.none;
@@ -120,6 +122,21 @@ export component MainWindow inherits Window {
     in-out property <bool> nm-autoplay;
     in-out property <int> nm-max-stories: 3;
     in-out property <bool> nm-turnoff;
+    // podcast dialog
+    in-out property <string> podcast-url;
+    in property <bool> podcast-loading;
+    in property <string> podcast-header;
+    in property <[EpisodeRow]> podcast-rows;
+    in property <int> podcast-selected-count;
+    in-out property <string> podcast-filter;
+    in-out property <int> podcast-mode;
+    callback podcast-mode-changed();
+    callback podcast-load();
+    callback podcast-toggle(index: int);
+    callback podcast-select-all(all: bool);
+    callback podcast-filter-edited();
+    callback podcast-accepted();
+
     callback confirm-remove-accepted();
     callback login-accepted();
     callback night-mode-accepted();
@@ -142,61 +159,65 @@ export component MainWindow inherits Window {
     MenuBar {
         Menu {
             title: @tr("File");
-            MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: !root.busy; activated => { root.action("open-device"); } }
-            MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: !root.busy; activated => { root.action("refresh-devices"); } }
+            MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: !root.busy; activated => { root.action(Action.open-device); } }
+            MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: !root.busy; activated => { root.action(Action.refresh-devices); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Import STUdio DB"); enabled: !root.busy; activated => { root.action("import-db"); } }
-            MenuItem { title: @tr("Refresh official DB"); enabled: !root.busy; activated => { root.action("refresh-db"); } }
+            MenuItem { title: @tr("Import STUdio DB"); enabled: !root.busy; activated => { root.action(Action.import-db); } }
+            MenuItem { title: @tr("Refresh official DB"); enabled: !root.busy; activated => { root.action(Action.refresh-db); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Exit"); shortcut: @keys(Control + Q); activated => { root.action("exit"); } }
+            MenuItem { title: @tr("Exit"); shortcut: @keys(Control + Q); activated => { root.action(Action.exit); } }
         }
         Menu {
             title: @tr("Stories");
-            MenuItem { title: @tr("Move Top"); shortcut: @keys(Control + UpArrow); enabled: root.selection-actions; activated => { root.action("move-top"); } }
-            MenuItem { title: @tr("Move Up"); shortcut: @keys(Alt + UpArrow); enabled: root.selection-actions; activated => { root.action("move-up"); } }
-            MenuItem { title: @tr("Move Down"); shortcut: @keys(Alt + DownArrow); enabled: root.selection-actions; activated => { root.action("move-down"); } }
-            MenuItem { title: @tr("Move Bottom"); shortcut: @keys(Control + DownArrow); enabled: root.selection-actions; activated => { root.action("move-bottom"); } }
+            MenuItem { title: @tr("Move Top"); shortcut: @keys(Control + UpArrow); enabled: root.selection-actions; activated => { root.action(Action.move-top); } }
+            MenuItem { title: @tr("Move Up"); shortcut: @keys(Alt + UpArrow); enabled: root.selection-actions; activated => { root.action(Action.move-up); } }
+            MenuItem { title: @tr("Move Down"); shortcut: @keys(Alt + DownArrow); enabled: root.selection-actions; activated => { root.action(Action.move-down); } }
+            MenuItem { title: @tr("Move Bottom"); shortcut: @keys(Control + DownArrow); enabled: root.selection-actions; activated => { root.action(Action.move-bottom); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Hide / Show"); shortcut: @keys(Control + H); enabled: root.selection-actions; activated => { root.action("hide"); } }
-            MenuItem { title: @tr("Force Night Mode"); shortcut: @keys(Control + N); enabled: root.selection-actions && !root.is-flam; activated => { root.action("night-mode"); } }
+            MenuItem { title: @tr("Hide / Show"); shortcut: @keys(Control + H); enabled: root.selection-actions; activated => { root.action(Action.hide); } }
+            MenuItem { title: @tr("Force Night Mode"); shortcut: @keys(Control + N); enabled: root.selection-actions && !root.is-flam; activated => { root.action(Action.night-mode); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Import"); shortcut: @keys(Control + I); enabled: root.story-actions && root.can-import; activated => { root.action("import"); } }
-            MenuItem { title: @tr("Import MP3 album"); shortcut: @keys(Control + Shift + I); enabled: root.story-actions && root.can-import; activated => { root.action("import-album"); } }
-            MenuItem { title: @tr("Export"); shortcut: @keys(Control + S); enabled: root.selection-actions && root.can-export; activated => { root.action("export"); } }
-            MenuItem { title: @tr("Export All"); shortcut: @keys(Control + Shift + S); enabled: root.story-actions && root.can-export-all; activated => { root.action("export-all"); } }
-            MenuItem { title: @tr("Remove"); shortcut: @keys(Delete); enabled: root.selection-actions; activated => { root.action("remove"); } }
+            MenuItem { title: @tr("Import"); shortcut: @keys(Control + I); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import); } }
+            MenuItem { title: @tr("Import MP3 album"); shortcut: @keys(Control + Shift + I); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import-album); } }
+            MenuItem { title: @tr("Add MP3 to album"); enabled: root.story-actions && root.can-add-to-album; activated => { root.action(Action.add-to-album); } }
+            MenuItem { title: @tr("Import a podcast"); shortcut: @keys(Control + P); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import-podcast); } }
+            MenuItem { title: @tr("Update podcasts"); enabled: root.story-actions && root.can-import; activated => { root.action(Action.update-podcasts); } }
+            MenuItem { title: @tr("Export"); shortcut: @keys(Control + S); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
+            MenuItem { title: @tr("Export All"); shortcut: @keys(Control + Shift + S); enabled: root.story-actions && root.can-export-all; activated => { root.action(Action.export-all); } }
+            MenuItem { title: @tr("Remove"); shortcut: @keys(Delete); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
         }
         Menu {
             title: @tr("Tools");
-            MenuItem { title: @tr("Show size"); checkable: true; checked <=> root.show-size; activated => { root.action("show-size"); } }
-            MenuItem { title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action("show-details"); } }
+            MenuItem { title: @tr("Show size"); checkable: true; checked <=> root.show-size; activated => { root.action(Action.show-size); } }
+            MenuItem { title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action(Action.show-details); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action("show-log"); } }
-            MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action("get-firmware"); } }
+            MenuItem { title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action(Action.show-log); } }
+            MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action(Action.get-firmware); } }
             MenuSeparator { }
             Menu {
                 title: @tr("Lost stories");
                 enabled: root.story-actions;
-                MenuItem { title: @tr("Find"); activated => { root.action("find-lost"); } }
-                MenuItem { title: @tr("Recover"); activated => { root.action("recover-lost"); } }
-                MenuItem { title: @tr("Remove"); activated => { root.action("remove-lost"); } }
+                MenuItem { title: @tr("Find"); activated => { root.action(Action.find-lost); } }
+                MenuItem { title: @tr("Recover"); activated => { root.action(Action.recover-lost); } }
+                MenuItem { title: @tr("Remove"); activated => { root.action(Action.remove-lost); } }
             }
             MenuSeparator { }
+            MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: root.ffmpeg-present; activated => { root.action(Action.normalize-volume); } }
             MenuItem {
                 title: root.ffmpeg-present ? @tr("FFMPEG detected") : @tr("FFMPEG is missing (📥)");
                 checked: root.ffmpeg-present;
                 enabled: !root.busy;
-                activated => { root.action("ffmpeg"); }
+                activated => { root.action(Action.ffmpeg); }
             }
         }
         Menu {
             title: root.update-available ? @tr("[ Help ]") : @tr("Help");
-            if root.update-available: MenuItem { title: @tr("Update to {}", root.latest-version); activated => { root.action("update"); } }
-            MenuItem { title: @tr("About"); shortcut: @keys(F1); activated => { root.action("about"); } }
+            if root.update-available: MenuItem { title: @tr("Update to {}", root.latest-version); activated => { root.action(Action.update); } }
+            MenuItem { title: @tr("About"); shortcut: @keys(F1); activated => { root.action(Action.about); } }
         }
         if root.update-available: Menu {
             title: @tr("Update is available");
-            MenuItem { title: @tr("Update to {}", root.latest-version); activated => { root.action("update"); } }
+            MenuItem { title: @tr("Update to {}", root.latest-version); activated => { root.action(Action.update); } }
         }
     }
 
@@ -210,7 +231,7 @@ export component MainWindow inherits Window {
             IconButton {
                 icon: @image-url("../../../res/refresh.png");
                 enabled: !root.busy;
-                clicked => { root.action("refresh-devices"); }
+                clicked => { root.action(Action.refresh-devices); }
             }
             Rectangle {
                 max-width: 220px;
@@ -237,7 +258,7 @@ export component MainWindow inherits Window {
                 icon-size: 22px;
                 icon-width: 47px;
                 enabled: root.nm-available && !root.busy;
-                clicked => { root.action("night-mode-settings"); }
+                clicked => { root.action(Action.night-mode-settings); }
             }
             Rectangle { min-width: 20px; max-width: 80px; horizontal-stretch: 0.2; }
             LineEdit {
@@ -249,7 +270,7 @@ export component MainWindow inherits Window {
             IconButton {
                 icon: @image-url("../../../res/refresh_db.png");
                 enabled: !root.busy;
-                clicked => { root.action("refresh-db"); }
+                clicked => { root.action(Action.refresh-db); }
             }
         }
 
@@ -257,19 +278,20 @@ export component MainWindow inherits Window {
         ContextMenuArea {
             enabled: root.story-actions;
             Menu {
-                MenuItem { title: @tr("Move Top"); enabled: root.selection-actions; activated => { root.action("move-top"); } }
-                MenuItem { title: @tr("Move Up"); enabled: root.selection-actions; activated => { root.action("move-up"); } }
-                MenuItem { title: @tr("Move Down"); enabled: root.selection-actions; activated => { root.action("move-down"); } }
-                MenuItem { title: @tr("Move Bottom"); enabled: root.selection-actions; activated => { root.action("move-bottom"); } }
+                MenuItem { title: @tr("Move Top"); enabled: root.selection-actions; activated => { root.action(Action.move-top); } }
+                MenuItem { title: @tr("Move Up"); enabled: root.selection-actions; activated => { root.action(Action.move-up); } }
+                MenuItem { title: @tr("Move Down"); enabled: root.selection-actions; activated => { root.action(Action.move-down); } }
+                MenuItem { title: @tr("Move Bottom"); enabled: root.selection-actions; activated => { root.action(Action.move-bottom); } }
                 MenuSeparator { }
-                MenuItem { title: @tr("Hide / Show"); enabled: root.selection-actions; activated => { root.action("hide"); } }
-                MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions && !root.is-flam; activated => { root.action("night-mode"); } }
+                MenuItem { title: @tr("Hide / Show"); enabled: root.selection-actions; activated => { root.action(Action.hide); } }
+                MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions && !root.is-flam; activated => { root.action(Action.night-mode); } }
                 MenuSeparator { }
-                MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action("import"); } }
-                MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action("import-album"); } }
-                MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action("export"); } }
-                MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action("export-all"); } }
-                MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action("remove"); } }
+                MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action(Action.import); } }
+                MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action(Action.import-album); } }
+                MenuItem { title: @tr("Add MP3 to album"); enabled: root.can-add-to-album; activated => { root.action(Action.add-to-album); } }
+                MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
+                MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action(Action.export-all); } }
+                MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
             }
 
             table := StoryTable {
@@ -437,7 +459,7 @@ export component MainWindow inherits Window {
                 }
                 log-toggle := TouchArea {
                     mouse-cursor: pointer;
-                    clicked => { root.action("show-log"); }
+                    clicked => { root.action(Action.show-log); }
                 }
             }
         }
@@ -470,6 +492,24 @@ export component MainWindow inherits Window {
         close => { root.dialog = DialogKind.none; }
         accepted => { root.dialog = DialogKind.none; root.night-mode-accepted(); }
         open-guide => { root.open-url(@tr("https://support.lunii.com/hc/en-gb/categories/4404826574353-The-Night-Mode")); }
+    }
+    if root.dialog == DialogKind.podcast: PodcastDialog {
+        width: root.width;
+        height: root.height;
+        url <=> root.podcast-url;
+        loading: root.podcast-loading;
+        header: root.podcast-header;
+        rows: root.podcast-rows;
+        selected-count: root.podcast-selected-count;
+        filter <=> root.podcast-filter;
+        mode <=> root.podcast-mode;
+        mode-changed => { root.podcast-mode-changed(); }
+        close => { root.dialog = DialogKind.none; }
+        load => { root.podcast-load(); }
+        toggle(index) => { root.podcast-toggle(index); }
+        select-all(all) => { root.podcast-select-all(all); }
+        filter-edited => { root.podcast-filter-edited(); }
+        accepted => { root.dialog = DialogKind.none; root.podcast-accepted(); }
     }
     if root.dialog == DialogKind.about: AboutDialog {
         width: root.width;

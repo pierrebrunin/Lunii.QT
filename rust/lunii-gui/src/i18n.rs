@@ -237,6 +237,7 @@ pub fn system_language() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn placeholders() {
@@ -263,6 +264,116 @@ mod tests {
             "Pas assez de place restant sur la Lunii (reste 12Mo)"
         );
         assert_eq!(tr_message("Totally unknown"), "Totally unknown");
+    }
+
+    /// String literals passed to the user facing calls of `source` (errors,
+    /// contexts, info / warning / error logs), placeholders included.
+    fn user_messages(source: &str) -> Vec<String> {
+        const CALLS: [&str; 9] = [
+            "bail!(",
+            "anyhow!(",
+            ".context(",
+            "ctx.info(",
+            "ctx.warn(",
+            "ctx.error(",
+            "ctx.info(format!(",
+            "ctx.warn(format!(",
+            "ctx.error(format!(",
+        ];
+        let mut out = Vec::new();
+        for call in CALLS {
+            let mut rest = source;
+            while let Some(pos) = rest.find(call) {
+                rest = &rest[pos + call.len()..];
+                let Some(lit) = rest.trim_start().strip_prefix('"') else {
+                    continue;
+                };
+                let mut msg = String::new();
+                let mut chars = lit.chars();
+                while let Some(c) = chars.next() {
+                    match c {
+                        '"' => break,
+                        '\\' => {
+                            if let Some(n) = chars.next() {
+                                msg.push(if n == 'n' { '\n' } else { n });
+                            }
+                        }
+                        c => msg.push(c),
+                    }
+                }
+                out.push(msg);
+            }
+        }
+        out
+    }
+
+    /// The messages of `lunii-core` shown to the user have a French
+    /// translation: they are translated by matching their English text, a
+    /// message changed in `lunii-core` would silently lose it.
+    #[test]
+    fn core_messages_are_translated() {
+        assert!(init("fr"));
+        // internal errors, left in English (bug reports)
+        const TECHNICAL: [&str; 2] = ["can't sync to MPEG frame", "embedded font"];
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../lunii-core/src");
+        let mut missing = Vec::new();
+        let mut checked = 0;
+        fn rust_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    rust_files(&path, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    out.push(path);
+                }
+            }
+        }
+        let mut files = Vec::new();
+        rust_files(&root, &mut files);
+        // crypto errors: internal, left in English
+        files.retain(|f| !f.ends_with("crypto.rs"));
+        for path in files {
+            let source = std::fs::read_to_string(&path).unwrap();
+            // the tests of the file are not user facing
+            let source = source.split("#[cfg(test)]").next().unwrap();
+            for msg in user_messages(source) {
+                // `{}`, `{name}`, `{:?}`... replaced by a value
+                let mut sample = String::new();
+                let mut in_placeholder = false;
+                for c in msg.chars() {
+                    match c {
+                        '{' => in_placeholder = true,
+                        '}' if in_placeholder => {
+                            in_placeholder = false;
+                            sample.push_str("X1");
+                        }
+                        _ if in_placeholder => {}
+                        c => sample.push(c),
+                    }
+                }
+                let text = sample.replace("X1", "");
+                if !text.chars().any(char::is_alphabetic) || TECHNICAL.contains(&msg.as_str()) {
+                    continue;
+                }
+                checked += 1;
+                if tr_message(&sample) == sample {
+                    missing.push(format!(
+                        "{}: {msg}",
+                        path.file_name().unwrap().to_string_lossy()
+                    ));
+                }
+            }
+        }
+        // the extraction works (not an empty check)
+        assert!(checked > 100, "only {checked} messages found");
+        missing.sort();
+        missing.dedup();
+        assert!(
+            missing.is_empty(),
+            "{} untranslated lunii-core messages:\n{}",
+            missing.len(),
+            missing.join("\n")
+        );
     }
 
     #[test]

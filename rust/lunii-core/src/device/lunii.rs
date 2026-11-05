@@ -3,18 +3,15 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
-use serde_json::Value;
 use uuid::Uuid;
 
 use super::Device;
 use super::common::{self, StoryZip, join_path, remove_suffix, skip_chars, split_path};
 use crate::archive::Archive;
 use crate::constants::*;
-use crate::convert::{audio, image};
 use crate::crypto::{self, hex_spaced, hexlify, reverse_bytes};
-use crate::db;
-use crate::report::{Aborted, Context, check_abort};
-use crate::story::{self, Story, StoryList, StudioStory, archive_type, uuid_from_archive};
+use crate::report::{Context, check_abort};
+use crate::story::{self, Story, StoryList, archive_type, uuid_from_archive};
 
 pub const STORIES_BASEDIR: &str = ".content/";
 pub const HIDDEN_STORIES_BASEDIR: &str = ".content.hidden/";
@@ -452,12 +449,6 @@ impl LuniiDevice {
         rel.to_string()
     }
 
-    fn write_ciphered(&self, data_plain: &[u8], output_dir: &Path, file: &str) -> Result<()> {
-        let path = output_dir.join(file);
-        let data = self.ciphered_data(&path.to_string_lossy(), data_plain)?;
-        common::write_file(&path, &data)
-    }
-
     fn check_v3_key(&self, story_path: &Path) -> bool {
         let Ok(ri) = std::fs::read(story_path.join("ri")) else {
             return false;
@@ -561,21 +552,6 @@ impl LuniiDevice {
         true
     }
 
-    fn check_not_loaded(&self, uuid: &Uuid) -> Result<()> {
-        if let Some(s) = self.stories.get(&uuid.to_string()) {
-            bail!("'{}' is already loaded !", s.name());
-        }
-        Ok(())
-    }
-
-    fn abort_cleanup(&self, ctx: &Context, uuid: &Uuid) -> anyhow::Error {
-        ctx.warn("Import aborted, performing cleanup on current story...");
-        if let Err(e) = self.clean_up_story_dir(uuid) {
-            ctx.error(e.to_string());
-        }
-        Aborted.into()
-    }
-
     fn finish_import(
         &mut self,
         ctx: &Context,
@@ -600,7 +576,7 @@ impl LuniiDevice {
         let new_uuid = Uuid::from_slice(&archive.read(FILE_UUID)?)?;
         self.check_not_loaded(&new_uuid)?;
 
-        import_plain_metadata(&archive, &new_uuid)?;
+        common::import_plain_metadata(&archive, &new_uuid)?;
 
         let short = story::short_uuid(&new_uuid);
         let output = self.content_dir().join(&short);
@@ -751,98 +727,6 @@ impl LuniiDevice {
         )
     }
 
-    fn import_studio(&mut self, ctx: &Context, path: &Path) -> Result<()> {
-        let archive = Archive::open(path)?;
-        if archive.contains(FILE_UUID) {
-            bail!("plain.pk format detected ! Unable to add this story.");
-        }
-        if !archive.contains(FILE_STUDIO_JSON) {
-            bail!("missing 'story.json'. Unable to add this story.");
-        }
-        let story_json: Value = serde_json::from_slice(&archive.read(FILE_STUDIO_JSON)?)?;
-        let transcoding = transcoding_supported();
-        let studio = StudioStory::load(&story_json, transcoding)?;
-        if !studio.compatible {
-            bail!(
-                "STUdio story with non MP3 audio file. You need FFMPEG tool to import such kind of story, refer to README.md"
-            );
-        }
-
-        db::thirdparty_add_story(&studio.uuid, Some(&studio.title), Some(&studio.description))?;
-        if let Some(s) = self.stories.get(&studio.uuid.to_string()) {
-            bail!("'{}' is already loaded !", s.name());
-        }
-
-        let short = studio.short_uuid();
-        let output = self.content_dir().join(&short);
-        std::fs::create_dir_all(&output)?;
-
-        let files = archive.file_names();
-        for (index, entry) in files.iter().enumerate() {
-            ctx.story_progress(&short, index, files.len());
-            if ctx.is_aborted() {
-                return Err(self.abort_cleanup(ctx, &studio.uuid));
-            }
-            if entry.ends_with(FILE_STUDIO_JSON) {
-                continue;
-            }
-            if entry.ends_with(FILE_STUDIO_THUMB) {
-                db::thirdparty_add_thumb(&studio.uuid, &archive.read(entry)?)?;
-                continue;
-            }
-            if !entry.starts_with("assets") {
-                continue;
-            }
-
-            let data = archive.read(entry)?;
-            let file = skip_chars(entry, 7);
-            let (new_name, data) = if let Some((name, _)) = studio.ri.get(&file) {
-                (
-                    Self::ciphered_name(name, true, false),
-                    image::image_to_bitmap_rle4(&data)?,
-                )
-            } else if let Some((name, _)) = studio.si.get(&file) {
-                let new_name = Self::ciphered_name(name, false, true);
-                (
-                    new_name.clone(),
-                    convert_studio_audio(ctx, &file, &new_name, data, transcoding)?,
-                )
-            } else {
-                continue;
-            };
-
-            let data_ciphered = self.ciphered_data(&file, &data)?;
-            ctx.debug(format!("File {}/{} > {new_name}", index + 1, files.len()));
-            common::write_with_progress(ctx, &output.join(&new_name), &data_ciphered)?;
-        }
-
-        // lunii index files
-        let ri_data = studio.ri_data();
-        self.write_ciphered(&ri_data, &output, "ri")?;
-        if self.device_version.is_lunii_v1_v2() {
-            let ri_ciphered = self.ciphered_data("ri", &ri_data)?;
-            self.bt = self.v2_bt(&ri_ciphered)?;
-        }
-        self.write_ciphered(&studio.si_data(), &output, "si")?;
-        self.write_ciphered(&studio.li_data(), &output, "li")?;
-        self.write_ciphered(&studio.ni_data()?, &output, "ni")?;
-
-        ctx.info("Authorization file creation...");
-        std::fs::write(output.join("bt"), &self.bt)?;
-
-        if studio.nm {
-            ctx.info("Night mode file creation...");
-            std::fs::write(output.join("nm"), b"")?;
-        }
-
-        self.finish_import(
-            ctx,
-            &output,
-            Story::with_flags(studio.uuid, false, studio.nm),
-            false,
-        )
-    }
-
     fn export_backup_story(&self, ctx: &Context, story: &Story, out_dir: &Path) -> Result<PathBuf> {
         let story_path = self.story_path(story);
         let short = story.short_uuid();
@@ -967,55 +851,6 @@ impl LuniiDevice {
     }
 }
 
-/// Registers the metadata / thumbnail of a third-party plain archive.
-pub(crate) fn import_plain_metadata(archive: &Archive, uuid: &Uuid) -> Result<()> {
-    if archive.contains(FILE_META) {
-        let meta: Value = serde_json::from_slice(&archive.read(FILE_META)?)?;
-        let meta_uuid = meta.get("uuid").and_then(Value::as_str).unwrap_or_default();
-        if meta_uuid.to_uppercase() != db::db_key(uuid) {
-            bail!("Metadata UUID mismatch ({meta_uuid})");
-        }
-        db::thirdparty_add_story(
-            uuid,
-            meta.get("title").and_then(Value::as_str),
-            meta.get("description").and_then(Value::as_str),
-        )?;
-    }
-    if archive.contains(FILE_THUMB) {
-        db::thirdparty_add_thumb(uuid, &archive.read(FILE_THUMB)?)?;
-    }
-    Ok(())
-}
-
-/// Transcodes / cleans a STUdio audio asset when necessary.
-pub(crate) fn convert_studio_audio(
-    ctx: &Context,
-    file: &str,
-    new_name: &str,
-    mut data: Vec<u8>,
-    transcoding: bool,
-) -> Result<Vec<u8>> {
-    if audio::transcoding_required(file, &data) {
-        if !transcoding {
-            bail!(
-                "STUdio story with non MP3 audio file. You need FFMPEG tool to import such kind of story, refer to README.md"
-            );
-        }
-        ctx.warn(format!(
-            "⌛ Transcoding audio {new_name} : {} KB ...",
-            data.len() / 1024
-        ));
-        ctx.file_progress("⌛ FFMPEG", 0, 0);
-        data = audio::audio_to_mp3(&data)?;
-        ctx.file_progress("", 0, 0);
-    }
-    if audio::tags_removal_required(&data) {
-        ctx.warn(format!("⌛ Removing tags from audio {new_name}"));
-        data = audio::mp3_tag_cleanup(&data);
-    }
-    Ok(data)
-}
-
 impl Device for LuniiDevice {
     fn mount_point(&self) -> &Path {
         &self.mount_point
@@ -1103,7 +938,9 @@ impl Device for LuniiDevice {
             ArchiveType::LuniiPlain => self.import_lunii_plain(ctx, path),
             ArchiveType::LuniiV2Zip | ArchiveType::LuniiV27z => self.import_lunii_v2(ctx, path),
             ArchiveType::LuniiV3Zip => self.import_lunii_v3(ctx, path),
-            ArchiveType::StudioZip | ArchiveType::StudioSevenZ => self.import_studio(ctx, path),
+            ArchiveType::StudioZip | ArchiveType::StudioSevenZ => {
+                common::import_studio(self, ctx, path)
+            }
             other => bail!("Archive => Unsupported type 0x{:02X}", other as u8),
         }
     }
@@ -1151,6 +988,19 @@ impl Device for LuniiDevice {
             (dir_name.len() == 8 && dir_name.chars().all(|c| c.is_ascii_hexdigit()))
                 .then(|| format!("{}{dir_name}", "00".repeat(12)))
         })
+    }
+
+    fn album_track_count(&self, story: &Story) -> Option<usize> {
+        crate::album::device_track_count(&self.story_path(story))
+    }
+
+    fn add_album_tracks(
+        &mut self,
+        ctx: &Context,
+        uuid: &Uuid,
+        tracks: &[crate::album::Track],
+    ) -> Result<usize> {
+        common::append_album_tracks(self, ctx, uuid, tracks)
     }
 
     fn validate_story_dir(&mut self, ctx: &Context, story_dir: &Path) -> bool {
@@ -1239,6 +1089,37 @@ pub fn feed_config(ctx: &Context, root: &Path) -> Vec<u16> {
         }
     }
     config
+}
+
+impl common::StoryWriter for LuniiDevice {
+    fn cipher_story_file(&self, file: &str, data: &[u8]) -> Result<Vec<u8>> {
+        self.ciphered_data(file, data)
+    }
+
+    /// The authorization file `bt`: on v1/v2 derived from `ri` (rewritten
+    /// when tracks are appended), the device one on v3.
+    fn seal_story(
+        &mut self,
+        ctx: &Context,
+        story_dir: &Path,
+        _story: &Story,
+        ri: &[u8],
+        new_story: bool,
+    ) -> Result<()> {
+        if self.device_version.is_lunii_v1_v2() {
+            let bt = self.v2_bt(ri)?;
+            if new_story {
+                self.bt = bt.clone();
+            }
+            ctx.info("Authorization file creation...");
+            return common::write_file(&story_dir.join("bt"), &bt);
+        }
+        if new_story {
+            ctx.info("Authorization file creation...");
+            std::fs::write(story_dir.join("bt"), &self.bt)?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

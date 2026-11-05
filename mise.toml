@@ -1,2 +1,6 @@
+# Versions des outils de développement : seule source de vérité, utilisée en
+# local (`mise install`) et par la CI (jdx/mise-action).
 [tools]
-python = "latest"
+rust = { version = "1.99.1", components = "rustfmt,clippy" }
+# régénération du fichier de traduction (lunii-gui/tools/ts2po.py)
+python = "3.13.7"

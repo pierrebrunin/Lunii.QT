@@ -56,7 +56,7 @@ pub fn import_studio_db(ctx: &Context, path: &Path) -> Result<(usize, usize)> {
 
 /// Downloads `url` to `target`, reporting progress.
 pub fn download(ctx: &Context, url: &str, target: &Path, label: &str) -> Result<u64> {
-    let resp = http::agent(Duration::from_secs(60)).get(url).call()?;
+    let resp = http::download_agent().get(url).call()?;
     let total = http::content_length(&resp).unwrap_or(0);
     let mut reader = resp.into_body().into_reader();
     let mut out = std::fs::File::create(target)?;

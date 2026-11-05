@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use slint::Rgb8Pixel;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 use slint::platform::{EventLoopProxy, Platform, PlatformError, WindowAdapter};
-use slint::{ComponentHandle, PhysicalSize};
+use slint::{ComponentHandle, Model, PhysicalSize};
 
 use crate::app::App;
 use crate::{DialogKind, MainWindow};
@@ -127,27 +127,27 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     ui.invoke_filter_edited();
 
     ui.set_show_size(true);
-    app.action("show-size");
+    app.action(crate::Action::ShowSize);
     pump(&queue, 800);
     render(0, &shot("05-sizes"));
 
     app.row_pointer(1, false, false, false);
-    app.action("remove");
+    app.action(crate::Action::Remove);
     pump(&queue, 200);
     render(0, &shot("06-confirm-remove"));
     ui.set_dialog(DialogKind::None);
 
-    app.action("night-mode-settings");
+    app.action(crate::Action::NightModeSettings);
     pump(&queue, 200);
     render(0, &shot("07-night-mode"));
     ui.set_dialog(DialogKind::None);
 
-    app.action("about");
+    app.action(crate::Action::About);
     pump(&queue, 200);
     render(0, &shot("08-about"));
     ui.set_dialog(DialogKind::None);
 
-    app.action("get-firmware");
+    app.action(crate::Action::GetFirmware);
     pump(&queue, 200);
     render(0, &shot("09-login"));
     ui.set_dialog(DialogKind::None);
@@ -158,7 +158,7 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
 
     // a long task: progress bars
     app.row_pointer(0, false, false, false);
-    app.action("hide");
+    app.action(crate::Action::Hide);
     pump(&queue, 300);
     render(0, &shot("11-hidden-story"));
 
@@ -172,6 +172,34 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     pump(&queue, 100);
     render(0, &shot("12-progress"));
     app.handle_event(crate::worker::Event::Finished);
+
+    // podcast dialog, from a feed file (LUNII_QT_SHOT_FEED)
+    if let Some(feed) = std::env::var_os("LUNII_QT_SHOT_FEED") {
+        let xml = std::fs::read_to_string(feed)?;
+        let podcast = lunii_core::podcast::parse_feed("https://example.org/feed.xml", &xml)?;
+        let imported: std::collections::HashSet<String> = podcast.episodes[..2]
+            .iter()
+            .map(|e| e.guid.clone())
+            .collect();
+        ui.set_podcast_url("https://www.radiofrance.fr/franceinter/podcasts/les-odyssees".into());
+        ui.set_dialog(DialogKind::Podcast);
+        app.handle_event(crate::worker::Event::Podcast(Ok(Box::new(
+            crate::worker::PodcastView {
+                stories: imported.clone(),
+                podcast,
+                on_device: true,
+                imported,
+            },
+        ))));
+        let n = ui.get_podcast_rows().row_count();
+        for row in [n - 1, n - 2, 0, 2] {
+            let index = ui.get_podcast_rows().row_data(row).unwrap().index;
+            ui.invoke_podcast_toggle(index);
+        }
+        pump(&queue, 300);
+        render(0, &shot("14-podcast"));
+        ui.set_dialog(DialogKind::None);
+    }
 
     // real import through the UI
     if let Some(list) = std::env::var_os("LUNII_QT_SHOT_IMPORT") {

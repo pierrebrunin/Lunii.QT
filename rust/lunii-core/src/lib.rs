@@ -17,7 +17,9 @@ pub mod db;
 pub mod device;
 pub mod firmware;
 mod http;
+pub mod podcast;
 pub mod report;
+pub mod settings;
 pub mod story;
 pub mod tools;
 

@@ -14,10 +14,14 @@ use lunii_core::{Context, Device, Level};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use uuid::Uuid;
 
-use crate::i18n::{tr, tr_message, trf};
+use crate::i18n::{tr, trf};
 use crate::logfile;
-use crate::worker::{self, Event, GuiReporter, SharedDevice, Sink, StoryInfo, Task};
-use crate::{DialogKind, LogLine, MainWindow, StoryRow, Theme};
+use crate::worker::{self, Event, GuiReporter, PodcastView, SharedDevice, Sink, StoryInfo, Task};
+use crate::{EpisodeRow, LogLine, MainWindow, StoryRow, Theme};
+
+mod actions;
+mod log_panel;
+mod podcast;
 
 pub const APP_VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 const RELEASES_URL: &str = "https://github.com/o-daneel/Lunii.QT/releases/latest";
@@ -50,7 +54,7 @@ struct Eta {
     start: Instant,
     /// bytes expected for the whole import
     total: u64,
-    /// `Context::written()` when the import started
+    /// `Context::progress()` when the import started
     base: u64,
     /// (time, bytes written) over the last `ETA_WINDOW`
     samples: VecDeque<(Instant, u64)>,
@@ -136,6 +140,8 @@ struct State {
     /// highest level logged while the log panel was hidden
     log_alert: i32,
     eta: Option<Eta>,
+    /// podcast of the selection dialog, and its selected episodes
+    podcast: Option<(Box<PodcastView>, HashSet<usize>)>,
 }
 
 pub struct App {
@@ -143,6 +149,7 @@ pub struct App {
     rows: Rc<VecModel<StoryRow>>,
     devices_model: Rc<VecModel<SharedString>>,
     log_model: Rc<VecModel<LogLine>>,
+    podcast_rows: Rc<VecModel<EpisodeRow>>,
     state: RefCell<State>,
     drop_timer: slint::Timer,
     eta_timer: slint::Timer,
@@ -215,6 +222,7 @@ impl App {
             rows: Rc::new(VecModel::default()),
             devices_model: Rc::new(VecModel::default()),
             log_model: Rc::new(VecModel::default()),
+            podcast_rows: Rc::new(VecModel::default()),
             state: RefCell::new(State::default()),
             drop_timer: slint::Timer::default(),
             eta_timer: slint::Timer::default(),
@@ -225,6 +233,8 @@ impl App {
         ui.set_rows(ModelRc::from(app.rows.clone()));
         ui.set_devices(ModelRc::from(app.devices_model.clone()));
         ui.set_ffmpeg_present(which_ffmpeg().is_some());
+        let normalize = lunii_core::settings::get_bool("normalize_volume");
+        ui.set_normalize_volume(normalize);
         ui.global::<Theme>().set_mono_font(
             if cfg!(windows) {
                 "Consolas"
@@ -236,6 +246,7 @@ impl App {
             .into(),
         );
         ui.set_log_lines(ModelRc::from(app.log_model.clone()));
+        ui.set_podcast_rows(ModelRc::from(app.podcast_rows.clone()));
         ui.set_log_file_path(logfile::log_path().display().to_string().into());
 
         app.connect(ui);
@@ -268,7 +279,7 @@ impl App {
         let w = Rc::downgrade(self);
         ui.on_action(move |name| {
             if let Some(app) = w.upgrade() {
-                app.action(&name);
+                app.action(name);
             }
         });
         let w = Rc::downgrade(self);
@@ -309,6 +320,24 @@ impl App {
         }));
         ui.on_login_accepted(with(|app| app.firmware_login()));
         ui.on_night_mode_accepted(with(|app| app.save_night_mode()));
+
+        // podcast dialog
+        ui.on_podcast_load(with(|app| app.podcast_load()));
+        ui.on_podcast_filter_edited(with(|app| app.rebuild_podcast_rows()));
+        ui.on_podcast_mode_changed(with(|app| app.podcast_mode_changed()));
+        ui.on_podcast_accepted(with(|app| app.podcast_import()));
+        let w = Rc::downgrade(self);
+        ui.on_podcast_toggle(move |index| {
+            if let Some(app) = w.upgrade() {
+                app.podcast_toggle(index as usize);
+            }
+        });
+        let w = Rc::downgrade(self);
+        ui.on_podcast_select_all(move |all| {
+            if let Some(app) = w.upgrade() {
+                app.podcast_select_all(all);
+            }
+        });
         ui.on_open_url(|url| {
             let _ = open::that(url.as_str());
         });
@@ -372,118 +401,6 @@ impl App {
             }
             EventResult::Propagate
         });
-    }
-
-    // -----------------------------------------------------------------------
-    // Log
-    // -----------------------------------------------------------------------
-
-    fn min_log_level(&self) -> i32 {
-        match self.ui().get_log_level_index() {
-            0 | 1 => 0,
-            2 => 1,
-            3 => 2,
-            _ => 3,
-        }
-    }
-
-    fn log_line_visible(&self, level: i32, text: &str) -> bool {
-        let filter = self.ui().get_log_filter().to_lowercase();
-        level >= self.min_log_level()
-            && (filter.is_empty() || text.to_lowercase().contains(&filter))
-    }
-
-    pub fn log(&self, level: Level, message: &str) {
-        let level = level_value(level);
-        let line = format!("[{}] {}", level_name(level), tr_message(message));
-        let replace = {
-            let mut st = self.state.borrow_mut();
-            // progress lines replace each other
-            let replace = st
-                .log
-                .last()
-                .is_some_and(|(_, l)| l.starts_with("[DEBUG] Progress"));
-            if replace {
-                st.log.pop();
-            }
-            st.log.push((level, line.clone()));
-            replace
-        };
-        // progress lines would flood the file
-        if !line.starts_with("[DEBUG] Progress") {
-            logfile::write(&line);
-        }
-        if level >= 2 && !self.ui().get_log_visible() {
-            let alert = {
-                let mut st = self.state.borrow_mut();
-                st.log_alert = st.log_alert.max(level);
-                st.log_alert
-            };
-            self.ui().set_log_alert(alert);
-        }
-        let visible = self.log_line_visible(level, &line);
-        let last_was_progress = self.log_model.row_count() > 0
-            && self
-                .log_model
-                .row_data(self.log_model.row_count() - 1)
-                .is_some_and(|l| l.text.starts_with("[DEBUG] Progress"));
-        if replace && last_was_progress {
-            self.log_model.remove(self.log_model.row_count() - 1);
-        }
-        if visible {
-            self.log_model.push(LogLine {
-                text: line.into(),
-                level,
-            });
-            self.scroll_log();
-        }
-    }
-
-    fn scroll_log(&self) {
-        // delayed: the list must have laid out the new line first
-        let ui = self.ui.clone();
-        slint::Timer::single_shot(Duration::from_millis(10), move || {
-            if let Some(ui) = ui.upgrade() {
-                ui.set_log_scroll_token(ui.get_log_scroll_token().wrapping_add(1));
-            }
-        });
-    }
-
-    fn rebuild_log(&self) {
-        let lines: Vec<LogLine> = self
-            .state
-            .borrow()
-            .log
-            .iter()
-            .filter(|(level, text)| self.log_line_visible(*level, text))
-            .map(|(level, text)| LogLine {
-                text: text.into(),
-                level: *level,
-            })
-            .collect();
-        self.log_model.set_vec(lines);
-        self.scroll_log();
-    }
-
-    /// Copies the displayed (filtered) lines to the clipboard.
-    fn copy_log(&self) {
-        let content = (0..self.log_model.row_count())
-            .filter_map(|i| self.log_model.row_data(i))
-            .map(|l| l.text.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            let _ = clipboard.set_text(content);
-            self.ui().set_status(tr("Log sent to clipboard.").into());
-        }
-    }
-
-    pub(crate) fn show_log(&self) {
-        let ui = self.ui();
-        ui.set_log_visible(true);
-        self.state.borrow_mut().log_alert = 0;
-        ui.set_log_alert(0);
-        self.scroll_log();
     }
 
     // -----------------------------------------------------------------------
@@ -857,7 +774,7 @@ impl App {
     /// Updates rows highlight, menu states and details panel.
     fn selection_changed(&self) {
         let ui = self.ui();
-        let (current, has_selection, can_export, can_import, can_export_all) = {
+        let (current, has_selection, can_export, can_import, can_export_all, can_add_to_album) = {
             let st = self.state.borrow();
             for (row, &i) in st.visible.iter().enumerate() {
                 let selected = st.selected.contains(&st.stories[i].uuid);
@@ -873,12 +790,21 @@ impl App {
                 .iter()
                 .any(|s| st.selected.contains(&s.uuid) && s.exportable);
             let dev = st.dev.as_ref();
+            let can_import = dev.is_some_and(|d| d.can_import);
+            // a single album selected
+            let can_add_to_album = can_import
+                && st.selected.len() == 1
+                && st
+                    .stories
+                    .iter()
+                    .any(|s| st.selected.contains(&s.uuid) && s.album);
             (
                 st.current.map(|c| c as i32).unwrap_or(-1),
                 !st.selected.is_empty(),
                 can_export,
-                dev.is_some_and(|d| d.can_import),
+                can_import,
                 dev.is_some_and(|d| d.export_all) && !st.stories.is_empty(),
+                can_add_to_album,
             )
         };
         ui.set_current_row(current);
@@ -886,6 +812,7 @@ impl App {
         ui.set_can_export(can_export);
         ui.set_can_import(can_import);
         ui.set_can_export_all(can_export_all);
+        ui.set_can_add_to_album(can_add_to_album);
         self.update_device_status();
         self.update_details();
     }
@@ -933,6 +860,19 @@ impl App {
         ui.set_details_visible(true);
     }
 
+    /// The device, for a quick change on the UI thread. Never waits: `None`
+    /// (and a message) while a task holds it, the UI would freeze until its end.
+    pub(super) fn lock_device(
+        dev: &SharedDevice,
+    ) -> Result<std::sync::MutexGuard<'_, Box<dyn Device>>, std::sync::TryLockError<()>> {
+        match dev.try_lock() {
+            Ok(guard) => Ok(guard),
+            // a task panicked holding it: the device state is still usable
+            Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) => Err(std::sync::TryLockError::WouldBlock),
+        }
+    }
+
     /// Applies a quick change on the device (UI thread, like the Python version).
     fn device_op(&self, op: impl FnOnce(&mut dyn Device, &Context) -> anyhow::Result<()>) -> bool {
         let Some(dev) = self.state.borrow().device.clone() else {
@@ -940,7 +880,12 @@ impl App {
         };
         let ctx = self.ctx();
         let (result, stories) = {
-            let mut dev = dev.lock().unwrap();
+            let Ok(mut dev) = Self::lock_device(&dev) else {
+                self.status(&tr(
+                    "⏳ The storyteller is busy, try again once the current task is done",
+                ));
+                return false;
+            };
             let result = op(dev.as_mut(), &ctx);
             (result, worker::snapshot(dev.as_ref()))
         };
@@ -977,357 +922,6 @@ impl App {
     }
 
     // -----------------------------------------------------------------------
-    // Menu actions
-    // -----------------------------------------------------------------------
-
-    pub(crate) fn action(self: &Rc<Self>, name: &str) {
-        let ui = self.ui();
-        match name {
-            "refresh-devices" => self.refresh_devices(),
-            "open-device" => self.open_device_dialog(),
-            "import-db" => {
-                let studio_dir = dirs_home().join(".studio").join("db");
-                if let Some(file) = rfd::FileDialog::new()
-                    .set_title(tr("Open STUdio DB"))
-                    .set_directory(studio_dir)
-                    .add_filter("STUdio DB (unofficial.json)", &["json"])
-                    .add_filter(tr("All files"), &["*"])
-                    .pick_file()
-                {
-                    self.launch(Task::DbImport(file));
-                }
-            }
-            "refresh-db" => {
-                self.status(&tr("Fetching official Lunii DB..."));
-                self.launch(Task::RefreshDb);
-            }
-            "exit" => {
-                if let Some((_, ctx)) = self.state.borrow().worker.as_ref() {
-                    ctx.request_abort();
-                }
-                let _ = slint::quit_event_loop();
-            }
-            "move-top" => self.move_selection(-2),
-            "move-up" => self.move_selection(-1),
-            "move-down" => self.move_selection(1),
-            "move-bottom" => self.move_selection(2),
-            "hide" => {
-                let ids = self.selected_ids();
-                if self.device_op(|d, ctx| d.toggle_hidden(ctx, &ids)) {
-                    self.status(&tr("✅ Stories updated..."));
-                } else {
-                    self.status(&tr("🛑 Unable to update story ..."));
-                    self.show_log();
-                }
-            }
-            "night-mode" => {
-                let ids = self.selected_ids();
-                let ok = self.device_op(|d, _| match d.as_lunii_mut() {
-                    Some(l) => l.toggle_night_mode(&ids),
-                    None => Ok(()),
-                });
-                if ok {
-                    self.status(&tr("✅ Stories updated..."));
-                } else {
-                    self.status(&tr("🛑 Unable to update story ..."));
-                    self.show_log();
-                }
-            }
-            "import" => {
-                let Some(files) = rfd::FileDialog::new()
-                    .set_title(tr("Open Stories"))
-                    .add_filter(tr("All supported"), &["pk", "7z", "zip"])
-                    .add_filter(tr("PK files"), &["pk"])
-                    .add_filter(tr("Archive files"), &["7z", "zip"])
-                    .add_filter(tr("All files"), &["*"])
-                    .pick_files()
-                else {
-                    return;
-                };
-                self.import(files);
-            }
-            "import-album" => {
-                let Some(dirs) = rfd::FileDialog::new()
-                    .set_title(tr("Folders of MP3 files"))
-                    .pick_folders()
-                else {
-                    return;
-                };
-                let (albums, others): (Vec<_>, Vec<_>) = dirs
-                    .into_iter()
-                    .partition(|d| lunii_core::album::is_album_dir(d));
-                if !others.is_empty() {
-                    self.status(&tr("🛑 No MP3 file in this folder"));
-                }
-                self.import(albums);
-            }
-            "export" | "export-all" => {
-                let uuids = if name == "export" {
-                    self.selected_uuids()
-                } else {
-                    let st = self.state.borrow();
-                    st.visible
-                        .iter()
-                        .map(|&i| st.stories[i].str_uuid.clone())
-                        .collect()
-                };
-                if uuids.is_empty() {
-                    return;
-                }
-                let title = format!("Output Directory for {} stories", uuids.len());
-                match rfd::FileDialog::new().set_title(title).pick_folder() {
-                    Some(out) => self.launch(Task::Export { uuids, out }),
-                    None if name == "export" => self.status(&tr("🛑 Export cancelled")),
-                    None => self.status(&tr("🛑 Export All cancelled")),
-                }
-            }
-            "remove" => {
-                let names: Vec<String> = {
-                    let st = self.state.borrow();
-                    st.visible
-                        .iter()
-                        .map(|&i| &st.stories[i])
-                        .filter(|s| st.selected.contains(&s.uuid))
-                        .map(|s| s.name.clone())
-                        .collect()
-                };
-                if names.is_empty() {
-                    return;
-                }
-                let mut message = tr("You are requesting to delete : \n");
-                for n in &names {
-                    message += &format!("- {n}\n");
-                }
-                if message.len() > 512 {
-                    message = message.chars().take(512).collect::<String>() + "...";
-                    message += &tr("\n(and too many others)\n");
-                }
-                message += &tr("\nDo you want to proceed ?");
-                ui.set_confirm_message(message.into());
-                ui.set_dialog(DialogKind::ConfirmRemove);
-            }
-            "show-size" => {
-                ui.set_show_size(ui.get_show_size());
-                if ui.get_show_size() && self.state.borrow().device.is_some() {
-                    self.launch(Task::Size);
-                }
-            }
-            "show-details" => {
-                self.state.borrow_mut().details_uuid = None;
-                self.update_details();
-            }
-            "show-log" => {
-                if ui.get_log_visible() {
-                    ui.set_log_visible(false);
-                } else {
-                    self.show_log();
-                }
-            }
-            "get-firmware" => {
-                ui.set_login_password("".into());
-                ui.set_dialog(DialogKind::Login);
-            }
-            "find-lost" | "recover-lost" | "remove-lost" => {
-                self.show_log();
-                self.launch(match name {
-                    "find-lost" => Task::Recover { dry_run: true },
-                    "recover-lost" => Task::Recover { dry_run: false },
-                    _ => Task::Cleanup,
-                });
-            }
-            "ffmpeg" => self.launch(Task::Ffmpeg),
-            "update" => {
-                let _ = open::that(RELEASES_URL);
-            }
-            "about" => ui.set_dialog(DialogKind::About),
-            "night-mode-settings" => self.open_night_mode(),
-            other => log::warn!("unknown action {other}"),
-        }
-    }
-
-    fn open_device_dialog(&self) {
-        let Some(dir) = rfd::FileDialog::new()
-            .set_title(tr("Open Lunii device"))
-            .pick_folder()
-        else {
-            return;
-        };
-        if !device::is_lunii(&dir) && !device::is_flam(&dir) {
-            self.status(&tr("Not a Lunii, nor Flam or unsupported one 😥"));
-            return;
-        }
-        let index = {
-            let st = self.state.borrow();
-            st.devices.iter().position(|d| d == &dir)
-        };
-        let index = match index {
-            Some(i) => i,
-            None => {
-                let mut devices = self.state.borrow().devices.clone();
-                devices.push(dir);
-                self.set_devices(devices);
-                self.state.borrow().devices.len() - 1
-            }
-        };
-        self.set_device_index(index as i32);
-        self.select_device(index as i32);
-    }
-
-    pub(crate) fn import(&self, files: Vec<PathBuf>) {
-        if files.is_empty() {
-            return;
-        }
-        self.status(&tr("Importing stories..."));
-        let update_size = self.ui().get_show_size();
-        self.launch(Task::Import { files, update_size });
-    }
-
-    fn files_dropped(&self) {
-        let files = std::mem::take(&mut self.state.borrow_mut().pending_drop);
-        let (version, can_import) = match self.state.borrow().dev.as_ref() {
-            Some(d) => (d.version, d.can_import),
-            None => return,
-        };
-        if self.ui().get_busy() {
-            return;
-        }
-        let extensions = if version == DeviceVersion::FlamV1 {
-            FLAM_SUPPORTED_EXT
-        } else {
-            LUNII_SUPPORTED_EXT
-        };
-        if !files
-            .iter()
-            .all(|f| has_supported_ext(f, extensions) || lunii_core::album::is_album_dir(f))
-        {
-            self.status(&tr("🛑 Unsupported file type"));
-            return;
-        }
-        if !can_import {
-            self.status(&tr(
-                "🛑 Unable to import story, missing story key for Lunii v3",
-            ));
-            return;
-        }
-        self.import(files);
-    }
-
-    fn open_night_mode(&self) {
-        let Some(config) = self
-            .state
-            .borrow()
-            .dev
-            .as_ref()
-            .and_then(|d| d.config.clone())
-        else {
-            return;
-        };
-        let ui = self.ui();
-        ui.set_nm_enabled(config[LUNII_CFGPOS_NM_ENABLED] != 0);
-        ui.set_nm_limit(config[LUNII_CFGPOS_NM_VOL_LIMIT] != 0);
-        ui.set_nm_autoplay(config[LUNII_CFGPOS_NM_AUTOPLAY] != 0);
-        ui.set_nm_max_stories((config[LUNII_CFGPOS_NM_STORYCOUNT] as i32).clamp(1, 8));
-        ui.set_nm_turnoff(config[LUNII_CFGPOS_NM_TURNOFF_NM] != 0);
-        ui.set_dialog(DialogKind::NightMode);
-    }
-
-    fn save_night_mode(&self) {
-        let ui = self.ui();
-        let Some(dev) = self.state.borrow().device.clone() else {
-            return;
-        };
-        let result = {
-            let mut dev = dev.lock().unwrap();
-            let Some(lunii) = dev.as_lunii_mut() else {
-                return;
-            };
-            lunii.config[LUNII_CFGPOS_NM_ENABLED] = ui.get_nm_enabled() as u16;
-            lunii.config[LUNII_CFGPOS_NM_VOL_LIMIT] = if ui.get_nm_limit() { 30 } else { 0 };
-            lunii.config[LUNII_CFGPOS_NM_AUTOPLAY] = ui.get_nm_autoplay() as u16;
-            lunii.config[LUNII_CFGPOS_NM_STORYCOUNT] = ui.get_nm_max_stories() as u16;
-            lunii.config[LUNII_CFGPOS_NM_TURNOFF_NM] = ui.get_nm_turnoff() as u16;
-            lunii.update_config().map(|_| lunii.config.clone())
-        };
-        match result {
-            Ok(config) => {
-                ui.set_nm_active(config[LUNII_CFGPOS_NM_ENABLED] == 1);
-                if let Some(d) = self.state.borrow_mut().dev.as_mut() {
-                    d.config = Some(config);
-                }
-            }
-            Err(e) => {
-                self.log(Level::Error, &format!("{e:#}"));
-                self.show_log();
-            }
-        }
-    }
-
-    fn firmware_login(&self) {
-        let ui = self.ui();
-        let Some((version, snu)) = self
-            .state
-            .borrow()
-            .dev
-            .as_ref()
-            .map(|d| (d.version, d.snu.clone()))
-        else {
-            return;
-        };
-        let email = ui.get_login_email().to_string();
-        let password = ui.get_login_password().to_string();
-        ui.set_login_password("".into());
-        self.launch(Task::FirmwareLogin {
-            email,
-            password,
-            version,
-            snu,
-        });
-    }
-
-    /// Asks where to save each firmware, then downloads them.
-    fn firmware_targets(&self) {
-        let Some((auth, files)) = self.state.borrow_mut().fw.take() else {
-            return;
-        };
-        let Some((version, snu)) = self
-            .state
-            .borrow()
-            .dev
-            .as_ref()
-            .map(|d| (d.version, d.snu.clone()))
-        else {
-            return;
-        };
-        let (filter_name, ext) = if version == DeviceVersion::FlamV1 {
-            ("Flam Firmware", "enc")
-        } else {
-            ("Lunii Firmware", "bin")
-        };
-        let mut targets = Vec::new();
-        for (index, name) in files.iter().enumerate() {
-            let target = rfd::FileDialog::new()
-                .set_directory(cfg_dir())
-                .set_file_name(name)
-                .add_filter(filter_name, &[ext])
-                .add_filter(tr("All files"), &["*"])
-                .save_file();
-            match target {
-                Some(t) => targets.push((t, index != 0)),
-                None => {
-                    self.status("");
-                    return;
-                }
-            }
-        }
-        self.launch(Task::FirmwareDownload {
-            auth,
-            version,
-            snu,
-            targets,
-        });
-    }
-
-    // -----------------------------------------------------------------------
     // Worker
     // -----------------------------------------------------------------------
 
@@ -1337,7 +931,10 @@ impl App {
         }
         let ctx = self.ctx();
         let device = self.state.borrow().device.clone();
-        let handle = worker::spawn(task, device, ctx.clone(), sink());
+        let audio = lunii_core::convert::audio::AudioOptions {
+            normalize_volume: self.ui().get_normalize_volume(),
+        };
+        let handle = worker::spawn(task, device, audio, ctx.clone(), sink());
         self.state.borrow_mut().worker = Some((handle, ctx));
         let ui = self.ui();
         ui.set_busy(true);
@@ -1350,7 +947,7 @@ impl App {
             .borrow()
             .worker
             .as_ref()
-            .map(|(_, c)| c.written())
+            .map(|(_, c)| c.progress())
         else {
             return;
         };
@@ -1382,7 +979,7 @@ impl App {
             .borrow()
             .worker
             .as_ref()
-            .map(|(_, c)| c.written())
+            .map(|(_, c)| c.progress())
         else {
             return;
         };
@@ -1436,6 +1033,7 @@ impl App {
                 });
             }
             Event::ImportPlan(total) => self.start_eta(total),
+            Event::Podcast(result) => self.podcast_loaded(result),
             Event::Story(uuid, current, total) => {
                 ui.set_story_visible(true);
                 ui.set_story_text(uuid.into());
@@ -1464,8 +1062,12 @@ impl App {
                     self.log(Level::Warn, "Failed to fetch official DB");
                 }
                 let device = self.state.borrow().device.clone();
-                if let (Some(dev), false) = (device, ui.get_busy()) {
-                    let stories = worker::snapshot(dev.lock().unwrap().as_ref());
+                // busy: the task refreshes the list at its end
+                if let (Some(dev), false) = (device, ui.get_busy())
+                    && let Ok(dev) = Self::lock_device(&dev)
+                {
+                    let stories = worker::snapshot(dev.as_ref());
+                    drop(dev);
                     self.state.borrow_mut().stories = stories;
                     self.rebuild_rows();
                 }
@@ -1484,6 +1086,7 @@ impl App {
             Event::Details(uuid, desc, picture) => self.details_ready(uuid, desc, picture),
             Event::Finished => {
                 self.stop_eta();
+                ui.set_podcast_loading(false);
                 if let Some((handle, _)) = self.state.borrow_mut().worker.take() {
                     let _ = handle.join();
                 }
@@ -1550,11 +1153,11 @@ fn dirs_home() -> PathBuf {
 }
 
 fn lunii_icon() -> slint::Image {
-    decode_image(include_bytes!("../ui/img/lunii.png")).unwrap_or_default()
+    decode_image(include_bytes!("../../ui/img/lunii.png")).unwrap_or_default()
 }
 
 fn flam_icon() -> slint::Image {
-    decode_image(include_bytes!("../ui/img/flam.png")).unwrap_or_default()
+    decode_image(include_bytes!("../../ui/img/flam.png")).unwrap_or_default()
 }
 
 #[cfg(test)]

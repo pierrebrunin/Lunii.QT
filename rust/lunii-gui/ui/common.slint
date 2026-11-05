@@ -16,12 +16,60 @@ export struct LogLine {
     level: int,
 }
 
+/// Menu entries and shortcuts, handled by `App::action`.
+export enum Action {
+    about,
+    add-to-album,
+    exit,
+    export,
+    export-all,
+    ffmpeg,
+    find-lost,
+    get-firmware,
+    hide,
+    import,
+    import-album,
+    import-db,
+    import-podcast,
+    move-bottom,
+    move-down,
+    move-top,
+    move-up,
+    night-mode,
+    night-mode-settings,
+    normalize-volume,
+    open-device,
+    recover-lost,
+    refresh-db,
+    refresh-devices,
+    remove,
+    remove-lost,
+    show-details,
+    show-log,
+    show-size,
+    update,
+    update-podcasts,
+}
+
 export enum DialogKind {
     none,
     confirm-remove,
     login,
     night-mode,
     about,
+    podcast,
+}
+
+/// An episode in the podcast dialog.
+export struct EpisodeRow {
+    // index in the podcast episodes
+    index: int,
+    title: string,
+    // date, duration
+    info: string,
+    checked: bool,
+    // already in the album on the device
+    present: bool,
 }
 
 export global Theme {

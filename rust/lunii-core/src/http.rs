@@ -26,6 +26,17 @@ pub fn agent_with_ua(timeout: Duration, user_agent: Option<&str>) -> ureq::Agent
     cfg.build().new_agent()
 }
 
+/// Agent for downloads: no limit on the whole transfer (big files on slow
+/// connections), but an error if the server stops sending data.
+pub fn download_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(20)))
+        .timeout_recv_response(Some(Duration::from_secs(30)))
+        .timeout_per_read(Some(Duration::from_secs(30)))
+        .build()
+        .new_agent()
+}
+
 /// Parses the whole body as JSON.
 pub fn json(resp: Response) -> Result<Value> {
     Ok(serde_json::from_reader(resp.into_body().into_reader())?)

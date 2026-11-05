@@ -3,20 +3,24 @@
 //! A task runs in its own thread and talks to the UI with [`Event`]s, delivered
 //! in order on the Slint event loop.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use lunii_core::constants::DeviceVersion;
+use lunii_core::convert::audio::AudioOptions;
 use lunii_core::firmware::{self, AuthToken};
+use lunii_core::podcast::{self, Episode, ImportMode, ImportPlan, Podcast};
 use lunii_core::{Aborted, Context, Device, Level, Reporter, album, db, tools};
 use uuid::Uuid;
 
 use crate::i18n::{tr, trf};
 
-/// Bytes an import of `path` should write to the device: the uncompressed size
-/// of the archive (or of the folder). STUdio stories transcoded to MP3 differ a
-/// bit, the remaining time estimation adapts.
+/// Progress expected for the import of `path`: the uncompressed size of the
+/// archive (or of the folder). Converted files are counted with their source
+/// size (`Context::count_as_source`), so this is exact up to the few metadata
+/// files that are not written as is (`story.json`, thumbnail).
 fn expected_size(path: &Path) -> u64 {
     fn dir_size(dir: &Path) -> u64 {
         let Ok(entries) = std::fs::read_dir(dir) else {
@@ -41,6 +45,57 @@ fn expected_size(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
+/// Progress expected when appending these MP3 files to an album: for each
+/// track the audio and the screen.
+fn append_expected<'a>(files: impl Iterator<Item = &'a Path>) -> u64 {
+    files
+        .filter_map(|f| std::fs::metadata(f).ok())
+        .map(|m| m.len() + 10_000)
+        .sum()
+}
+
+fn format_secs(d: u64) -> String {
+    if d > 120 {
+        format!("{} min {} s", d / 60, d % 60)
+    } else {
+        format!("{d} s")
+    }
+}
+
+/// Removes a temporary directory on drop (abort included).
+struct TempDir(PathBuf);
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A podcast loaded for the selection dialog.
+pub struct PodcastView {
+    pub podcast: Podcast,
+    /// its album is on the device: the episodes will be appended
+    pub on_device: bool,
+    /// episodes already in the album
+    pub imported: HashSet<String>,
+    /// episodes already on the device as stories of their own
+    pub stories: HashSet<String>,
+}
+
+/// Files to import: (requested file, archive to import + `true` if temporary).
+/// The temporary archives are removed on drop, abort included.
+struct PreparedFiles<'a>(Vec<(&'a PathBuf, anyhow::Result<(PathBuf, bool)>)>);
+
+impl Drop for PreparedFiles<'_> {
+    fn drop(&mut self) {
+        for (_, r) in &self.0 {
+            if let Ok((archive, true)) = r {
+                let _ = std::fs::remove_file(archive);
+            }
+        }
+    }
+}
+
 pub type SharedDevice = Arc<Mutex<Box<dyn Device>>>;
 
 /// What the UI needs to display a story.
@@ -54,6 +109,8 @@ pub struct StoryInfo {
     pub hidden: bool,
     pub exportable: bool,
     pub size: Option<u64>,
+    /// MP3 album created by Lunii.QT, tracks can be appended
+    pub album: bool,
 }
 
 pub fn snapshot(dev: &dyn Device) -> Vec<StoryInfo> {
@@ -68,6 +125,7 @@ pub fn snapshot(dev: &dyn Device) -> Vec<StoryInfo> {
             hidden: s.hidden,
             exportable: dev.story_exportable(s),
             size: s.size,
+            album: dev.album_track_count(s).is_some(),
         })
         .collect()
 }
@@ -81,6 +139,8 @@ pub enum Event {
     Total(usize, usize),
     /// An import starts: expected number of bytes written to the device
     ImportPlan(u64),
+    /// Podcast loaded for the selection dialog (or the error)
+    Podcast(Result<Box<PodcastView>, String>),
     Story(String, usize, usize),
     File(String, u64, u64),
     Stories(Vec<StoryInfo>),
@@ -124,6 +184,28 @@ pub enum Task {
     Remove {
         uuids: Vec<String>,
     },
+    /// Loads a podcast feed for the selection dialog
+    FetchPodcast {
+        url: String,
+    },
+    /// Episodes of a podcast imported as an album (or appended to it)
+    ImportPodcast {
+        podcast: Box<Podcast>,
+        episodes: Vec<Episode>,
+        /// one story per episode instead of an album
+        as_stories: bool,
+        update_size: bool,
+    },
+    /// New episodes of the podcasts imported as albums on the device
+    UpdatePodcasts {
+        update_size: bool,
+    },
+    /// MP3 files appended to an album story
+    AddToAlbum {
+        uuid: Uuid,
+        files: Vec<PathBuf>,
+        update_size: bool,
+    },
     Size,
     Recover {
         dry_run: bool,
@@ -150,6 +232,7 @@ struct Runner {
     ctx: Context,
     sink: Sink,
     device: Option<SharedDevice>,
+    audio: AudioOptions,
 }
 
 impl Runner {
@@ -195,19 +278,37 @@ impl Runner {
             self.message(tr("Importing stories..."));
         }
 
+        // MP3 albums are turned into STUdio archives first: the remaining time
+        // estimation needs their real size (screens...)
+        let prepared = PreparedFiles(
+            files
+                .iter()
+                .map(|file| {
+                    if album::is_album_dir(file) {
+                        (file, self.prepare_album(file).map(|zip| (zip, true)))
+                    } else {
+                        (file, Ok((file.clone(), false)))
+                    }
+                })
+                .collect(),
+        );
         self.emit(Event::ImportPlan(
-            files.iter().map(|f| expected_size(f)).sum(),
+            prepared
+                .0
+                .iter()
+                .filter_map(|(_, r)| r.as_ref().ok())
+                .map(|(archive, _)| expected_size(archive))
+                .sum(),
         ));
 
         let mut success = 0;
-        for (index, file) in files.iter().enumerate() {
+        for (index, (file, archive)) in prepared.0.iter().enumerate() {
             lunii_core::report::check_abort(&self.ctx)?;
             self.emit(Event::Total(index, files.len()));
             let start = Instant::now();
-            let result = if album::is_album_dir(file) {
-                self.import_album(file)
-            } else {
-                self.on_device(|d| d.import_story(&self.ctx, file))
+            let result = match archive {
+                Ok((archive, _)) => self.on_device(|d| d.import_story(&self.ctx, archive)),
+                Err(e) => Err(anyhow::anyhow!("{e:#}")),
             };
             let name = file.display().to_string();
             match result {
@@ -242,24 +343,208 @@ impl Runner {
         Ok(())
     }
 
-    /// A folder of MP3 files: turned into a STUdio story, then imported.
-    fn import_album(&self, dir: &Path) -> anyhow::Result<()> {
-        let album = album::scan(dir)?;
+    fn add_to_album(
+        &self,
+        uuid: &Uuid,
+        files: &[PathBuf],
+        update_size: bool,
+    ) -> anyhow::Result<()> {
+        self.message(tr("Adding MP3 files to the album..."));
+        self.emit(Event::ImportPlan(append_expected(
+            files.iter().map(PathBuf::as_path),
+        )));
+        self.emit(Event::Total(0, 1));
+        let start = Instant::now();
+        let tracks = album::scan_files(files)?.tracks;
+        album::check_ffmpeg(&tracks)?;
+        let work = TempDir(std::env::temp_dir().join(format!("lunii-qt-append-{uuid}")));
+        let tracks = album::prepare_tracks(&self.ctx, &tracks, self.audio, &work.0)?;
+        let result = self.on_device(|d| d.add_album_tracks(&self.ctx, uuid, &tracks));
+        self.refresh();
+        let added = result?;
+        if update_size {
+            self.on_device(|d| d.compute_sizes(&self.ctx))?;
+            self.refresh();
+        }
+        self.message(trf(
+            "✅ {} track(s) added to the album in {} s",
+            &[&added.to_string(), &start.elapsed().as_secs().to_string()],
+        ));
+        Ok(())
+    }
+
+    /// Is the album `uuid` on the device (tracks can be appended)?
+    fn album_on_device(&self, uuid: &Uuid) -> bool {
+        self.with_device(|d| {
+            d.stories()
+                .get(&uuid.to_string())
+                .cloned()
+                .is_some_and(|s| d.album_track_count(&s).is_some())
+        })
+        .unwrap_or(false)
+    }
+
+    fn fetch_podcast(&self, url: &str) {
+        let result = podcast::fetch(url).map(|podcast| {
+            let uuid = podcast.album_uuid();
+            let on_device = self.album_on_device(&uuid);
+            let stories = self
+                .with_device(|d| {
+                    podcast
+                        .episodes
+                        .iter()
+                        .filter(|e| {
+                            d.stories()
+                                .get(&podcast.episode_uuid(e).to_string())
+                                .is_some()
+                        })
+                        .map(|e| e.guid.clone())
+                        .collect()
+                })
+                .unwrap_or_default();
+            Box::new(PodcastView {
+                imported: if on_device {
+                    podcast::imported_episodes(&uuid)
+                } else {
+                    HashSet::new()
+                },
+                on_device,
+                stories,
+                podcast,
+            })
+        });
+        self.emit(Event::Podcast(
+            result.map_err(|e| crate::i18n::tr_message(&format!("{e:#}"))),
+        ));
+    }
+
+    fn import_podcast(
+        &self,
+        podcast: &Podcast,
+        episodes: &[Episode],
+        as_stories: bool,
+        update_size: bool,
+    ) -> anyhow::Result<()> {
+        let start = Instant::now();
+        let dir = TempDir(
+            std::env::temp_dir().join(format!("lunii-qt-podcast-{}", podcast.album_uuid())),
+        );
+        self.message(trf(
+            "⬇ Downloading {} episode(s) of '{}'...",
+            &[&episodes.len().to_string(), &podcast.title],
+        ));
+        let mode = ImportMode {
+            as_stories,
+            album_on_device: self.album_on_device(&podcast.album_uuid()),
+            audio: self.audio,
+        };
+        let plan = podcast::prepare_import(&self.ctx, podcast, episodes, mode, &dir.0, |i| {
+            self.emit(Event::Total(i, episodes.len()))
+        })?;
+
+        match &plan {
+            // regular imports of STUdio archives
+            ImportPlan::Stories(archives) => return self.import(archives, update_size),
+            ImportPlan::Append(uuid, tracks) => {
+                self.emit(Event::Total(0, 1));
+                self.emit(Event::ImportPlan(append_expected(
+                    tracks.iter().map(|t| t.path.as_path()),
+                )));
+                let result = self.on_device(|d| d.add_album_tracks(&self.ctx, uuid, tracks));
+                self.refresh();
+                result?;
+            }
+            ImportPlan::NewAlbum(zip) => {
+                self.emit(Event::Total(0, 1));
+                self.emit(Event::ImportPlan(expected_size(zip)));
+                let result = self.on_device(|d| d.import_story(&self.ctx, zip));
+                self.refresh();
+                result?;
+            }
+        }
+        podcast::record_plan(podcast, episodes, &plan)?;
+        if update_size {
+            self.on_device(|d| d.compute_sizes(&self.ctx))?;
+            self.refresh();
+        }
+        self.message(trf(
+            "✅ {} episode(s) of '{}' imported in {}",
+            &[
+                &episodes.len().to_string(),
+                &podcast.title,
+                &format_secs(start.elapsed().as_secs()),
+            ],
+        ));
+        Ok(())
+    }
+
+    /// Appends their new episodes to the podcast albums of the device.
+    fn update_podcasts(&self, update_size: bool) -> anyhow::Result<()> {
+        let saved: Vec<_> = podcast::saved_podcasts()
+            .into_iter()
+            .filter(|p| self.album_on_device(&p.album))
+            .collect();
+        if saved.is_empty() {
+            self.message(tr("No podcast album on this device (Import a podcast)"));
+            return Ok(());
+        }
+        let mut added = 0;
+        let mut failed = 0;
+        for (i, entry) in saved.iter().enumerate() {
+            lunii_core::report::check_abort(&self.ctx)?;
+            self.emit(Event::Total(i, saved.len()));
+            self.message(trf("🔄 Checking '{}'...", &[&entry.title]));
+            let result = podcast::parse_feed_url(&entry.feed_url).and_then(|podcast| {
+                let new = podcast::new_episodes(&podcast);
+                if new.is_empty() {
+                    self.message(trf("'{}' : up to date", &[&podcast.title]));
+                    return Ok(0);
+                }
+                self.import_podcast(&podcast, &new, false, false)?;
+                Ok(new.len())
+            });
+            match result {
+                Ok(n) => added += n,
+                Err(e) if e.is::<Aborted>() => return Err(e),
+                Err(e) => {
+                    failed += 1;
+                    self.emit(Event::Log(Level::Error, format!("{e:#}")));
+                    self.emit(Event::ShowLog);
+                    self.message(trf("🛑 Failed to update '{}'", &[&entry.title]));
+                }
+            }
+        }
+        if update_size && added > 0 {
+            self.on_device(|d| d.compute_sizes(&self.ctx))?;
+            self.refresh();
+        }
+        let mut done = trf(
+            "✅ Podcasts updated : {} new episode(s)",
+            &[&added.to_string()],
+        );
+        if failed > 0 {
+            done.push_str(&trf(" ({} failed)", &[&failed.to_string()]));
+        }
+        self.message(done);
+        Ok(())
+    }
+
+    /// A folder of MP3 files, turned into a temporary STUdio archive.
+    fn prepare_album(&self, dir: &Path) -> anyhow::Result<PathBuf> {
+        let mut album = album::scan(dir)?;
         self.message(trf(
             "🎵 MP3 album '{}' : {} tracks",
             &[&album.title, &album.tracks.len().to_string()],
         ));
-        if album.needs_transcoding() && !lunii_core::constants::transcoding_supported() {
-            anyhow::bail!(
-                "These MP3 files must be converted to mono 44.1 kHz: FFMPEG is required (Tools menu)"
-            );
-        }
+        album::check_ffmpeg(&album.tracks)?;
+        let work = TempDir(std::env::temp_dir().join(format!("lunii-qt-album-{}", album.uuid())));
+        album.tracks = album::prepare_tracks(&self.ctx, &album.tracks, self.audio, &work.0)?;
         let zip = std::env::temp_dir().join(format!("lunii-qt-album-{}.zip", album.uuid()));
-        let result = album
-            .write_studio_zip(&zip)
-            .and_then(|()| self.on_device(|d| d.import_story(&self.ctx, &zip)));
-        let _ = std::fs::remove_file(&zip);
-        result
+        if let Err(e) = album.write_studio_zip(&zip) {
+            let _ = std::fs::remove_file(&zip);
+            return Err(e);
+        }
+        Ok(zip)
     }
 
     fn export(&self, uuids: &[String], out: &std::path::Path) -> anyhow::Result<()> {
@@ -362,6 +647,19 @@ impl Runner {
             Task::Import { files, update_size } => self.import(&files, update_size)?,
             Task::Export { uuids, out } => self.export(&uuids, &out)?,
             Task::Remove { uuids } => self.remove(&uuids)?,
+            Task::AddToAlbum {
+                uuid,
+                files,
+                update_size,
+            } => self.add_to_album(&uuid, &files, update_size)?,
+            Task::FetchPodcast { url } => self.fetch_podcast(&url),
+            Task::UpdatePodcasts { update_size } => self.update_podcasts(update_size)?,
+            Task::ImportPodcast {
+                podcast,
+                episodes,
+                as_stories,
+                update_size,
+            } => self.import_podcast(&podcast, &episodes, as_stories, update_size)?,
             Task::Size => {
                 self.on_device(|d| d.compute_sizes(&self.ctx))?;
                 self.refresh();
@@ -456,11 +754,17 @@ impl Runner {
 pub fn spawn(
     task: Task,
     device: Option<SharedDevice>,
+    audio: AudioOptions,
     ctx: Context,
     sink: Sink,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
-        let runner = Runner { ctx, sink, device };
+        let runner = Runner {
+            ctx,
+            sink,
+            device,
+            audio,
+        };
         if let Err(e) = runner.run(task) {
             if e.is::<Aborted>() {
                 runner.refresh();

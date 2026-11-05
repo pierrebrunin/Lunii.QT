@@ -4,15 +4,20 @@
 use std::path::{Path, PathBuf};
 
 use lunii_core::constants::*;
-use lunii_core::{Context, album, db, open_device};
+use lunii_core::{Context, album, crypto, db, open_device};
 
-fn setup() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    set_cfg_dir(dir.path());
-    std::fs::write(dir.path().join("official.db"), "{}").unwrap();
-    std::fs::write(dir.path().join("third-party.db"), "{}").unwrap();
-    db::load_db(false);
-    dir
+/// Configuration directory shared by the tests of this binary (it is global).
+fn setup() -> &'static Path {
+    static CFG: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    CFG.get_or_init(|| {
+        let dir = tempfile::tempdir().unwrap();
+        set_cfg_dir(dir.path());
+        std::fs::write(dir.path().join("official.db"), "{}").unwrap();
+        std::fs::write(dir.path().join("third-party.db"), "{}").unwrap();
+        db::load_db(false);
+        dir
+    })
+    .path()
 }
 
 fn fake_flam(dir: &Path) -> PathBuf {
@@ -99,9 +104,9 @@ fn mp3_album_on_flam() {
         assert!(story_dir.join(f).is_file(), "missing {f}");
     }
     let count = |sub: &str| std::fs::read_dir(story_dir.join(sub)).unwrap().count();
-    // cover + 2 track screens; cover silence + 2 excerpts + 2 tracks
+    // cover + 2 track screens; one silence (cover + menu) + 2 tracks
     assert_eq!(count("rf/000"), 3);
-    assert_eq!(count("sf/000"), 5);
+    assert_eq!(count("sf/000"), 3);
     // the firmware needs 8 characters names (fixed size `ri` / `si` entries)
     for sub in ["rf/000", "sf/000"] {
         for f in std::fs::read_dir(story_dir.join(sub)).unwrap() {
@@ -110,9 +115,246 @@ fn mp3_album_on_flam() {
         }
     }
     assert_eq!(dev.stories()[0].name(), "Album test");
-    // bytes counted for the remaining time estimation
-    assert!(ctx.written() >= album.audio_size() / 2);
+    // progress counted in archive bytes: it ends exactly on the assets size,
+    // whatever the conversions (tags removed, images turned into bitmaps)
+    let archive = lunii_core::archive::Archive::open(&zip).unwrap();
+    let assets: u64 = archive
+        .file_names()
+        .iter()
+        .filter(|n| n.starts_with("assets/"))
+        .map(|n| archive.size(n).unwrap())
+        .sum();
+    assert_eq!(ctx.progress(), assets);
 
     // same album again: refused
     assert!(dev.import_story(&ctx, &zip).is_err());
+
+    // append a track to the album on the device
+    let story = dev.stories()[0].clone();
+    assert_eq!(dev.album_track_count(&story), Some(2));
+    let extra = tmp.path().join("extra.mp3");
+    std::fs::write(&extra, with_tags("Troisième", 9, mp3(20))).unwrap();
+    let old_track = std::fs::read(story_dir.join("sf/000/TRK00001")).unwrap();
+    // excerpt of an album created by a previous version: removed on append
+    std::fs::write(story_dir.join("sf/000/EXC00001"), b"old excerpt").unwrap();
+    let extra_tracks = album::scan_files(&[extra]).unwrap().tracks;
+    assert_eq!(dev.add_album_tracks(&ctx, &uuid, &extra_tracks).unwrap(), 1);
+
+    assert_eq!(dev.album_track_count(&story), Some(3));
+    for f in ["rf/000/IMG00003", "sf/000/TRK00003"] {
+        assert!(story_dir.join(f).is_file(), "missing {f}");
+    }
+    assert!(!story_dir.join("sf/000/EXC00001").exists());
+    // existing tracks untouched
+    assert_eq!(
+        std::fs::read(story_dir.join("sf/000/TRK00001")).unwrap(),
+        old_track
+    );
+    // ni (plain on Flam): cover + 3 menu entries + 3 playback nodes
+    let ni = std::fs::read(story_dir.join("ni")).unwrap();
+    assert_eq!(u32::from_le_bytes(ni[12..16].try_into().unwrap()), 7);
+    assert_eq!(u32::from_le_bytes(ni[16..20].try_into().unwrap()), 4);
+    assert_eq!(u32::from_le_bytes(ni[20..24].try_into().unwrap()), 4);
+
+    // not an album: refused
+    std::fs::remove_file(story_dir.join("sf/000/SNDCOVER")).unwrap();
+    assert_eq!(dev.album_track_count(&story), None);
+    assert!(dev.add_album_tracks(&ctx, &uuid, &extra_tracks).is_err());
+}
+
+fn fake_lunii_v2(dir: &Path) -> PathBuf {
+    let mut md = vec![0u8; 512];
+    md[0..2].copy_from_slice(&3u16.to_le_bytes());
+    md[6..8].copy_from_slice(&2u16.to_le_bytes());
+    md[8..10].copy_from_slice(&22u16.to_le_bytes());
+    md[10..18].copy_from_slice(&[0, 0, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]);
+    md[18..20].copy_from_slice(&0x0483u16.to_le_bytes());
+    md[20..22].copy_from_slice(&0xA341u16.to_le_bytes());
+    let devkey: Vec<u8> = (0..=255u8).collect();
+    md[0x100..0x200]
+        .copy_from_slice(&crypto::xxtea_encrypt(&devkey, &lunii_generic_key()).unwrap());
+    let root = dir.join("lunii_v2");
+    std::fs::create_dir_all(root.join(".content")).unwrap();
+    std::fs::write(root.join(".md"), md).unwrap();
+    root
+}
+
+/// A podcast episode as a story of its own, on a Lunii v2 and on a Flam.
+#[test]
+fn episode_story_on_lunii_and_flam() {
+    let _cfg = setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let audio = tmp.path().join("episode.mp3");
+    std::fs::write(&audio, mp3(30)).unwrap();
+    let uuid = lunii_core::podcast::episode_uuid("https://example.org/feed.xml", "ep-1");
+    let story = album::SingleStory {
+        uuid,
+        title: "Pourquoi le ciel est bleu ?",
+        description: "Les P'tits Bateaux",
+        header: "Les P'tits Bateaux",
+        footer: "04/11/2026",
+        thumbnail: None,
+        audio: &audio,
+    };
+    let zip = tmp.path().join("episode.zip");
+    story.write_studio_zip(&zip).unwrap();
+
+    let ctx = Context::default();
+    for root in [fake_lunii_v2(tmp.path()), fake_flam(tmp.path())] {
+        let mut dev = open_device(&ctx, &root).unwrap();
+        dev.import_story(&ctx, &zip).unwrap();
+        let s = dev
+            .stories()
+            .get(&uuid.to_string())
+            .expect("story imported")
+            .clone();
+        assert_eq!(s.name(), "Pourquoi le ciel est bleu ?");
+        // a single story, not an album
+        assert_eq!(dev.album_track_count(&s), None);
+        let dir = dev.story_path(&s);
+        for f in ["ni", "ri", "si", "li"] {
+            assert!(dir.join(f).is_file(), "{}: missing {f}", root.display());
+        }
+        assert!(dev.import_story(&ctx, &zip).is_err(), "imported twice");
+    }
+}
+
+/// Tracks appended to an album on a Lunii v2: new files, regenerated index
+/// files and authorization file (derived from `ri`).
+#[test]
+fn mp3_album_append_on_lunii() {
+    let _cfg = setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("Album Lunii");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("1.mp3"), with_tags("Un", 1, mp3(30))).unwrap();
+    std::fs::write(dir.join("2.mp3"), with_tags("Deux", 2, mp3(30))).unwrap();
+    let album = album::scan(&dir).unwrap();
+    let zip = tmp.path().join("album.zip");
+    album.write_studio_zip(&zip).unwrap();
+
+    let ctx = Context::default();
+    let root = fake_lunii_v2(tmp.path());
+    let mut dev = open_device(&ctx, &root).unwrap();
+    dev.import_story(&ctx, &zip).unwrap();
+    let uuid = album.uuid();
+    let story = dev.stories().get(&uuid.to_string()).unwrap().clone();
+    assert_eq!(dev.album_track_count(&story), Some(2));
+
+    let story_dir = dev.story_path(&story);
+    let old_bt = std::fs::read(story_dir.join("bt")).unwrap();
+    let old_track = std::fs::read(story_dir.join("sf/000/TRK00001")).unwrap();
+    let extra = tmp.path().join("extra.mp3");
+    std::fs::write(&extra, with_tags("Trois", 3, mp3(20))).unwrap();
+    let tracks = album::scan_files(&[extra]).unwrap().tracks;
+    assert_eq!(dev.add_album_tracks(&ctx, &uuid, &tracks).unwrap(), 1);
+
+    assert_eq!(dev.album_track_count(&story), Some(3));
+    for f in ["rf/000/IMG00003", "sf/000/TRK00003"] {
+        assert!(story_dir.join(f).is_file(), "missing {f}");
+    }
+    assert_eq!(
+        std::fs::read(story_dir.join("sf/000/TRK00001")).unwrap(),
+        old_track
+    );
+    // ni (plain): cover + 3 menu entries + 3 playback nodes
+    let ni = std::fs::read(story_dir.join("ni")).unwrap();
+    assert_eq!(u32::from_le_bytes(ni[12..16].try_into().unwrap()), 7);
+    // `ri` grew (cover + 3 screens): the authorization file follows
+    let bt = std::fs::read(story_dir.join("bt")).unwrap();
+    assert_ne!(bt, old_bt);
+    // still a valid story once the device is reopened
+    let dev = open_device(&ctx, &root).unwrap();
+    assert!(dev.stories().get(&uuid.to_string()).is_some());
+}
+
+/// A folder of sub-folders (CDs): two menus, chapter screens, the cover file
+/// of the folder; tracks can't be appended.
+#[test]
+fn chapters_album_on_flam() {
+    let _cfg = setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("Intégrale");
+    for (cd, tracks) in [("CD 10", 1), ("CD 2", 2)] {
+        let sub = dir.join(cd);
+        std::fs::create_dir_all(&sub).unwrap();
+        for t in 0..tracks {
+            std::fs::write(
+                sub.join(format!("{t}.mp3")),
+                with_tags(&format!("{cd} piste {t}"), t + 1, mp3(20)),
+            )
+            .unwrap();
+        }
+    }
+    // cover of the folder (the tags of `with_tags` hold none)
+    let mut cover = std::io::Cursor::new(Vec::new());
+    image::RgbImage::from_pixel(64, 64, image::Rgb([200, 100, 50]))
+        .write_to(&mut cover, image::ImageFormat::Png)
+        .unwrap();
+    std::fs::write(dir.join("Cover.png"), cover.get_ref()).unwrap();
+
+    assert!(album::is_album_dir(&dir));
+    let album = album::scan(&dir).unwrap();
+    // same album tag in both CDs: it is the title
+    assert_eq!(album.title, "Album test");
+    assert_eq!(album.cover.as_deref(), Some(cover.get_ref().as_slice()));
+    let chapters: Vec<_> = album
+        .chapters
+        .iter()
+        .map(|c| (c.title.as_str(), c.len))
+        .collect();
+    // natural order: CD 2 before CD 10
+    assert_eq!(chapters, [("CD 2", 2), ("CD 10", 1)]);
+    assert_eq!(album.tracks[0].title, "CD 2 piste 0");
+
+    let zip = tmp.path().join("album.zip");
+    album.write_studio_zip(&zip).unwrap();
+    let ctx = Context::default();
+    let root = fake_flam(tmp.path());
+    let mut dev = open_device(&ctx, &root).unwrap();
+    dev.import_story(&ctx, &zip).unwrap();
+    let story = dev
+        .stories()
+        .get(&album.uuid().to_string())
+        .unwrap()
+        .clone();
+    let story_dir = dev.story_path(&story);
+    for f in ["rf/000/CHP00001", "rf/000/CHP00002", "sf/000/TRK00003"] {
+        assert!(story_dir.join(f).is_file(), "missing {f}");
+    }
+    // cover + 2 chapters + 3 menu entries + 3 playback nodes
+    let ni = std::fs::read(story_dir.join("ni")).unwrap();
+    assert_eq!(u32::from_le_bytes(ni[12..16].try_into().unwrap()), 9);
+    assert_eq!(dev.album_track_count(&story), None);
+}
+
+/// Podcast update: the albums are remembered, the new episodes found.
+#[test]
+fn podcast_new_episodes() {
+    let _cfg = setup();
+    let feed = |items: &[&str]| {
+        let items: String = items
+            .iter()
+            .map(|g| {
+                format!(
+                    "<item><title>{g}</title><guid>{g}</guid><enclosure url=\"https://example.org/{g}.mp3\"/></item>"
+                )
+            })
+            .collect();
+        format!("<rss><channel><title>Mon podcast</title>{items}</channel></rss>")
+    };
+    let url = "https://example.org/update-test.xml";
+    let p = lunii_core::podcast::parse_feed(url, &feed(&["b", "a"])).unwrap();
+    lunii_core::podcast::record_imported(&p, &["a".into(), "b".into()], true).unwrap();
+    let saved = lunii_core::podcast::saved_podcasts();
+    let entry = saved.iter().find(|s| s.feed_url == url).expect("saved");
+    assert_eq!(entry.album, p.album_uuid());
+    assert_eq!(entry.title, "Mon podcast");
+
+    let p = lunii_core::podcast::parse_feed(url, &feed(&["d", "c", "b", "a"])).unwrap();
+    let new: Vec<_> = lunii_core::podcast::new_episodes(&p)
+        .into_iter()
+        .map(|e| e.guid)
+        .collect();
+    assert_eq!(new, ["c", "d"]);
 }

@@ -120,3 +120,267 @@ msgstr "🎵 Album MP3 '{}' : {} pistes"
 
 msgid "These MP3 files must be converted to mono 44.1 kHz: FFMPEG is required (Tools menu)"
 msgstr "Ces MP3 doivent être convertis en mono 44,1 kHz : FFMPEG est nécessaire (menu Outils)"
+
+msgid "Add MP3 to album"
+msgstr "Ajouter des MP3 à l'album"
+
+msgid "MP3 files to add to the album"
+msgstr "Fichiers MP3 à ajouter à l'album"
+
+msgid "Adding MP3 files to the album..."
+msgstr "Ajout des MP3 à l'album..."
+
+msgid "✅ {} track(s) added to the album in {} s"
+msgstr "✅ {} piste(s) ajoutée(s) à l'album en {} s"
+
+msgid "This story is not an MP3 album created by Lunii.QT"
+msgstr "Cette histoire n'est pas un album MP3 créé par Lunii.QT"
+
+msgid "Adding MP3 files to an album is not available on this storyteller"
+msgstr "L'ajout de MP3 à un album n'est pas disponible sur cette conteuse"
+
+msgid "No MP3 file to add"
+msgstr "Aucun fichier MP3 à ajouter"
+
+msgid "🎵 Track {} : {}"
+msgstr "🎵 Piste {} : {}"
+
+msgid "Import a podcast"
+msgstr "Importer un podcast"
+
+msgid "Address of the podcast page (radiofrance.fr...) or of its RSS feed:"
+msgstr "Adresse de la page du podcast (radiofrance.fr…) ou de son flux RSS :"
+
+msgid "Loading..."
+msgstr "Chargement..."
+
+msgid "Load"
+msgstr "Charger"
+
+msgid "(Episode filter text)"
+msgstr "(filtrer les épisodes)"
+
+msgid "All"
+msgstr "Tous"
+
+msgid "None"
+msgstr "Aucun"
+
+msgid "already on the device"
+msgstr "déjà sur l'appareil"
+
+msgid "Import ({})"
+msgstr "Importer ({})"
+
+msgid "{} : {} episodes"
+msgstr "{} : {} épisodes"
+
+msgid "album on the device, the episodes will be appended ({} already imported)"
+msgstr "album présent sur l'appareil, les épisodes y seront ajoutés ({} déjà importés)"
+
+msgid "Importing podcast..."
+msgstr "Import du podcast..."
+
+msgid "⬇ Downloading {} episode(s) of '{}'..."
+msgstr "⬇ Téléchargement de {} épisode(s) de '{}'..."
+
+msgid "✅ {} episode(s) of '{}' imported in {}"
+msgstr "✅ {} épisode(s) de '{}' importé(s) en {}"
+
+msgid "These episodes must be converted to MP3: FFMPEG is required (Tools menu)"
+msgstr "Ces épisodes doivent être convertis en MP3 : FFMPEG est nécessaire (menu Outils)"
+
+msgid "The podcast address must start with https://"
+msgstr "L'adresse du podcast doit commencer par https://"
+
+msgid "No podcast feed found at this address"
+msgstr "Aucun flux de podcast trouvé à cette adresse"
+
+msgid "Invalid podcast feed"
+msgstr "Flux de podcast invalide"
+
+msgid "Import as:"
+msgstr "Importer comme :"
+
+msgid "an album (a menu to choose the episode)"
+msgstr "un album (un menu pour choisir l'épisode)"
+
+msgid "one story per episode"
+msgstr "une histoire par épisode"
+
+msgid "{} episode(s) already on the device"
+msgstr "{} épisode(s) déjà sur l'appareil"
+
+msgid "Update podcasts"
+msgstr "Mettre à jour les podcasts"
+
+msgid "Normalize volume (albums, podcasts)"
+msgstr "Égaliser le volume (albums, podcasts)"
+
+msgid "No podcast album on this device (Import a podcast)"
+msgstr "Aucun album de podcast sur cet appareil (Importer un podcast)"
+
+msgid "🔄 Checking '{}'..."
+msgstr "🔄 Vérification de '{}'..."
+
+msgid "'{}' : up to date"
+msgstr "'{}' : à jour"
+
+msgid "🛑 Failed to update '{}'"
+msgstr "🛑 Échec de la mise à jour de '{}'"
+
+msgid "✅ Podcasts updated : {} new episode(s)"
+msgstr "✅ Podcasts mis à jour : {} nouvel(s) épisode(s)"
+
+msgid " ({} failed)"
+msgstr " ({} en échec)"
+
+msgid "Checking the written files..."
+msgstr "Vérification des fichiers écrits..."
+
+msgid "Check after writing failed"
+msgstr "Échec de la vérification après écriture"
+
+msgid "{}/000/{} is missing or empty"
+msgstr "{}/000/{} est absent ou vide"
+
+msgid "the index file '{}' differs from what was written"
+msgstr "le fichier d'index '{}' ne correspond pas à ce qui a été écrit"
+
+msgid "The album may be damaged, remove it and import it again"
+msgstr "L'album est peut-être abîmé, supprimez-le puis importez-le à nouveau"
+
+msgid "unable to normalize the volume of {}"
+msgstr "impossible d'égaliser le volume de {}"
+
+msgid "⏳ The storyteller is busy, try again once the current task is done"
+msgstr "⏳ La conteuse est occupée, réessayez une fois la tâche en cours terminée"
+
+msgid "7z read error: {}"
+msgstr "Erreur de lecture 7z : {}"
+
+msgid "Bad 7z file: {}"
+msgstr "Fichier 7z invalide : {}"
+
+msgid "Bad zip file: {}"
+msgstr "Fichier zip invalide : {}"
+
+msgid "FFMPEG is not available"
+msgstr "FFMPEG n'est pas disponible"
+
+msgid "ffmpeg error: {}"
+msgstr "Erreur ffmpeg : {}"
+
+msgid "ffmpeg produced no audio: {}"
+msgstr "ffmpeg n'a produit aucun son : {}"
+
+msgid "unable to start ffmpeg"
+msgstr "impossible de lancer ffmpeg"
+
+msgid "unable to write the ffmpeg input file"
+msgstr "impossible d'écrire le fichier d'entrée de ffmpeg"
+
+msgid "Destination path '{}' already exists"
+msgstr "Le chemin de destination '{}' existe déjà"
+
+msgid "invalid source directory"
+msgstr "dossier source invalide"
+
+msgid "no token in Lunii guest response"
+msgstr "pas de jeton dans la réponse invité de Lunii"
+
+msgid "no token in Luniistore response"
+msgstr "pas de jeton dans la réponse du Luniistore"
+
+msgid "no {} available for this device"
+msgstr "aucun {} disponible pour cet appareil"
+
+msgid "unsupported device"
+msgstr "appareil non pris en charge"
+
+msgid "Archive => Unsupported type 0x{}"
+msgstr "Archive => type non pris en charge 0x{}"
+
+msgid "Flam metadata file is too short ({} bytes)"
+msgstr "Le fichier de métadonnées de la Flam est trop court ({} octets)"
+
+msgid "Invalid UUID in library list: {}"
+msgstr "UUID invalide dans la liste de la bibliothèque : {}"
+
+msgid "empty archive"
+msgstr "archive vide"
+
+msgid "invalid story IV"
+msgstr "IV d'histoire invalide"
+
+msgid "invalid story key"
+msgstr "clé d'histoire invalide"
+
+msgid "unable to decode image"
+msgstr "impossible de décoder l'image"
+
+msgid ".md file unreadable ({})"
+msgstr "fichier .md illisible ({})"
+
+msgid "metadata file too short"
+msgstr "fichier de métadonnées trop court"
+
+msgid "missing IV"
+msgstr "IV manquant"
+
+msgid "no device key"
+msgstr "pas de clé d'appareil"
+
+msgid "Already in list but invalid - {}"
+msgstr "Déjà dans la liste mais invalide - {}"
+
+msgid "Error occurred while moving story directories: {}"
+msgstr "Erreur lors du déplacement des dossiers d'histoires : {}"
+
+msgid "Found - {}"
+msgstr "Trouvée - {}"
+
+msgid "No Lunii nor Flam found at {}"
+msgstr "Ni Lunii ni Flam trouvée à {}"
+
+msgid "Recovered - {}"
+msgstr "Récupérée - {}"
+
+msgid "Skipping lost story (seems broken/incomplete) - {}"
+msgstr "Histoire perdue ignorée (semble abîmée ou incomplète) - {}"
+
+msgid "Story dir {} does not exist or already {}"
+msgstr "Le dossier d'histoire {} n'existe pas ou est déjà {}"
+
+msgid "💡 Try to use menu 'Tools/Recover or Remove lost stories' to fix it"
+msgstr "💡 Essayez le menu « Outils / Histoires perdues » (Récupérer ou Supprimer) pour corriger"
+
+msgid "🔊 Normalizing the volume : {}"
+msgstr "🔊 Égalisation du volume : {}"
+
+msgid "Invalid podcast feed (no channel)"
+msgstr "Flux de podcast invalide (pas de channel)"
+
+msgid "no MP3 file in {}"
+msgstr "aucun fichier MP3 dans {}"
+
+msgid "action node '{}' not found in story.json"
+msgstr "nœud d'action '{}' introuvable dans story.json"
+
+msgid "invalid stage node UUID in story.json"
+msgstr "UUID de nœud invalide dans story.json"
+
+msgid "missing 'stageNodes' in story.json"
+msgstr "'stageNodes' manquant dans story.json"
+
+msgid "no stage node in story.json"
+msgstr "aucun nœud dans story.json"
+
+msgid "Unsupported OS."
+msgstr "Système d'exploitation non pris en charge."
+
+msgid "You must rely on your Linux package manager to install FFMPEG (e.g., on Ubuntu/Debian: sudo apt install ffmpeg)"
+msgstr "Installez FFMPEG avec le gestionnaire de paquets de votre distribution Linux (par exemple sur Ubuntu/Debian : sudo apt install ffmpeg)"
+
+msgid "invalid JSON file"
+msgstr "fichier JSON invalide"

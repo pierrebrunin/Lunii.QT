@@ -3,7 +3,6 @@ name = "lunii-cli"
 description = "Command line tool to manage Lunii and Flam storytellers"
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 

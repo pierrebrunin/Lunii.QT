@@ -3,7 +3,6 @@ name = "lunii-gui"
 description = "Lunii.QT graphical interface (Slint)"
 version.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
@@ -26,6 +25,9 @@ uuid = "1"
 
 [build-dependencies]
 slint-build = "~1.18"
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
 
 [features]
 # development tool: headless rendering of the screens (see src/screenshot.rs)

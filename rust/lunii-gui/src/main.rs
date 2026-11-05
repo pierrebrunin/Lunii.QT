@@ -1,5 +1,8 @@
 //! Lunii.QT graphical interface (Slint).
 
+// no console window on Windows (release builds; debug ones keep it for the logs)
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 slint::include_modules!();
 
 mod app;
