@@ -180,6 +180,8 @@ export component MainWindow inherits Window {
     property <bool> modal: root.dialog != DialogKind.none;
     property <bool> idle: !root.busy && !root.modal;
     property <bool> story-actions: root.device-ready && root.idle;
+    // after the change, whatever toggled it (menu, settings)
+    changed show-size => { root.action(Action.show-size); }
     // the selection is only acted on in the stories view
     property <bool> selection-actions: root.story-actions && root.has-selection && root.view == 0;
 
@@ -215,7 +217,7 @@ export component MainWindow inherits Window {
         }
         Menu {
             title: @tr("Tools");
-            MenuItem { enabled: !root.modal; title: @tr("Show size"); checkable: true; checked <=> root.show-size; activated => { root.action(Action.show-size); } }
+            MenuItem { enabled: !root.modal; title: @tr("Show size"); checkable: true; checked <=> root.show-size; }
             MenuItem { enabled: !root.modal; title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action(Action.show-details); } }
             MenuSeparator { }
             MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: root.ffmpeg-present && !root.modal; activated => { root.action(Action.normalize-volume); } }

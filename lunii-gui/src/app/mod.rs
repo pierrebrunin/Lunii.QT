@@ -141,6 +141,8 @@ struct State {
     /// highest level logged while the log panel was hidden
     log_alert: i32,
     eta: Option<Eta>,
+    /// the running task computes the sizes
+    sizing: bool,
     /// podcast of the selection dialog, and its selected episodes
     podcast: Option<(Box<PodcastView>, HashSet<usize>)>,
     /// followed podcasts and their feeds (Podcasts view)
@@ -648,8 +650,8 @@ impl App {
         self.rebuild_rows();
         self.status("");
 
-        if ui.get_show_size() && sizes_unknown {
-            self.launch(Task::Size);
+        if sizes_unknown {
+            self.ensure_sizes();
         }
         // a Lunii v3 without story keys can't import: show why
         if version == DeviceVersion::LuniiV3
@@ -962,6 +964,22 @@ impl App {
     // Worker
     // -----------------------------------------------------------------------
 
+    /// Computes the missing story sizes when they are displayed. A task
+    /// running: done when it ends (see `Event::Finished`).
+    pub(super) fn ensure_sizes(&self) {
+        let needed = {
+            let st = self.state.borrow();
+            self.ui().get_show_size()
+                && st.device.is_some()
+                && st.worker.is_none()
+                && st.stories.iter().any(|s| s.size.is_none())
+        };
+        if needed {
+            self.launch(Task::Size);
+            self.state.borrow_mut().sizing = true;
+        }
+    }
+
     fn launch(&self, task: Task) {
         if self.state.borrow().worker.is_some() {
             return;
@@ -1128,6 +1146,8 @@ impl App {
                 if let Some((handle, _)) = self.state.borrow_mut().worker.take() {
                     let _ = handle.join();
                 }
+                // a failed size computation is not retried in a loop
+                let sized = std::mem::take(&mut self.state.borrow_mut().sizing);
                 ui.set_busy(false);
                 ui.set_total_visible(false);
                 ui.set_story_visible(false);
@@ -1136,6 +1156,9 @@ impl App {
                 ui.set_ffmpeg_present(which_ffmpeg().is_some());
                 self.selection_changed();
                 self.podcasts_refresh_device();
+                if !sized {
+                    self.ensure_sizes();
+                }
                 // firmware login done: choose where to save the files
                 if self.state.borrow().fw.is_some() {
                     let app = self.clone();

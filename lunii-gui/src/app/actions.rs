@@ -168,12 +168,7 @@ impl App {
                 ui.set_confirm_message(message.into());
                 ui.set_dialog(DialogKind::ConfirmRemove);
             }
-            Action::ShowSize => {
-                ui.set_show_size(ui.get_show_size());
-                if ui.get_show_size() && self.state.borrow().device.is_some() {
-                    self.launch(Task::Size);
-                }
-            }
+            Action::ShowSize => self.ensure_sizes(),
             Action::ShowDetails => {
                 self.state.borrow_mut().details_uuid = None;
                 self.update_details();
