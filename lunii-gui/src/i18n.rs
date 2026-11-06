@@ -226,9 +226,9 @@ pub fn apply_language() -> &'static str {
     lang
 }
 
-/// Language of the user (`LUNII_QT_LANG` overrides the system locale).
+/// Language of the user (`LUNII_LANG` overrides the system locale).
 pub fn system_language() -> String {
-    std::env::var("LUNII_QT_LANG")
+    std::env::var("LUNII_LANG")
         .ok()
         .or_else(sys_locale::get_locale)
         .unwrap_or_else(|| "en".into())

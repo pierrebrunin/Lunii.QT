@@ -1,13 +1,13 @@
 [package]
 name = "lunii-gui"
-description = "Lunii.QT graphical interface (Slint)"
+description = "Lunii graphical interface (Slint)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "lunii-qt"
+name = "lunii"
 path = "src/main.rs"
 
 [dependencies]

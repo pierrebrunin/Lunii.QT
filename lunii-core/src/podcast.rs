@@ -4,7 +4,7 @@
 //! tracks, in chronological order. The album UUID is derived from the feed
 //! address: the episodes of a podcast already on the device are appended to its
 //! album. The episodes already imported are remembered in
-//! `~/.lunii-qt/podcasts.json`.
+//! `~/.lunii/podcasts.json`.
 //!
 //! The address can be the feed itself or a web page announcing it (Radio
 //! France podcast pages, `<link rel="alternate" type="application/rss+xml">`).
@@ -77,7 +77,7 @@ pub fn episode_uuid(feed_url: &str, guid: &str) -> Uuid {
 fn get_text(url: &str) -> Result<String> {
     let resp = http::agent(Duration::from_secs(30))
         .get(url)
-        .header("User-Agent", "Mozilla/5.0 (Lunii.QT)")
+        .header("User-Agent", "Mozilla/5.0 (Lunii)")
         .call()
         .with_context(|| format!("unable to load {url}"))?;
     let data = http::bytes(resp)?;
@@ -451,7 +451,7 @@ pub fn record_plan(podcast: &Podcast, episodes: &[Episode], plan: &ImportPlan) -
 }
 
 // ---------------------------------------------------------------------------
-// Imported episodes (~/.lunii-qt/podcasts.json)
+// Imported episodes (~/.lunii/podcasts.json)
 // ---------------------------------------------------------------------------
 
 fn state_file() -> PathBuf {
@@ -480,7 +480,7 @@ pub fn imported_episodes(uuid: &Uuid) -> HashSet<String> {
         .unwrap_or_default()
 }
 
-/// A podcast imported as an album, from `~/.lunii-qt/podcasts.json`.
+/// A podcast imported as an album, from `~/.lunii/podcasts.json`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SavedPodcast {
     pub album: Uuid,

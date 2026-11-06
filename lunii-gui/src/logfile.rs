@@ -1,7 +1,7 @@
-//! Persistent log file: `~/.lunii-qt/logs/lunii-qt.log`.
+//! Persistent log file: `~/.lunii/logs/lunii.log`.
 //!
-//! One file per session, the previous ones are kept as `lunii-qt.log.1` …
-//! `lunii-qt.log.4` (rotated at start-up). This module also installs the
+//! One file per session, the previous ones are kept as `lunii.log.1` …
+//! `lunii.log.4` (rotated at start-up). This module also installs the
 //! `log` crate logger, so the messages of `lunii-core` that don't go through a
 //! `Reporter` (database loading...) end up in the panel and in the file.
 
@@ -12,7 +12,7 @@ use std::sync::Mutex;
 
 use lunii_core::Level;
 
-const FILE_NAME: &str = "lunii-qt.log";
+const FILE_NAME: &str = "lunii.log";
 const KEPT_SESSIONS: usize = 5;
 
 static FILE: Mutex<Option<File>> = Mutex::new(None);

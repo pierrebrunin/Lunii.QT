@@ -1,4 +1,4 @@
-//! Progress / log reporting, replacing the Qt signals of the Python devices.
+//! Progress / log reporting of the long operations.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -27,7 +27,7 @@ pub struct LogReporter;
 
 impl Reporter for LogReporter {
     fn log(&self, level: Level, message: &str) {
-        log::log!(target: "lunii-qt", level, "{message}");
+        log::log!(target: "lunii", level, "{message}");
     }
 }
 

@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>luniiQt</string>
+    <string>Lunii</string>
     <key>CFBundleDisplayName</key>
-    <string>Lunii Qt</string>
+    <string>Lunii</string>
     <key>CFBundleIdentifier</key>
-    <string>com.o-daneel.luniiqt</string>
+    <string>com.o-daneel.lunii</string>
     <key>CFBundleVersion</key>
     <string>@VERSION@</string>
     <key>CFBundleShortVersionString</key>
     <string>@VERSION@</string>
     <key>CFBundleExecutable</key>
-    <string>lunii-qt</string>
+    <string>lunii</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>

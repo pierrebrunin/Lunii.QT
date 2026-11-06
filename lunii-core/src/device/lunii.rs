@@ -195,7 +195,7 @@ impl LuniiDevice {
         Ok(())
     }
 
-    /// Real v3 device keys, if provided by the user in `~/.lunii-qt/<SNU>.keys`.
+    /// Real v3 device keys, if provided by the user in `~/.lunii/<SNU>.keys`.
     fn load_device_keys(&mut self, ctx: &Context) {
         let keyfile = cfg_dir().join(format!("{}.keys", self.snu_str()));
         if let Ok(keys) = std::fs::read(&keyfile)

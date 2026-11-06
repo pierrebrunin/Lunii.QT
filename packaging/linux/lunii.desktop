@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Lunii.QT
+Name=Lunii
 Comment=Manage the stories of Lunii and Flam storytellers
 Comment[fr]=Gérer les histoires des conteuses Lunii et Flam
-Exec=lunii-qt
-Icon=lunii-qt
+Exec=lunii
+Icon=lunii
 Terminal=false
 Categories=Utility;
 Keywords=Lunii;Flam;story;histoire;

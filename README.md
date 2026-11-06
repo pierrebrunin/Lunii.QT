@@ -1,11 +1,11 @@
 ![Total downloads](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/total?label=Total%20Downloads)
-[![luniiQt v3.1.4](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v3.1.4/total?label=luniiQt%20v3.1.4)](https://github.com/o-daneel/Lunii.QT/releases/tag/v3.1.4)
-[![luniiQt v3.0.0](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v3.0.0/total?label=luniiQt%20v3.0.0)](https://github.com/o-daneel/Lunii.QT/releases/tag/v3.0.0)
-[![luniiQt v2.7.6](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v2.7.6/total?label=luniiQt%20v2.7.6)](https://github.com/o-daneel/Lunii.QT/releases/tag/v2.7.6)
+[![Lunii v3.1.4](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v3.1.4/total?label=Lunii%20v3.1.4)](https://github.com/o-daneel/Lunii.QT/releases/tag/v3.1.4)
+[![Lunii v3.0.0](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v3.0.0/total?label=Lunii%20v3.0.0)](https://github.com/o-daneel/Lunii.QT/releases/tag/v3.0.0)
+[![Lunii v2.7.6](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v2.7.6/total?label=Lunii%20v2.7.6)](https://github.com/o-daneel/Lunii.QT/releases/tag/v2.7.6)
 
 :uk: [English README](./README_EN.md) :uk:
 
-# Lunii.QT
+# Lunii
 
 Une application (Rust, interface Slint) pour gérer sa fabrique à histoires (fah) <u>Lunii</u> et <u>Flam</u>, avec les opérations de  **organisation** / **importation** / **exportation** / **téléchargement du firmware**   
 pour Windows 11 / MacOs (11 BigSur => 26 Tahoe) / Linux   
@@ -18,7 +18,7 @@ L'application permet désormais d'importer les histoires Lunii sur votre Flam, s
     > **Attention :** la Flam est TRES lente en usb. Il faut etre patient. (environ 4min pour 80Mo)
 
 * 😎 **Lunii v3 & Firmware 3.2.x** 😎  
-Lunii.QT a été mis à jour pour prendre en charge le dernier firmware (3.2.2 et suivants). Grâce à une analyse approfondie (j’aurais dû connecter les neurones et réfléchir 10 minutes de plus à la premère analyse), une solution **stable** et **TRÈS simple** a été trouvée.  
+Lunii a été mis à jour pour prendre en charge le dernier firmware (3.2.2 et suivants). Grâce à une analyse approfondie (j’aurais dû connecter les neurones et réfléchir 10 minutes de plus à la premère analyse), une solution **stable** et **TRÈS simple** a été trouvée.  
 Oubliez toutes les anciennes manipulations concernant les fichiers .md et le firmware.
   > **Rappel :** Gardez précieusement vos fichiers firmware v3 (vous pourrez toujours rétrograder) et évitez les mises à jour automatiques.
 
@@ -35,7 +35,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 
 ### Table des matières
 <!-- TOC -->
-- [Lunii.QT](#luniiqt)
+- [Lunii](#lunii)
   - [Interface Utilisateur](#interface-utilisateur)
     - [Fenêtre principale](#fenêtre-principale)
     - [Mode Nuit](#mode-nuit)
@@ -162,8 +162,8 @@ Certaines histoires tierces utilisent des fichiers non MP3. Ils ne peuvent donc 
   
 Procedure:
 1) Cliquez sur Menu "Outils" puis "FFMPEG **Absent**"
-2) luniiQt va lancer le téléchargement de FFMPEG
-3) FFMPEG sera installé dans le dossier `~/.lunii-qt`
+2) Lunii va lancer le téléchargement de FFMPEG
+3) FFMPEG sera installé dans le dossier `~/.lunii`
 4) Vérifiez avec Menu Outils / FFMPEG **détecté**
 5) L'application est prête
 
@@ -171,7 +171,7 @@ Procedure:
 1) ouvrir un terminal
 2) exécutez la commande suivante :   
 `sudo apt-get install ffmpeg`
-4) redémarrez luni-qt
+4) redémarrez lunii
 
 ### Vérification 
 Dans l'application, le menu `Tools` affiche l'état de la détection.
@@ -182,7 +182,7 @@ Dans l'application, le menu `Tools` affiche l'état de la détection.
 
 ## Mise à jour du firmware
 
-Lunii.QT vous offre la possibilité de sauvegarder la dernière version du Firmware disponible sur les serveurs Lunii. Par extension, ayant le firmware enregistré, il est donc possible de manuellement l'installer sur votre appareil sans avoir à vous connecter au LuniiStore (vous ne perdrez pas vos histoires chargées non officielles). Cette procédure est **manuelle** et **expérimentale** mais jusqu'à présent personne n'a rencontré de problème.
+Lunii vous offre la possibilité de sauvegarder la dernière version du Firmware disponible sur les serveurs Lunii. Par extension, ayant le firmware enregistré, il est donc possible de manuellement l'installer sur votre appareil sans avoir à vous connecter au LuniiStore (vous ne perdrez pas vos histoires chargées non officielles). Cette procédure est **manuelle** et **expérimentale** mais jusqu'à présent personne n'a rencontré de problème.
 
 **NOTE 1:** Pensez à garder une sauvegarde du firmware pour Lunii v3 et FLAMs, dans le cas d'une mise à jour qui casserait l'astuce des histoires tierces. <u>Vous serez en mesure de downgrader/revenir en arrière.</u>  
 **NOTE 2:** Vous ne pouvez pas choisir la version du firmware. Vous n'obtiendrez que la **dernière version disponible** sur les serveurs de Lunii.
@@ -341,20 +341,20 @@ utiles et la génération des traductions.
 ```bash
 cd rust
 cargo build --release
-./target/release/lunii-qt
+./target/release/lunii
 ```
 
 ## Astuces
 
 ### macOS - Authorisation de l'application
-1. Double cliquez sur le fichier `lunii-qt`.
+1. Double cliquez sur le fichier `lunii`.
 2. Vous devez voir apparaître le message d'erreur suivant :     
 ![](./res/macos_install_1.png)  
   Cliquez sur "**OK**"
 3. Allez dans **Préférences du système** > **Sécurité et confidentialité** et cliquez sur l'onglet **Général**.  
 ![](./res/macos_install_2.png)
-4. En bas de la fenêtre, vous trouverez un message indiquant que  `lunii-qt` est bloqué. Cliquez sur "**Ouvrir quand même**".   
-   Si vous ne voyez pas ce message sur l'onglet Général, double cliquez de nouveau sur `lunii-qt`.  
+4. En bas de la fenêtre, vous trouverez un message indiquant que  `lunii` est bloqué. Cliquez sur "**Ouvrir quand même**".   
+   Si vous ne voyez pas ce message sur l'onglet Général, double cliquez de nouveau sur `lunii`.  
    **NOTE :** Il est possible que vous deviez en premier cliquer sur le bouton "**unlock**" puis entrer votre nom d'utilisateur / mot de passe pour pouvoir cliquer sur "**Ouvrir quand même**".
 5. Une nouvelle popup apparait       
 ![](./res/macos_install_3.png)  
@@ -366,16 +366,16 @@ Cliquez sur "**Ouvrir**", et vous n'aurez plus ces avertissements à l'avenir.
 
 ### Métadonnées des histoires non-officielles
 Lors de l'utilisation de cette application, vous allez peut-être constater des hisoires marquées `Unknown story (maybe a User created story)...`. 
-Il s'agit certainement d'une histoire tierce qui a été chargé par une autre application. Lunii.QT n'a donc 
+Il s'agit certainement d'une histoire tierce qui a été chargé par une autre application. Lunii n'a donc 
 pas connaissance des métadonnées associées (Titre, Description, Image).  
 Il est possible de pallier ce problème de deux manières (au choix) :
 1. en important la base d'histoires de STUdio avec le menu `File/Import STUdio DB`
-2. en glissant déposant l'archive de l'histoire dans l'application, comme pour la charger. Cette dernière étant déjà présente, Lunii.Qt ne va faire qu'**analyser les métadonnées** et les ajouter dans la base interne, en prenant soin de **ne pas recharger** l'histoire.
+2. en glissant déposant l'archive de l'histoire dans l'application, comme pour la charger. Cette dernière étant déjà présente, Lunii ne va faire qu'**analyser les métadonnées** et les ajouter dans la base interne, en prenant soin de **ne pas recharger** l'histoire.
 
 ### Gestion du cache
 Cette application téléchargera une fois pour toutes la base de données des histoires officielles et toutes les images demandées dans le dossier dédié à l'application.
-* `$HOME/.lunii-qt/official.db`
-* `$HOME/.lunii-qt/cache/*`
+* `$HOME/.lunii/official.db`
+* `$HOME/.lunii/cache/*`
 
 En cas de problème, il suffit de supprimer ce fichier et ce répertoire pour forcer le rafraîchissement.
 
@@ -392,8 +392,8 @@ Pour compiler l'application, voir les prérequis dans [`CONTRIBUTING.md`](CONTRI
 ### Exportation V3
 Afin de supporter l'exportation d'histoires depuis une Luniis v3, vous devez placer vos clés de périphérique ici :
 ```bash
-%HOME%\.lunii-qt\230230300XXXXX.keys
-$HOME/.lunii-qt/230230300XXXXX.keys
+%HOME%\.lunii\230230300XXXXX.keys
+$HOME/.lunii/230230300XXXXX.keys
 ```
 Il s'agit d'un fichier binaire avec 0x10 octets pour la clé et 0x10 octets pour l'IV.
 

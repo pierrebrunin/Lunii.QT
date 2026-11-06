@@ -1,4 +1,4 @@
-//! Lunii.QT graphical interface (Slint).
+//! Lunii graphical interface (Slint).
 
 // no console window on Windows (release builds; debug ones keep it for the logs)
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -14,7 +14,7 @@ mod worker;
 
 fn main() -> anyhow::Result<()> {
     #[cfg(feature = "screenshot")]
-    if let Some(out) = std::env::var_os("LUNII_QT_SCREENSHOT") {
+    if let Some(out) = std::env::var_os("LUNII_SCREENSHOT") {
         return screenshot::run(out.into());
     }
 
@@ -24,7 +24,7 @@ fn main() -> anyhow::Result<()> {
     logfile::init();
     #[cfg(target_os = "linux")]
     if prefer_x11() {
-        log::info!(target: "lunii-qt", "Wayland session: using X11 (XWayland) for file drops, LUNII_QT_WAYLAND=1 to disable");
+        log::info!(target: "lunii", "Wayland session: using X11 (XWayland) for file drops, LUNII_WAYLAND=1 to disable");
     }
     let ui = MainWindow::new()?;
     // must be called after the creation of the first component
@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
 
 /// winit backend selector. Under a Wayland session, X11 (XWayland) is preferred
 /// when available: winit 0.30 only reports file drops on X11.
-/// `LUNII_QT_WAYLAND=1` keeps the native Wayland backend.
+/// `LUNII_WAYLAND=1` keeps the native Wayland backend.
 fn backend() -> slint::BackendSelector {
     let selector = slint::BackendSelector::new().backend_name("winit".into());
     #[cfg(target_os = "linux")]
@@ -59,5 +59,5 @@ fn backend() -> slint::BackendSelector {
 #[cfg(target_os = "linux")]
 fn prefer_x11() -> bool {
     let set = |name: &str| std::env::var_os(name).is_some_and(|v| !v.is_empty());
-    set("WAYLAND_DISPLAY") && set("DISPLAY") && !set("LUNII_QT_WAYLAND")
+    set("WAYLAND_DISPLAY") && set("DISPLAY") && !set("LUNII_WAYLAND")
 }

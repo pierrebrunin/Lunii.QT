@@ -109,7 +109,7 @@ pub struct StoryInfo {
     pub hidden: bool,
     pub exportable: bool,
     pub size: Option<u64>,
-    /// MP3 album created by Lunii.QT, tracks can be appended
+    /// MP3 album created by Lunii, tracks can be appended
     pub album: bool,
 }
 
@@ -357,7 +357,7 @@ impl Runner {
         let start = Instant::now();
         let tracks = album::scan_files(files)?.tracks;
         album::check_ffmpeg(&tracks)?;
-        let work = TempDir(std::env::temp_dir().join(format!("lunii-qt-append-{uuid}")));
+        let work = TempDir(std::env::temp_dir().join(format!("lunii-append-{uuid}")));
         let tracks = album::prepare_tracks(&self.ctx, &tracks, self.audio, &work.0)?;
         let result = self.on_device(|d| d.add_album_tracks(&self.ctx, uuid, &tracks));
         self.refresh();
@@ -426,9 +426,8 @@ impl Runner {
         update_size: bool,
     ) -> anyhow::Result<()> {
         let start = Instant::now();
-        let dir = TempDir(
-            std::env::temp_dir().join(format!("lunii-qt-podcast-{}", podcast.album_uuid())),
-        );
+        let dir =
+            TempDir(std::env::temp_dir().join(format!("lunii-podcast-{}", podcast.album_uuid())));
         self.message(trf(
             "⬇ Downloading {} episode(s) of '{}'...",
             &[&episodes.len().to_string(), &podcast.title],
@@ -537,9 +536,9 @@ impl Runner {
             &[&album.title, &album.tracks.len().to_string()],
         ));
         album::check_ffmpeg(&album.tracks)?;
-        let work = TempDir(std::env::temp_dir().join(format!("lunii-qt-album-{}", album.uuid())));
+        let work = TempDir(std::env::temp_dir().join(format!("lunii-album-{}", album.uuid())));
         album.tracks = album::prepare_tracks(&self.ctx, &album.tracks, self.audio, &work.0)?;
-        let zip = std::env::temp_dir().join(format!("lunii-qt-album-{}.zip", album.uuid()));
+        let zip = std::env::temp_dir().join(format!("lunii-album-{}.zip", album.uuid()));
         if let Err(e) = album.write_studio_zip(&zip) {
             let _ = std::fs::remove_file(&zip);
             return Err(e);

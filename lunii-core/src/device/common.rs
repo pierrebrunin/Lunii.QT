@@ -277,7 +277,7 @@ pub fn skip_chars(s: &str, n: usize) -> String {
     s.chars().skip(n).collect()
 }
 
-/// Appends `tracks` to an MP3 album story created by Lunii.QT (see
+/// Appends `tracks` to an MP3 album story created by Lunii (see
 /// [`crate::album`]): writes the screens and audio of the new tracks after the
 /// existing ones, and returns the story of the whole album, whose index files
 /// (`ri`, `si`, `li`, `ni`) the caller writes last: until then (abort,
@@ -296,7 +296,7 @@ pub(crate) fn write_album_tracks(
     use crate::{album, convert::image, story};
 
     let count = album::device_track_count(story_dir)
-        .context("This story is not an MP3 album created by Lunii.QT")?;
+        .context("This story is not an MP3 album created by Lunii")?;
     if tracks.is_empty() {
         bail!("No MP3 file to add");
     }
@@ -577,7 +577,7 @@ pub(crate) fn import_studio<D: StoryWriter>(dev: &mut D, ctx: &Context, path: &P
     dev.update_pack_index()
 }
 
-/// Appends MP3 files to an album story created by Lunii.QT (see
+/// Appends MP3 files to an album story created by Lunii (see
 /// [`write_album_tracks`]), returns the number of added tracks.
 pub(crate) fn append_album_tracks<D: StoryWriter>(
     dev: &mut D,

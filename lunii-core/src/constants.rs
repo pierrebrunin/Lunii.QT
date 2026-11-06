@@ -1,7 +1,7 @@
 //! Constants shared by every module (port of `pkg/api/constants.py`).
 
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{OnceLock, RwLock};
 
 /// Hardcoded key found in the external flash of Lunii v1/v2 devices
 /// (`91BD7A0A A75440A9 BBD49D6C E0DCC0E3`, stored little endian).
@@ -25,7 +25,7 @@ pub const OFFICIAL_DB_URL: &str = "https://server-data-prod.lunii.com/v2/packs";
 pub const OFFICIAL_IMAGE_BASE_URL: &str = "https://storage.googleapis.com/lunii-data-prod";
 
 // ---------------------------------------------------------------------------
-// Configuration directory (~/.lunii-qt, shared with the Python application)
+// Configuration directory (~/.lunii, ~/.lunii-qt for the earlier versions)
 // ---------------------------------------------------------------------------
 
 static CFG_DIR_OVERRIDE: RwLock<Option<PathBuf>> = RwLock::new(None);
@@ -35,17 +35,37 @@ pub fn set_cfg_dir(path: impl Into<PathBuf>) {
     *CFG_DIR_OVERRIDE.write().unwrap() = Some(path.into());
 }
 
-/// `~/.lunii-qt` (or the `LUNII_QT_CFG_DIR` environment variable, or the override).
+/// `~/.lunii` (or the `LUNII_CFG_DIR` environment variable, or the override).
 pub fn cfg_dir() -> PathBuf {
     if let Some(p) = CFG_DIR_OVERRIDE.read().unwrap().as_ref() {
         return p.clone();
     }
-    if let Some(p) = std::env::var_os("LUNII_QT_CFG_DIR") {
+    if let Some(p) = std::env::var_os("LUNII_CFG_DIR") {
         return PathBuf::from(p);
     }
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".lunii-qt")
+    static HOME_CFG_DIR: OnceLock<PathBuf> = OnceLock::new();
+    HOME_CFG_DIR
+        .get_or_init(|| {
+            let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+            let dir = home.join(".lunii");
+            // directory of the earlier versions: moved once
+            let legacy = home.join(".lunii-qt");
+            if !dir.exists() && legacy.is_dir() {
+                match std::fs::rename(&legacy, &dir) {
+                    Ok(()) => log::info!("{} moved to {}", legacy.display(), dir.display()),
+                    Err(e) => {
+                        log::warn!(
+                            "unable to move {} to {}: {e}",
+                            legacy.display(),
+                            dir.display()
+                        );
+                        return legacy;
+                    }
+                }
+            }
+            dir
+        })
+        .clone()
 }
 
 pub fn cache_dir() -> PathBuf {

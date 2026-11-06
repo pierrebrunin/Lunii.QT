@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# macOS package: universal (Apple Silicon + Intel) `luniiQt.app` in a DMG.
+# macOS package: universal (Apple Silicon + Intel) `Lunii.app` in a DMG.
 #
 #   cargo build --release --target aarch64-apple-darwin
 #   cargo build --release --target x86_64-apple-darwin
@@ -20,14 +20,14 @@ trap 'rm -rf "$STAGE"' EXIT
 
 # DMG contents: the application (+ the Applications link)
 SRC="$STAGE/dmg"
-APP="$SRC/luniiQt.app"
+APP="$SRC/Lunii.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-for bin in lunii-qt lunii-cli; do
+for bin in lunii lunii-cli; do
     lipo -create -output "$APP/Contents/MacOS/$bin" \
         "target/aarch64-apple-darwin/release/$bin" \
         "target/x86_64-apple-darwin/release/$bin"
 done
-lipo -info "$APP/Contents/MacOS/lunii-qt"
+lipo -info "$APP/Contents/MacOS/lunii"
 sed "s/@VERSION@/${VERSION#v}/g" packaging/macos/Info.plist > "$APP/Contents/Info.plist"
 cp res/dmg_icon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp LICENSE "$APP/Contents/Resources/"
@@ -36,24 +36,24 @@ cp LICENSE "$APP/Contents/Resources/"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"
 
-DMG="$OUT/Lunii.Qt-$VERSION-MacOs-universal.dmg"
+DMG="$OUT/Lunii-$VERSION-MacOs-universal.dmg"
 rm -f "$DMG"
 if command -v create-dmg >/dev/null; then
     # same layout as the previous releases: application on the left,
     # Applications link on the right
     create-dmg \
-        --volname "luniiQt-$VERSION Installer" \
+        --volname "Lunii-$VERSION Installer" \
         --volicon res/dmg_icon.icns \
         --background res/dmg_background.png \
         --window-pos 200 120 \
         --window-size 600 425 \
         --icon-size 70 \
-        --icon luniiQt.app 185 185 \
+        --icon Lunii.app 185 185 \
         --app-drop-link 415 185 \
         --format UDZO \
         "$DMG" "$SRC"
 else
     ln -s /Applications "$SRC/Applications"
-    hdiutil create -volname "luniiQt-$VERSION" -srcfolder "$SRC" -ov -format UDZO "$DMG"
+    hdiutil create -volname "Lunii-$VERSION" -srcfolder "$SRC" -ov -format UDZO "$DMG"
 fi
 echo "$DMG"

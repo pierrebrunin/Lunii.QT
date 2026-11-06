@@ -1,8 +1,8 @@
 //! Story databases (official Lunii DB + third-party / STUdio DB) and thumbnails cache.
 //!
 //! Port of the `DB_OFFICIAL` / `DB_THIRD_PARTY` globals of `pkg/api/stories.py`.
-//! The files are shared with the Python application (`~/.lunii-qt/official.db`,
-//! `~/.lunii-qt/third-party.db`, `~/.lunii-qt/cache/`).
+//! The files are shared with the Python application (`~/.lunii/official.db`,
+//! `~/.lunii/third-party.db`, `~/.lunii/cache/`).
 
 use std::sync::{LazyLock, Mutex, RwLock};
 use std::time::Duration;
@@ -90,7 +90,7 @@ fn load_db_unlocked(reload: bool) -> bool {
     if reload || !file_official_db().is_file() {
         let _ = ensure_cfg_dir();
         if let Err(e) = fetch_official_db() {
-            log::warn!(target: "lunii-qt", "Failed to fetch official DB: {e}");
+            log::warn!(target: "lunii", "Failed to fetch official DB: {e}");
             ret = false;
         }
     }

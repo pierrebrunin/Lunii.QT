@@ -1,6 +1,6 @@
-# Lunii.QT — portage Rust
+# Lunii — développement
 
-Version Rust de Lunii.QT. Elle remplace l'application Python, qui a été
+Version Rust de Lunii. Elle remplace l'application Python, qui a été
 supprimée du dépôt ; elle reste consultable dans l'historique git
 (jusqu'au commit `c8afe43`).
 
@@ -16,7 +16,7 @@ supprimée du dépôt ; elle reste consultable dans l'historique git
 ```
 .
 ├── lunii-core/        bibliothèque, sans dépendance à une interface
-│   ├── src/constants.rs     constantes, répertoire ~/.lunii-qt
+│   ├── src/constants.rs     constantes, répertoire ~/.lunii
 │   ├── src/crypto.rs        XXTEA (rounds Lunii), AES-CBC
 │   ├── src/db.rs            bases officielle / tierce, cache des vignettes
 │   ├── src/story.rs         Story, StoryList, STUdio, détection des archives
@@ -27,12 +27,12 @@ supprimée du dépôt ; elle reste consultable dans l'historique git
 │   ├── src/album/           dossier de MP3 → histoire : scan.rs (tags, sous-dossiers,
 │   │                        pochette), layout.rs (story.json), screens.rs (écrans)
 │   ├── src/podcast.rs       flux RSS, téléchargement, préparation de l'import
-│   ├── src/settings.rs      réglages (~/.lunii-qt/settings.json)
+│   ├── src/settings.rs      réglages (~/.lunii/settings.json)
 │   ├── src/firmware.rs      téléchargement des firmwares
 │   ├── src/tools.rs         import base STUdio, ffmpeg, mise à jour
 │   └── tests/               scénarios complets sur de faux appareils
 ├── lunii-cli/         outil en ligne de commande
-└── lunii-gui/         interface graphique Slint (binaire `lunii-qt`)
+└── lunii-gui/         interface graphique Slint (binaire `lunii`)
     ├── ui/                  écrans .slint (fenêtre principale, liste, dialogues, journal)
     ├── src/app/             contrôleur (port de main_window.py / nm_window.py / debug_ui.py) :
     │                        mod.rs, actions.rs (menus, enum Action), podcast.rs, log_panel.rs
@@ -43,12 +43,13 @@ supprimée du dépôt ; elle reste consultable dans l'historique git
     └── lang/fr/…/lunii-gui.po  traduction française
 ```
 
-Les signaux Qt des appareils Python sont remplacés par le trait `Reporter`
-(logs + progression), et `abort_process` par `Context::request_abort()` :
-l'interface lance les opérations longues dans un thread (`worker.rs`).
+Les appareils rendent compte des opérations longues par le trait `Reporter`
+(logs + progression), et s'interrompent par `Context::request_abort()` :
+l'interface lance ces opérations dans un thread (`worker.rs`).
 
-Le répertoire de configuration reste `~/.lunii-qt` : bases, cache, clés v3 et
-sauvegardes `.md` / `.mdf` sont partagés avec la version Python.
+Le répertoire de configuration est `~/.lunii` : bases, cache, clés v3 et
+sauvegardes `.md` / `.mdf`. Celui des versions précédentes, `~/.lunii-qt`, est
+renommé en `~/.lunii` au premier lancement.
 
 ## Prérequis
 
@@ -73,7 +74,7 @@ sauvegardes `.md` / `.mdf` sont partagés avec la version Python.
   Desktop en C++ »).
 - **macOS** : les outils en ligne de commande Xcode (`xcode-select --install`).
 - **ffmpeg** (facultatif) : transcodage de l'audio non conforme, podcasts M4A,
-  égalisation du volume. Il est cherché dans `~/.lunii-qt`, puis dans le
+  égalisation du volume. Il est cherché dans `~/.lunii`, puis dans le
   `PATH`. Sans lui, les tests qui en ont besoin sont ignorés (ils l'indiquent).
 - **Python** (installé par mise) : seulement pour régénérer le fichier de
   traduction (voir [Traductions](#traductions)).
@@ -82,7 +83,7 @@ sauvegardes `.md` / `.mdf` sont partagés avec la version Python.
 
 ```bash
 cd rust
-cargo build --release          # target/release/lunii-qt (interface) et lunii-cli
+cargo build --release          # target/release/lunii (interface) et lunii-cli
 cargo run -p lunii-gui         # lance l'interface (debug)
 cargo run -p lunii-cli -- --help
 ```
@@ -105,7 +106,7 @@ dépendance ou de version, lancer `cargo build`, puis commiter `Cargo.lock`.
   albums, ajout de pistes, podcasts) sur de faux appareils Lunii v2 et Flam
   créés dans un dossier temporaire. Aucun appareil réel ni réseau n'est
   nécessaire. Le répertoire de configuration est redirigé par `set_cfg_dir`.
-- **Sans appareil branché** : `LUNII_QT_DEVICES` pointe l'interface vers un
+- **Sans appareil branché** : `LUNII_DEVICES` pointe l'interface vers un
   dossier (par exemple une copie du contenu d'une Lunii ou d'une Flam, avec
   son `.md` / `.mdf`) au lieu de détecter les appareils, voir
   [les variables](#variables-de-développement).
@@ -133,12 +134,12 @@ Les workflows sont dans `.github/workflows/` (à la racine du dépôt) :
 
 | Système | Paquets |
 |---------|---------|
-| Linux x86_64 | `Lunii.Qt-vX.Y.Z-x86_64.AppImage`, `Lunii.Qt-vX.Y.Z-Linux-x86_64.tar.gz` |
-| Windows x64 | `Lunii.Qt-vX.Y.Z-win64_setup.exe` (installation sans droits administrateur), `Lunii.Qt-vX.Y.Z-win64_portable.zip` |
-| macOS 11+ | `Lunii.Qt-vX.Y.Z-MacOs-universal.dmg` (Apple Silicon et Intel) |
+| Linux x86_64 | `Lunii-vX.Y.Z-x86_64.AppImage`, `Lunii-vX.Y.Z-Linux-x86_64.tar.gz` |
+| Windows x64 | `Lunii-vX.Y.Z-win64_setup.exe` (installation sans droits administrateur), `Lunii-vX.Y.Z-win64_portable.zip` |
+| macOS 11+ | `Lunii-vX.Y.Z-MacOs-universal.dmg` (Apple Silicon et Intel) |
 
 - **Linux** : compilé sur Ubuntu 22.04, donc compatible avec glibc 2.35 et
-  plus récent. `Lunii.Qt-….AppImage cli <args>` lance l'outil en ligne de
+  plus récent. `Lunii-….AppImage cli <args>` lance l'outil en ligne de
   commande.
 - **macOS** : l'application n'a qu'une signature ad hoc, sans certificat
   développeur Apple ni notarisation. Au premier lancement, il faut l'autoriser
@@ -179,7 +180,7 @@ packaging/macos/package.sh v3.1.4 dist                      # macOS, après les 
 cargo run --release -p lunii-gui
 ```
 
-Elle reprend la fenêtre Qt : sélection de l'appareil, filtre, liste des
+Elle propose : sélection de l'appareil, filtre, liste des
 histoires (sélection multiple Ctrl/Maj, flèches, Ctrl+A, menu contextuel),
 vignette et description, barres de progression avec bouton d'arrêt, barre
 d'état (un clic sur le SNU copie les détails de l'appareil), menus et raccourcis
@@ -218,7 +219,7 @@ Histoires / **Importer un album MP3** (Ctrl+Maj+I) transforme un dossier de MP3
 - **Identifiant** : l'UUID de l'histoire est dérivé de l'album (v5), donc le même
   album importé deux fois est refusé.
 - **Vérification** : après l'écriture d'une histoire STUdio (album compris) ou
-  l'ajout de pistes, Lunii.QT vérifie que chaque écran et chaque son référencé
+  l'ajout de pistes, Lunii vérifie que chaque écran et chaque son référencé
   est présent et non vide, et que les tables d'index se relisent telles
   qu'écrites. Si une histoire importée échoue à cette vérification (appareil
   débranché, plein…), elle est supprimée pour pouvoir être importée à nouveau.
@@ -245,7 +246,7 @@ Tous / Aucun).
   et grisés.
 - L'UUID de l'album est dérivé de l'adresse du flux. Si l'album est déjà sur
   l'appareil, les épisodes choisis y sont **ajoutés**. Les épisodes déjà importés
-  sont retenus dans `~/.lunii-qt/podcasts.json` et grisés dans la liste.
+  sont retenus dans `~/.lunii/podcasts.json` et grisés dans la liste.
 - **Mettre à jour les podcasts** (menu Histoires) : pour chaque podcast importé
   en album et présent sur l'appareil, relit son flux et ajoute les épisodes pas
   encore importés, sans rien demander. L'opération peut être interrompue.
@@ -256,7 +257,7 @@ Tous / Aucun).
   redistribuer les fichiers.
 
 **Ajouter des MP3 à un album** (Lunii et Flam) : sélectionner l'album, puis Histoires /
-Ajouter des MP3 à l'album. Un album créé par Lunii.QT se reconnaît à ses noms de
+Ajouter des MP3 à l'album. Un album créé par Lunii se reconnaît à ses noms de
 fichiers sur l'appareil (`sf/000/SNDCOVER`, `TRK00001`…), sans fichier
 supplémentaire.
 - Seuls les fichiers des nouvelles pistes sont écrits (écran, audio),
@@ -268,28 +269,28 @@ supplémentaire.
   deviendrait faux après un ajout. Les albums importés avant ce changement
   gardent leurs « n / total » sur les pistes déjà présentes.
 
-La langue suit le système (français ou anglais) ; `LUNII_QT_LANG=en` ou
-`LUNII_QT_LANG=fr` la force.
+La langue suit le système (français ou anglais) ; `LUNII_LANG=en` ou
+`LUNII_LANG=fr` la force.
 
 #### Variables de développement
 
 | Variable | Effet |
 |----------|-------|
-| `LUNII_QT_DEVICES=/chemin/a:/chemin/b` | remplace la détection des appareils (faux appareils de test) |
-| `LUNII_QT_NO_UPDATE_CHECK=1` | pas de requête vers GitHub au démarrage |
-| `LUNII_QT_WAYLAND=1` | garde le backend Wayland natif au lieu de X11 (XWayland) |
-| `LUNII_QT_CFG_DIR=…` | autre répertoire de configuration que `~/.lunii-qt` |
-| `LUNII_QT_LANG=fr` / `en` | force la langue |
-| `LUNII_QT_SCREENSHOT=<dossier>` | (feature `screenshot`) rend les écrans en PNG sans affichage, puis quitte |
-| `LUNII_QT_SHOT_FEED=<flux.xml>` | (captures) ajoute la fenêtre podcast, avec ce flux RSS local |
-| `LUNII_QT_SHOT_IMPORT=<a>:<b>` | (captures) importe ces archives par l'interface, pour capturer la progression |
+| `LUNII_DEVICES=/chemin/a:/chemin/b` | remplace la détection des appareils (faux appareils de test) |
+| `LUNII_NO_UPDATE_CHECK=1` | pas de requête vers GitHub au démarrage |
+| `LUNII_WAYLAND=1` | garde le backend Wayland natif au lieu de X11 (XWayland) |
+| `LUNII_CFG_DIR=…` | autre répertoire de configuration que `~/.lunii` |
+| `LUNII_LANG=fr` / `en` | force la langue |
+| `LUNII_SCREENSHOT=<dossier>` | (feature `screenshot`) rend les écrans en PNG sans affichage, puis quitte |
+| `LUNII_SHOT_FEED=<flux.xml>` | (captures) ajoute la fenêtre podcast, avec ce flux RSS local |
+| `LUNII_SHOT_IMPORT=<a>:<b>` | (captures) importe ces archives par l'interface, pour capturer la progression |
 
 Captures d'écran sans affichage (rendu logiciel), avec la feature `screenshot` :
 
 ```bash
 cargo build -p lunii-gui --features screenshot
-LUNII_QT_DEVICES=/chemin/faux_lunii LUNII_QT_NO_UPDATE_CHECK=1 \
-LUNII_QT_SCREENSHOT=/tmp/captures target/debug/lunii-qt
+LUNII_DEVICES=/chemin/faux_lunii LUNII_NO_UPDATE_CHECK=1 \
+LUNII_SCREENSHOT=/tmp/captures target/debug/lunii
 ```
 
 ### Traductions
@@ -303,21 +304,21 @@ Les messages de `lunii-core` (en anglais) sont traduits à l'affichage en les
 comparant aux modèles `{}` du catalogue (« Missing {} in {} »). Les arguments
 nommés du code (`{name}`) s'écrivent `{}` dans le `.po`.
 
-### Différences avec l'interface Qt
+### Différences avec les versions Python (3.1 et antérieures)
 
 - **Glisser-déposer** : il fonctionne sous Windows, macOS et X11. winit 0.30 ne
   le gère pas sous Wayland natif. Dans une session Wayland où XWayland est
   disponible (`DISPLAY` défini), l'appli utilise donc X11 automatiquement
-  (`LUNII_QT_WAYLAND=1` force le Wayland natif, sans glisser-déposer).
+  (`LUNII_WAYLAND=1` force le Wayland natif, sans glisser-déposer).
 - **Journal** : au lieu d'une fenêtre séparée, c'est un panneau repliable en bas
   de la fenêtre principale (Ctrl+L, ou l'icône à droite de la barre d'état).
   On le redimensionne avec la poignée au-dessus. L'icône affiche un point orange
   ou rouge si un avertissement ou une erreur est arrivé pendant que le panneau
   était fermé. Le bouton « Copier » met les lignes affichées (filtrées) dans le
   presse-papiers.
-  Chaque session est aussi écrite dans `~/.lunii-qt/logs/lunii-qt.log`, avec un
+  Chaque session est aussi écrite dans `~/.lunii/logs/lunii.log`, avec un
   horodatage et sans les lignes de progression. Les quatre sessions précédentes
-  sont gardées (`lunii-qt.log.1` à `.4`), et le bouton « Ouvrir le dossier des
+  sont gardées (`lunii.log.1` à `.4`), et le bouton « Ouvrir le dossier des
   journaux » ouvre ce dossier.
 - **Démarrage** : la base officielle est chargée en arrière-plan. La fenêtre
   s'ouvre tout de suite et les noms s'affichent dès que la base est prête.

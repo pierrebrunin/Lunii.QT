@@ -407,7 +407,7 @@ pub fn prepare_tracks(
     Ok(out)
 }
 
-/// Number of tracks of an album story created by Lunii.QT, from its files on
+/// Number of tracks of an album story created by Lunii, from its files on
 /// the device (`sf/000/SNDCOVER`, `sf/000/TRK00001`...). `None` for other
 /// stories, and for the albums made of chapters (`rf/000/CHP00001`): tracks
 /// can't be appended to them.

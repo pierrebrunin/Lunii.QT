@@ -64,7 +64,7 @@ pub trait Device: Send {
         None
     }
 
-    /// Number of tracks if `story` is an MP3 album created by Lunii.QT that
+    /// Number of tracks if `story` is an MP3 album created by Lunii that
     /// tracks can be appended to (see [`crate::album`]).
     fn album_track_count(&self, _story: &Story) -> Option<usize> {
         None

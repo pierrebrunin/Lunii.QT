@@ -109,9 +109,9 @@ enum Command {
         #[arg(short, long, default_value = ".")]
         out: PathBuf,
     },
-    /// Check if a new version of Lunii.QT is available
+    /// Check if a new version of Lunii is available
     CheckUpdate,
-    /// Download FFMPEG (Windows / macOS) into ~/.lunii-qt
+    /// Download FFMPEG (Windows / macOS) into ~/.lunii
     InstallFfmpeg,
 }
 

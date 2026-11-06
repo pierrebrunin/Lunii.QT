@@ -1,6 +1,6 @@
 //! Development tool: renders the main screens to PNG files without a display
 //! (software renderer). Built with `--features screenshot`, run with
-//! `LUNII_QT_SCREENSHOT=<output dir>` and `LUNII_QT_DEVICES=<fake device>`.
+//! `LUNII_SCREENSHOT=<output dir>` and `LUNII_DEVICES=<fake device>`.
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -173,8 +173,8 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     render(0, &shot("12-progress"));
     app.handle_event(crate::worker::Event::Finished);
 
-    // podcast dialog, from a feed file (LUNII_QT_SHOT_FEED)
-    if let Some(feed) = std::env::var_os("LUNII_QT_SHOT_FEED") {
+    // podcast dialog, from a feed file (LUNII_SHOT_FEED)
+    if let Some(feed) = std::env::var_os("LUNII_SHOT_FEED") {
         let xml = std::fs::read_to_string(feed)?;
         let podcast = lunii_core::podcast::parse_feed("https://example.org/feed.xml", &xml)?;
         let imported: std::collections::HashSet<String> = podcast.episodes[..2]
@@ -202,7 +202,7 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     }
 
     // real import through the UI
-    if let Some(list) = std::env::var_os("LUNII_QT_SHOT_IMPORT") {
+    if let Some(list) = std::env::var_os("LUNII_SHOT_IMPORT") {
         app.import(std::env::split_paths(&list).collect());
         let end = Instant::now() + Duration::from_secs(30);
         pump(&queue, 100);

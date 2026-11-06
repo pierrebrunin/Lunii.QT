@@ -11,10 +11,10 @@ fn main() {
         {
             let mut res = winresource::WindowsResource::new();
             res.set_icon("../res/lunii.ico")
-                .set("ProductName", "Lunii.QT")
+                .set("ProductName", "Lunii")
                 .set(
                     "FileDescription",
-                    "Lunii.QT - Lunii and Flam storytellers manager",
+                    "Lunii - Lunii and Flam storytellers manager",
                 );
             res.compile().expect("Windows resources");
         }

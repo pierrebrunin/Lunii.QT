@@ -478,8 +478,8 @@ impl App {
     }
 
     pub fn refresh_devices(&self) {
-        // LUNII_QT_DEVICES replaces the detection (tests, or devices mounted elsewhere)
-        let devices = match std::env::var_os("LUNII_QT_DEVICES") {
+        // LUNII_DEVICES replaces the detection (tests, or devices mounted elsewhere)
+        let devices = match std::env::var_os("LUNII_DEVICES") {
             Some(list) => std::env::split_paths(&list)
                 .filter(|p| device::is_lunii(p) || device::is_flam(p))
                 .collect(),
@@ -1132,7 +1132,7 @@ impl App {
     }
 
     pub fn start(self: &Rc<Self>) {
-        let title = format!("Lunii Qt-Manager {APP_VERSION}");
+        let title = format!("Lunii {APP_VERSION}");
         self.log(Level::Info, &title);
         self.ui()
             .set_device_placeholder(tr("Select your Lunii").into());
@@ -1140,7 +1140,7 @@ impl App {
         // stories database (may download the official one): names are refreshed once loaded
         let db_sink = sink();
         std::thread::spawn(move || db_sink(Event::DbLoaded(lunii_core::db::load_db(false))));
-        if std::env::var_os("LUNII_QT_NO_UPDATE_CHECK").is_none() {
+        if std::env::var_os("LUNII_NO_UPDATE_CHECK").is_none() {
             worker::check_version(sink());
         }
     }

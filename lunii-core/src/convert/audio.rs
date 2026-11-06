@@ -299,7 +299,7 @@ fn transcode(data: &[u8], filter: Option<&str>) -> Result<Vec<u8>> {
     let ffmpeg = which_ffmpeg().context("FFMPEG is not available")?;
     let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let input =
-        TempFile(std::env::temp_dir().join(format!("lunii-qt-ffmpeg-{}-{n}", std::process::id())));
+        TempFile(std::env::temp_dir().join(format!("lunii-ffmpeg-{}-{n}", std::process::id())));
     std::fs::write(&input.0, data).context("unable to write the ffmpeg input file")?;
 
     let mut cmd = Command::new(ffmpeg);

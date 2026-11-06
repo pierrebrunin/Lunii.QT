@@ -129,11 +129,11 @@ pub fn install_ffmpeg(ctx: &Context) -> Result<PathBuf> {
     result
 }
 
-/// Latest released version of Lunii.QT (tag name), following GitHub redirection.
+/// Latest released version of Lunii (tag name), following GitHub redirection.
 pub fn latest_version() -> Option<String> {
     let resp = http::agent(Duration::from_secs(5))
         .get(RELEASES_URL)
-        .header("Referer", "Lunii.QT")
+        .header("Referer", "Lunii")
         .call()
         .ok()?;
     resp.get_uri().path().rsplit('/').next().map(str::to_string)

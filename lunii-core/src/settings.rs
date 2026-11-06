@@ -1,4 +1,4 @@
-//! Application settings, in `~/.lunii-qt/settings.json`.
+//! Application settings, in `~/.lunii/settings.json`.
 
 use anyhow::Result;
 use serde_json::{Map, Value};

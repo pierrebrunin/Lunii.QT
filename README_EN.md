@@ -1,11 +1,11 @@
 ![Total downloads](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/total?label=Total%20Downloads)
-[![luniiQt v3.1.4](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v3.1.4/total?label=luniiQt%20v3.1.4)](https://github.com/o-daneel/Lunii.QT/releases/tag/v3.1.4)
-[![luniiQt v3.0.0](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v3.0.0/total?label=luniiQt%20v3.0.0)](https://github.com/o-daneel/Lunii.QT/releases/tag/v3.0.0)
-[![luniiQt v2.7.6](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v2.7.6/total?label=luniiQt%20v2.7.6)](https://github.com/o-daneel/Lunii.QT/releases/tag/v2.7.6)
+[![Lunii v3.1.4](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v3.1.4/total?label=Lunii%20v3.1.4)](https://github.com/o-daneel/Lunii.QT/releases/tag/v3.1.4)
+[![Lunii v3.0.0](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v3.0.0/total?label=Lunii%20v3.0.0)](https://github.com/o-daneel/Lunii.QT/releases/tag/v3.0.0)
+[![Lunii v2.7.6](https://img.shields.io/github/downloads/o-daneel/Lunii.QT/v2.7.6/total?label=Lunii%20v2.7.6)](https://github.com/o-daneel/Lunii.QT/releases/tag/v2.7.6)
 
 :fr: [README en français](README.md) :fr:
 
-# Lunii.QT
+# Lunii
 An app (Rust, Slint UI) to manage <u>Lunii</u> and <u>Flam</u> Storytellers, including **reorder** / **import** / **export** / **hide** / **firmware download**   
 for Windows 11 / MacOs (11 BigSur => 26 Tahoe) / Linux   
 (compatible with STUdio archive, **with** transcoding)
@@ -18,7 +18,7 @@ The application now allows importing Lunii stories onto your Flam, provided it i
    > **Warning:** the Flam is VERY slow over USB. Please be patient. (around 4min for 80MB)
 
 * 😎 **Lunii v3 & Firmware 3.2.x** 😎  
-Lunii.QT has been updated to support the latest firmware (3.2.2 and later). Thanks to a longer analysis (I should have spent 10 more minutes at the first sight to connect neurons), **a stable** and **VERY simple** workaround has been found.  
+Lunii has been updated to support the latest firmware (3.2.2 and later). Thanks to a longer analysis (I should have spent 10 more minutes at the first sight to connect neurons), **a stable** and **VERY simple** workaround has been found.  
 Forget about all previous .md and firmware recommendations.
    > **Reminder:** Keep your v3 Firmware files safe (you can always downgrade) and keep away from automatic upgrades
 
@@ -34,7 +34,7 @@ Forget about all previous .md and firmware recommendations.
 
 ### Table of contents
 <!-- TOC -->
-- [Lunii.QT](#luniiqt)
+- [Lunii](#lunii)
   - [User Interface](#user-interface)
     - [Main window](#main-window)
     - [Night mode](#night-mode)
@@ -159,8 +159,8 @@ Some third-party stories are using non MP3 files. Thus they can't be installed a
 
 Procedure:
 1) Click on the "Tools" menu, then "FFMPEG **is missing**"
-2) luniiQt will start downloading FFMPEG
-3) FFMPEG will be installed in the `~/.lunii-qt` folder
+2) Lunii will start downloading FFMPEG
+3) FFMPEG will be installed in the `~/.lunii` folder
 4) Check with Tools menu / FFMPEG **Detected**
 5) App is ready
 
@@ -168,7 +168,7 @@ Procedure:
 1) Open a terminal
 2) Run the following command:  
 `sudo apt-get install ffmpeg`
-3) Restart luni-qt
+3) Restart lunii
 
 ### Checking 
 Within the application, the Tools menu will display the status of detection.
@@ -180,7 +180,7 @@ Within the application, the Tools menu will display the status of detection.
 
 ## Firmware upgrade
 
-Lunii.QT allows you to backup the latest firmware version available from Lunii servers. With your firmware backed up, you can manually install it on your device without connecting to LuniiStore (you will not lose your loaded unofficial stories). This procedure is **manual** and **experimental**, but so far no one has reported any issues.
+Lunii allows you to backup the latest firmware version available from Lunii servers. With your firmware backed up, you can manually install it on your device without connecting to LuniiStore (you will not lose your loaded unofficial stories). This procedure is **manual** and **experimental**, but so far no one has reported any issues.
 
 **NOTE 1:** Remember to keep a backup of your firmware for Lunii v3 and FLAMs, in case a future update breaks the third-party stories workaround. <u>You will be able to downgrade.</u>  
 **NOTE 2:** You cannot choose the firmware version. You'll only get the **latest available version** from Lunii servers.
@@ -334,40 +334,40 @@ environment variables and the translation workflow.
 ```bash
 cd rust
 cargo build --release
-./target/release/lunii-qt
+./target/release/lunii
 ```
 
 ## Tricks
 
 ### macOS - Application Authorization
-1. Double-click the file called `lunii-qt`.
-2. You should see an error message "`lunii-qt` can’t be opened because it is from an unidentified developer".  
+1. Double-click the file called `lunii`.
+2. You should see an error message "`lunii` can’t be opened because it is from an unidentified developer".  
 ![](./res/macos_install_1.png)  
   Click "**OK**"
 3. Go to System **Preferences** > **Security** and **Privacy** and click on the General tab.  
 ![](./res/macos_install_2.png)
-4. At the bottom of the window you will see a message saying that `lunii-qt` was blocked. Click "**Open Anyway**".   
-   If you do not see this message in the General tab, double-click `lunii-qt` again.  
+4. At the bottom of the window you will see a message saying that `lunii` was blocked. Click "**Open Anyway**".   
+   If you do not see this message in the General tab, double-click `lunii` again.  
    **NOTE :** You may have to click the "**unlock**" button and enter your password to be able to click "**Open Anyway**".
-8. If you see another popup that says “`lunii-qt` is from an unidentified developer. Are you sure you want to open it?”, click "**Open**". If you don’t get this popup, just go to the same file and double-click it again.    
+8. If you see another popup that says “`lunii` is from an unidentified developer. Are you sure you want to open it?”, click "**Open**". If you don’t get this popup, just go to the same file and double-click it again.    
 ![](./res/macos_install_3.png)
-9. Finally, you'll be informed that `lunii-qt` was downloaded from internet     
+9. Finally, you'll be informed that `lunii` was downloaded from internet     
 ![](./res/macos_install_4.png)  
 Click "**Open**", and you'll never get these messages in the future. 
 
 ### Third Party story metadata
-You might have already loaded non-official stories to your device thanks to another app. When opening Lunii.QT, this 
+You might have already loaded non-official stories to your device thanks to another app. When opening Lunii, this 
 story will appear as `Unknown story (maybe a User created story)...`.   
 You can easily fix that by :  
 1. Importing STUdio DB with menu `File/Import STUdio DB`
 2. Dropping the corresponding archive as you'll do for loading.  
-Lunii.QT will **only read the metadata** and add them locally, **skipping the rest** of the archive.
+Lunii will **only read the metadata** and add them locally, **skipping the rest** of the archive.
 
 
 ### Cache management
 This application will download once for all the official story database and any request pictures to the application dedicated folder
-* `$HOME/.lunii-qt/official.db`
-* `$HOME/.lunii-qt/cache/*`
+* `$HOME/.lunii/official.db`
+* `$HOME/.lunii/cache/*`
 
 In case of any trouble, just remove this file and directory to force refresh
 
@@ -383,8 +383,8 @@ To build the application, see the prerequisites in [`CONTRIBUTING.md`](CONTRIBUT
 ### v3 export
 In order to suport story export from Lunii v3 hardware, you must place your device keys in here :
 ```bash
-%HOME%\.lunii-qt\230230300XXXXX.keys
-$HOME/.lunii-qt/230230300XXXXX.keys
+%HOME%\.lunii\230230300XXXXX.keys
+$HOME/.lunii/230230300XXXXX.keys
 ```
 It is a binary file with 0x10 bytes for Key and 0x10 bytes for IV
 ### ICO creation
