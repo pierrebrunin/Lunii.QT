@@ -147,6 +147,11 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     render(0, &shot("08-about"));
     ui.set_dialog(DialogKind::None);
 
+    app.action(crate::Action::DeviceInfo);
+    pump(&queue, 200);
+    render(0, &shot("08-device-info"));
+    ui.set_dialog(DialogKind::None);
+
     app.action(crate::Action::GetFirmware);
     pump(&queue, 200);
     render(0, &shot("09-login"));

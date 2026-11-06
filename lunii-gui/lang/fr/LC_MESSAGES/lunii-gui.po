@@ -1100,3 +1100,45 @@ msgstr "« {} » n'est plus suivi"
 
 msgid "Album made of sub-folders: its tracks can't be changed"
 msgstr "Album à sous-dossiers : ses pistes ne peuvent pas être modifiées"
+
+msgid "Device information"
+msgstr "Informations sur l'appareil"
+
+msgid "Technical details"
+msgstr "Détails techniques"
+
+msgid "Open the folder"
+msgstr "Ouvrir le dossier"
+
+msgid "{} MB free of {} MB"
+msgstr "{} Mo libres sur {} Mo"
+
+msgid "{} ({} hidden)"
+msgstr "{} (dont {} masquées)"
+
+msgid "Yes"
+msgstr "Oui"
+
+msgid "No"
+msgstr "Non"
+
+msgid "No: the story keys of this Lunii v3 are missing"
+msgstr "Non : les clés d'histoires de cette Lunii v3 sont absentes"
+
+msgid "Model"
+msgstr "Modèle"
+
+msgid "Firmware"
+msgstr "Firmware"
+
+msgid "Location"
+msgstr "Emplacement"
+
+msgid "Storage"
+msgstr "Stockage"
+
+msgid "Story import"
+msgstr "Import d'histoires"
+
+msgid "Unknown device"
+msgstr "Appareil inconnu"

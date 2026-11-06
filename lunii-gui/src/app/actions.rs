@@ -197,6 +197,7 @@ impl App {
                 let _ = open::that(RELEASES_URL);
             }
             Action::About => ui.set_dialog(DialogKind::About),
+            Action::DeviceInfo => self.show_device_info(),
             Action::NightModeSettings => self.open_night_mode(),
         }
     }

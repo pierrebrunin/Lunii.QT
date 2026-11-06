@@ -66,6 +66,22 @@ fn md_v3_snu(md: &[u8]) -> Result<Vec<u8>> {
     crypto::unhexlify(std::str::from_utf8(raw)?)
 }
 
+/// Model of a Lunii from its `.md` file contents.
+pub(crate) fn md_model(md: &[u8]) -> DeviceVersion {
+    let md_version = u16_le(md, 0);
+    if (1..=5).contains(&md_version) && md.len() == 512 {
+        match (u16_le(md, 18), u16_le(md, 20)) {
+            p if p == FAH_V1_USB_VID_PID || p == FAH_V1_FW_2_USB_VID_PID => DeviceVersion::LuniiV1,
+            p if p == FAH_V2_V3_USB_VID_PID => DeviceVersion::LuniiV2,
+            _ => DeviceVersion::LuniiV1or2Unknown,
+        }
+    } else if (6..=7).contains(&md_version) && [112, 128].contains(&md.len()) {
+        DeviceVersion::LuniiV3
+    } else {
+        DeviceVersion::Undefined
+    }
+}
+
 impl LuniiDevice {
     /// Opens the Lunii mounted at `mount_point` (reads `.md`, `.cfg` and `.pi`).
     pub fn open(ctx: &Context, mount_point: &Path) -> Result<Self> {
@@ -129,12 +145,7 @@ impl LuniiDevice {
         self.snu = md[10..18].to_vec();
         let vid = u16_le(md, 18);
         let pid = u16_le(md, 20);
-
-        self.device_version = match (vid, pid) {
-            p if p == FAH_V1_USB_VID_PID || p == FAH_V1_FW_2_USB_VID_PID => DeviceVersion::LuniiV1,
-            p if p == FAH_V2_V3_USB_VID_PID => DeviceVersion::LuniiV2,
-            _ => DeviceVersion::LuniiV1or2Unknown,
-        };
+        self.device_version = md_model(md);
 
         let dec = crypto::xxtea_decrypt(&md[0x100..0x200], &lunii_generic_key())?;
         // reordering key components

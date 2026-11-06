@@ -1,7 +1,7 @@
 // Modal dialogs, displayed as overlays inside the main window.
 
 import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette, SpinBox, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
-import { Link, Theme } from "common.slint";
+import { Link, Theme, InfoRow } from "common.slint";
 
 /// Dimmed background + centered panel with a title band. Clicking outside
 /// does nothing (modal); Escape or the cross closes it. The main window
@@ -281,6 +281,63 @@ export component AboutDialog inherits Overlay {
     }
     HorizontalLayout {
         alignment: end;
+        Button { text: "OK"; primary: true; clicked => { root.close(); } }
+    }
+}
+
+/// Technical information of the opened storyteller.
+export component DeviceInfoDialog inherits Overlay {
+    in property <[InfoRow]> rows;
+    // raw details (keys...), monospace
+    in property <string> details;
+    callback copy();
+    callback open-folder();
+
+    title: @tr("Device information");
+    panel-width: 620px;
+
+    VerticalLayout {
+        spacing: 6px;
+        for row in root.rows: HorizontalLayout {
+            spacing: 16px;
+            Text {
+                text: row.label;
+                width: 150px;
+                font-weight: 700;
+                horizontal-alignment: right;
+            }
+            Text {
+                text: row.value;
+                // fixed width: the height of the wrapped lines (long path) is right
+                width: root.panel-width - 150px - 16px - 2 * 14px;
+                wrap: word-wrap;
+            }
+        }
+    }
+    Text {
+        text: @tr("Technical details");
+        font-weight: 700;
+    }
+    Rectangle {
+        background: Palette.alternate-background;
+        border-radius: 4px;
+        border-width: 1px;
+        border-color: Palette.border;
+        VerticalLayout {
+            padding: 8px;
+            Text {
+                text: root.details;
+                font-family: Theme.mono-font;
+                font-size: 12px;
+                wrap: word-wrap;
+            }
+        }
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        Button { text: @tr("Open the folder"); clicked => { root.open-folder(); } }
+        Button { text: @tr("Copy"); clicked => { root.copy(); } }
+        Rectangle { horizontal-stretch: 1; }
         Button { text: "OK"; primary: true; clicked => { root.close(); } }
     }
 }

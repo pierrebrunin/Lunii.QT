@@ -8,7 +8,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use lunii_core::constants::*;
-use lunii_core::device::{self, common::free_space};
+use lunii_core::device::{
+    self,
+    common::{free_space, total_space},
+};
 use lunii_core::{Context, Device, Level};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use uuid::Uuid;
@@ -16,7 +19,7 @@ use uuid::Uuid;
 use crate::i18n::{tr, trf};
 use crate::logfile;
 use crate::worker::{self, Event, GuiReporter, SharedDevice, Sink, StoryInfo, Task};
-use crate::{EpisodeRow, LogLine, MainWindow, StoryRow, Theme};
+use crate::{DialogKind, EpisodeRow, InfoRow, LogLine, MainWindow, StoryRow, Theme};
 use podcast::PodcastView;
 
 mod actions;
@@ -114,6 +117,9 @@ struct DevInfo {
     version: DeviceVersion,
     snu: String,
     info: String,
+    /// "Lunii v3", "Flam"...
+    model: String,
+    firmware: String,
     hw_text: String,
     can_import: bool,
     /// export all possible (Flam, Lunii v1/v2, or v3 with device key)
@@ -124,6 +130,8 @@ struct DevInfo {
 #[derive(Default)]
 struct State {
     devices: Vec<PathBuf>,
+    /// names of `devices` in the selector
+    device_labels: Vec<String>,
     device: Option<SharedDevice>,
     dev: Option<DevInfo>,
     stories: Vec<StoryInfo>,
@@ -320,7 +328,13 @@ impl App {
             app.selection_changed();
         }));
         ui.on_abort(with(|app| app.abort()));
-        ui.on_device_info_clicked(with(|app| app.copy_device_info()));
+        ui.on_device_info_clicked(with(|app| app.show_device_info()));
+        ui.on_device_info_copy(with(|app| app.copy_device_info()));
+        ui.on_device_open_folder(with(|app| {
+            if let Some(dev) = app.state.borrow().dev.as_ref() {
+                let _ = open::that(&dev.mount);
+            }
+        }));
         ui.on_confirm_remove_accepted(with(|app| {
             let uuids = app.selected_uuids();
             app.launch(Task::Remove { uuids });
@@ -468,11 +482,77 @@ impl App {
         });
     }
 
-    fn copy_device_info(&self) {
-        let Some(info) = self.state.borrow().dev.as_ref().map(|d| d.info.clone()) else {
+    /// Lines of the device information dialog, and the raw technical details.
+    fn device_info(&self) -> Option<(Vec<(String, String)>, String)> {
+        let st = self.state.borrow();
+        let dev = st.dev.as_ref()?;
+        // fresh details (story count...), the cached ones while a task runs
+        let details = st
+            .device
+            .as_ref()
+            .and_then(|d| Self::lock_device(d).ok().map(|d| d.info()))
+            .unwrap_or_else(|| dev.info.clone());
+        let mb = |bytes: u64| (bytes / 1024 / 1024).to_string();
+        let space = match (free_space(&dev.mount), total_space(&dev.mount)) {
+            (Ok(free), Ok(total)) => trf("{} MB free of {} MB", &[&mb(free), &mb(total)]),
+            (Ok(free), Err(_)) => format!("{} MB", mb(free)),
+            _ => "?".into(),
+        };
+        let hidden = st.stories.iter().filter(|s| s.hidden).count();
+        let stories = if hidden > 0 {
+            trf(
+                "{} ({} hidden)",
+                &[&st.stories.len().to_string(), &hidden.to_string()],
+            )
+        } else {
+            st.stories.len().to_string()
+        };
+        let import = if dev.can_import {
+            tr("Yes")
+        } else if dev.version == DeviceVersion::LuniiV3 {
+            tr("No: the story keys of this Lunii v3 are missing")
+        } else {
+            tr("No")
+        };
+        let rows = vec![
+            (tr("Model"), dev.model.clone()),
+            (tr("Firmware"), dev.firmware.clone()),
+            ("SNU".into(), dev.snu.clone()),
+            (tr("Location"), dev.mount.display().to_string()),
+            (tr("Storage"), space),
+            (tr("Stories"), stories),
+            (tr("Story import"), import),
+        ];
+        Some((rows, details))
+    }
+
+    fn show_device_info(&self) {
+        let Some((rows, details)) = self.device_info() else {
             return;
         };
-        self.log(Level::Info, &info);
+        let ui = self.ui();
+        let rows: Vec<InfoRow> = rows
+            .into_iter()
+            .map(|(label, value)| InfoRow {
+                label: label.into(),
+                value: value.into(),
+            })
+            .collect();
+        ui.set_device_info_rows(ModelRc::new(VecModel::from(rows)));
+        ui.set_device_details(details.into());
+        ui.set_dialog(DialogKind::DeviceInfo);
+    }
+
+    fn copy_device_info(&self) {
+        let Some((rows, details)) = self.device_info() else {
+            return;
+        };
+        let mut info: String = rows
+            .iter()
+            .map(|(label, value)| format!("{label} : {value}\n"))
+            .collect();
+        info.push('\n');
+        info.push_str(&details);
         if let Ok(mut clipboard) = arboard::Clipboard::new() {
             let _ = clipboard.set_text(info);
         }
@@ -490,22 +570,25 @@ impl App {
         let text = self
             .state
             .borrow()
-            .devices
+            .device_labels
             .get(index.max(0) as usize)
             .filter(|_| index >= 0)
-            .map(|d| d.display().to_string());
+            .cloned();
         ui.set_device_index(index);
         ui.set_device_value(text.unwrap_or_default().into());
     }
 
     fn set_devices(&self, devices: Vec<PathBuf>) {
+        let labels = device_labels(&devices);
         self.devices_model.set_vec(
-            devices
+            labels
                 .iter()
-                .map(|d| SharedString::from(d.display().to_string()))
+                .map(|l| SharedString::from(l.as_str()))
                 .collect::<Vec<_>>(),
         );
-        self.state.borrow_mut().devices = devices;
+        let mut st = self.state.borrow_mut();
+        st.devices = devices;
+        st.device_labels = labels;
     }
 
     pub fn refresh_devices(&self) {
@@ -586,31 +669,16 @@ impl App {
         let version = dev.version();
         let is_flam = version == DeviceVersion::FlamV1;
         let lunii = dev.as_lunii();
-        let hw_text = match version {
-            DeviceVersion::LuniiV1 => format!(
-                "Lunii v1, FW: {}",
-                lunii.map(|l| l.firmware()).unwrap_or_default()
-            ),
-            DeviceVersion::LuniiV2 => format!(
-                "Lunii v2, FW: {}",
-                lunii.map(|l| l.firmware()).unwrap_or_default()
-            ),
-            DeviceVersion::LuniiV3 => format!(
-                "Lunii v3, FW: {}",
-                lunii.map(|l| l.firmware()).unwrap_or_default()
-            ),
-            DeviceVersion::FlamV1 => {
-                let fw = dev
-                    .info()
-                    .lines()
-                    .find_map(|l| l.strip_prefix("- Main firmware : ").map(str::to_string));
-                format!("Flam v1, FW: {}", fw.unwrap_or_default())
-            }
-            _ => format!(
-                "?v1/v2?, FW: {}",
-                lunii.map(|l| l.firmware()).unwrap_or_default()
-            ),
+        let firmware = if is_flam {
+            dev.info()
+                .lines()
+                .find_map(|l| l.strip_prefix("- Main firmware : ").map(str::to_string))
+                .unwrap_or_default()
+        } else {
+            lunii.map(|l| l.firmware()).unwrap_or_default()
         };
+        let model = tr(&version.to_string());
+        let hw_text = format!("{model}, FW: {firmware}");
         let export_all = is_flam
             || version < DeviceVersion::LuniiV3
             || lunii.is_some_and(|l| l.device_key.is_some());
@@ -619,6 +687,8 @@ impl App {
             version,
             snu: dev.snu_str(),
             info: dev.info(),
+            model,
+            firmware,
             hw_text,
             can_import: dev.can_import(),
             export_all,
@@ -1212,6 +1282,30 @@ fn dirs_home() -> PathBuf {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(PathBuf::from)
         .unwrap_or_default()
+}
+
+/// Names of the devices in the selector: their model ("Lunii v3", "Flam"),
+/// with their folder when several have the same.
+fn device_labels(devices: &[PathBuf]) -> Vec<String> {
+    let models: Vec<String> = devices
+        .iter()
+        .map(|d| tr(&device::device_model(d).to_string()))
+        .collect();
+    models
+        .iter()
+        .zip(devices)
+        .map(|(model, path)| {
+            if models.iter().filter(|m| *m == model).count() > 1 {
+                let folder = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                format!("{model} ({folder})")
+            } else {
+                model.clone()
+            }
+        })
+        .collect()
 }
 
 fn lunii_icon() -> slint::Image {

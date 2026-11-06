@@ -142,6 +142,11 @@ pub fn free_space(path: &Path) -> Result<u64> {
     Ok(fs4::available_space(path)?)
 }
 
+/// Total size of the file system holding `path` (bytes).
+pub fn total_space(path: &Path) -> Result<u64> {
+    Ok(fs4::total_space(path)?)
+}
+
 /// Removes the given directories (if they exist).
 pub fn remove_dirs(dirs: &[PathBuf]) -> Result<()> {
     for d in dirs {

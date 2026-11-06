@@ -176,7 +176,8 @@ cargo run --release -p lunii-gui
 Elle propose : sélection de l'appareil, filtre, liste des
 histoires (sélection multiple Ctrl/Maj, flèches, Ctrl+A, menu contextuel),
 vignette et description, barres de progression avec bouton d'arrêt, barre
-d'état (un clic sur le SNU copie les détails de l'appareil), menus et raccourcis
+d'état (un clic sur le SNU ouvre les informations de l'appareil : modèle, firmware,
+emplacement, stockage, clés ; aussi par Fichier / Informations sur l'appareil), menus et raccourcis
 (Ctrl+I, Ctrl+S, Suppr, Alt+↑/↓, Ctrl+↑/↓, Ctrl+H, Ctrl+N, Ctrl+L, F5, F1…),
 réglages du mode nuit, connexion Luniistore pour le firmware, journal de debug,
 vérification des mises à jour, glisser-déposer d'archives.

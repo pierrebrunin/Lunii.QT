@@ -370,6 +370,18 @@ pub fn is_flam(root: &Path) -> bool {
     root.join(".mdf").is_file()
 }
 
+/// Model of the storyteller at `root`, from its `.md` / `.mdf` file only
+/// (quick, without opening it).
+pub fn device_model(root: &Path) -> DeviceVersion {
+    if is_flam(root) {
+        DeviceVersion::FlamV1
+    } else if let Ok(md) = std::fs::read(root.join(".md")) {
+        lunii::md_model(&md)
+    } else {
+        DeviceVersion::Undefined
+    }
+}
+
 /// Opens the storyteller mounted at `path`.
 pub fn open_device(ctx: &Context, path: &Path) -> Result<Box<dyn Device>> {
     if is_lunii(path) {

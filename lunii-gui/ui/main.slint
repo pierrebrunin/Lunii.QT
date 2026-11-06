@@ -1,14 +1,14 @@
 // Main window.
 
 import { ComboBox, LineEdit, ProgressIndicator, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
-import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, EpisodeRow, AlbumTrackRow, FollowedRow, ViewSwitch } from "common.slint";
+import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow, ViewSwitch } from "common.slint";
 import { StoryTable } from "story_table.slint";
-import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog } from "dialogs.slint";
+import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, DeviceInfoDialog } from "dialogs.slint";
 import { PodcastsView } from "podcasts.slint";
 import { AlbumEditor } from "album_editor.slint";
 import { LogPanel } from "log_panel.slint";
 
-export { Action, Theme, StoryRow, LogLine, DialogKind, EpisodeRow, AlbumTrackRow, FollowedRow }
+export { Action, Theme, StoryRow, LogLine, DialogKind, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow }
 
 component StatusText inherits Text {
     color: Theme.status-text;
@@ -94,6 +94,11 @@ export component MainWindow inherits Window {
     in property <bool> low-space;
     in property <string> story-count;
     callback device-info-clicked();
+    // device information dialog
+    in property <[InfoRow]> device-info-rows;
+    in property <string> device-details;
+    callback device-info-copy();
+    callback device-open-folder();
 
     // log panel
     in property <[LogLine]> log-lines;
@@ -190,6 +195,7 @@ export component MainWindow inherits Window {
             title: @tr("File");
             MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: root.idle; activated => { root.action(Action.open-device); } }
             MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: root.idle; activated => { root.action(Action.refresh-devices); } }
+            MenuItem { title: @tr("Device information"); enabled: root.device-ready && !root.modal; activated => { root.action(Action.device-info); } }
             MenuSeparator { }
             MenuItem { title: @tr("Import STUdio DB"); enabled: root.idle; activated => { root.action(Action.import-db); } }
             MenuItem { title: @tr("Refresh official DB"); enabled: root.idle; activated => { root.action(Action.refresh-db); } }
@@ -540,7 +546,7 @@ export component MainWindow inherits Window {
                     if root.story-count != "": StatusSeparator { }
                     if root.story-count != "": StatusText { text: root.story-count; }
                 }
-                // device details: click to copy them to the clipboard
+                // click: device information dialog
                 TouchArea {
                     mouse-cursor: pointer;
                     clicked => { root.device-info-clicked(); }
@@ -606,5 +612,14 @@ export component MainWindow inherits Window {
         version: root.app-version;
         close => { root.dialog = DialogKind.none; }
         open-url(url) => { root.open-url(url); }
+    }
+    if root.dialog == DialogKind.device-info: DeviceInfoDialog {
+        width: root.width;
+        height: root.height;
+        rows: root.device-info-rows;
+        details: root.device-details;
+        close => { root.dialog = DialogKind.none; }
+        copy => { root.device-info-copy(); }
+        open-folder => { root.device-open-folder(); }
     }
 }
