@@ -1,12 +1,14 @@
 // Main window.
 
 import { ComboBox, LineEdit, ProgressIndicator, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
-import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, EpisodeRow } from "common.slint";
+import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, EpisodeRow, AlbumTrackRow, FollowedRow, ViewSwitch } from "common.slint";
 import { StoryTable } from "story_table.slint";
-import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, PodcastDialog } from "dialogs.slint";
+import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog } from "dialogs.slint";
+import { PodcastsView } from "podcasts.slint";
+import { AlbumEditor } from "album_editor.slint";
 import { LogPanel } from "log_panel.slint";
 
-export { Action, Theme, StoryRow, LogLine, DialogKind, EpisodeRow }
+export { Action, Theme, StoryRow, LogLine, DialogKind, EpisodeRow, AlbumTrackRow, FollowedRow }
 
 component StatusText inherits Text {
     color: Theme.status-text;
@@ -57,6 +59,17 @@ export component MainWindow inherits Window {
     in property <bool> has-picture;
     in property <string> description;
     in property <bool> details-dimmed;
+    // track list of the selected album
+    in property <bool> album-visible;
+    in property <bool> album-editable;
+    in property <[AlbumTrackRow]> album-rows;
+    in-out property <int> album-current: -1;
+    in property <bool> album-modified;
+    callback album-move(delta: int);
+    callback album-remove();
+    callback album-add-files();
+    callback album-apply();
+    callback album-revert();
 
     // progress
     in property <bool> busy;
@@ -122,16 +135,26 @@ export component MainWindow inherits Window {
     in-out property <bool> nm-autoplay;
     in-out property <int> nm-max-stories: 3;
     in-out property <bool> nm-turnoff;
-    // podcast dialog
+    // 0: stories, 1: podcasts
+    in-out property <int> view;
+    callback view-changed();
+    // Podcasts view
+    in property <[FollowedRow]> podcast-followed;
+    in-out property <int> podcast-current: -1;
     in-out property <string> podcast-url;
+    in property <bool> podcast-adding;
     in property <bool> podcast-loading;
     in property <string> podcast-header;
     in property <[EpisodeRow]> podcast-rows;
     in property <int> podcast-selected-count;
     in-out property <string> podcast-filter;
     in-out property <int> podcast-mode;
+    in property <int> podcast-focus-token;
+    callback podcast-add();
+    callback podcast-select(index: int);
+    callback podcast-refresh();
+    callback podcast-unfollow();
     callback podcast-mode-changed();
-    callback podcast-load();
     callback podcast-toggle(index: int);
     callback podcast-select-all(all: bool);
     callback podcast-filter-edited();
@@ -144,8 +167,8 @@ export component MainWindow inherits Window {
 
     title: "Lunii " + root.app-version;
     icon: root.device-icon;
-    preferred-width: 665px;
-    preferred-height: 600px;
+    preferred-width: 860px;
+    preferred-height: 640px;
     min-width: 500px;
     min-height: 400px;
 
@@ -153,19 +176,23 @@ export component MainWindow inherits Window {
         table.ensure-visible(row);
     }
 
-    property <bool> story-actions: root.device-ready && !root.busy;
-    property <bool> selection-actions: root.story-actions && root.has-selection;
+    // a dialog is open: the menus (and their shortcuts) are disabled
+    property <bool> modal: root.dialog != DialogKind.none;
+    property <bool> idle: !root.busy && !root.modal;
+    property <bool> story-actions: root.device-ready && root.idle;
+    // the selection is only acted on in the stories view
+    property <bool> selection-actions: root.story-actions && root.has-selection && root.view == 0;
 
     MenuBar {
         Menu {
             title: @tr("File");
-            MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: !root.busy; activated => { root.action(Action.open-device); } }
-            MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: !root.busy; activated => { root.action(Action.refresh-devices); } }
+            MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: root.idle; activated => { root.action(Action.open-device); } }
+            MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: root.idle; activated => { root.action(Action.refresh-devices); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Import STUdio DB"); enabled: !root.busy; activated => { root.action(Action.import-db); } }
-            MenuItem { title: @tr("Refresh official DB"); enabled: !root.busy; activated => { root.action(Action.refresh-db); } }
+            MenuItem { title: @tr("Import STUdio DB"); enabled: root.idle; activated => { root.action(Action.import-db); } }
+            MenuItem { title: @tr("Refresh official DB"); enabled: root.idle; activated => { root.action(Action.refresh-db); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Exit"); shortcut: @keys(Control + Q); activated => { root.action(Action.exit); } }
+            MenuItem { enabled: !root.modal; title: @tr("Exit"); shortcut: @keys(Control + Q); activated => { root.action(Action.exit); } }
         }
         Menu {
             title: @tr("Stories");
@@ -180,44 +207,44 @@ export component MainWindow inherits Window {
             MenuItem { title: @tr("Import"); shortcut: @keys(Control + I); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import); } }
             MenuItem { title: @tr("Import MP3 album"); shortcut: @keys(Control + Shift + I); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import-album); } }
             MenuItem { title: @tr("Add MP3 to album"); enabled: root.story-actions && root.can-add-to-album; activated => { root.action(Action.add-to-album); } }
-            MenuItem { title: @tr("Import a podcast"); shortcut: @keys(Control + P); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import-podcast); } }
-            MenuItem { title: @tr("Update podcasts"); enabled: root.story-actions && root.can-import; activated => { root.action(Action.update-podcasts); } }
+            MenuItem { title: @tr("Edit the album"); enabled: root.story-actions && root.can-add-to-album; activated => { root.action(Action.edit-album); } }
+            MenuItem { title: @tr("Import a podcast"); shortcut: @keys(Control + P); enabled: !root.modal; activated => { root.action(Action.import-podcast); } }
             MenuItem { title: @tr("Export"); shortcut: @keys(Control + S); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
             MenuItem { title: @tr("Export All"); shortcut: @keys(Control + Shift + S); enabled: root.story-actions && root.can-export-all; activated => { root.action(Action.export-all); } }
             MenuItem { title: @tr("Remove"); shortcut: @keys(Delete); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
         }
         Menu {
             title: @tr("Tools");
-            MenuItem { title: @tr("Show size"); checkable: true; checked <=> root.show-size; activated => { root.action(Action.show-size); } }
-            MenuItem { title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action(Action.show-details); } }
+            MenuItem { enabled: !root.modal; title: @tr("Show size"); checkable: true; checked <=> root.show-size; activated => { root.action(Action.show-size); } }
+            MenuItem { enabled: !root.modal; title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action(Action.show-details); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action(Action.show-log); } }
+            MenuItem { enabled: !root.modal; title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action(Action.show-log); } }
             MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action(Action.get-firmware); } }
             MenuSeparator { }
             Menu {
                 title: @tr("Lost stories");
                 enabled: root.story-actions;
-                MenuItem { title: @tr("Find"); activated => { root.action(Action.find-lost); } }
-                MenuItem { title: @tr("Recover"); activated => { root.action(Action.recover-lost); } }
-                MenuItem { title: @tr("Remove"); activated => { root.action(Action.remove-lost); } }
+                MenuItem { enabled: !root.modal; title: @tr("Find"); activated => { root.action(Action.find-lost); } }
+                MenuItem { enabled: !root.modal; title: @tr("Recover"); activated => { root.action(Action.recover-lost); } }
+                MenuItem { enabled: !root.modal; title: @tr("Remove"); activated => { root.action(Action.remove-lost); } }
             }
             MenuSeparator { }
-            MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: root.ffmpeg-present; activated => { root.action(Action.normalize-volume); } }
+            MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: root.ffmpeg-present && !root.modal; activated => { root.action(Action.normalize-volume); } }
             MenuItem {
                 title: root.ffmpeg-present ? @tr("FFMPEG detected") : @tr("FFMPEG is missing (📥)");
                 checked: root.ffmpeg-present;
-                enabled: !root.busy;
+                enabled: root.idle;
                 activated => { root.action(Action.ffmpeg); }
             }
         }
         Menu {
             title: root.update-available ? @tr("[ Help ]") : @tr("Help");
-            if root.update-available: MenuItem { title: @tr("Update to {}", root.latest-version); activated => { root.action(Action.update); } }
-            MenuItem { title: @tr("About"); shortcut: @keys(F1); activated => { root.action(Action.about); } }
+            if root.update-available: MenuItem { enabled: !root.modal; title: @tr("Update to {}", root.latest-version); activated => { root.action(Action.update); } }
+            MenuItem { enabled: !root.modal; title: @tr("About"); shortcut: @keys(F1); activated => { root.action(Action.about); } }
         }
         if root.update-available: Menu {
             title: @tr("Update is available");
-            MenuItem { title: @tr("Update to {}", root.latest-version); activated => { root.action(Action.update); } }
+            MenuItem { enabled: !root.modal; title: @tr("Update to {}", root.latest-version); activated => { root.action(Action.update); } }
         }
     }
 
@@ -260,13 +287,24 @@ export component MainWindow inherits Window {
                 enabled: root.nm-available && !root.busy;
                 clicked => { root.action(Action.night-mode-settings); }
             }
-            Rectangle { min-width: 20px; max-width: 80px; horizontal-stretch: 0.2; }
-            LineEdit {
+            Rectangle { min-width: 8px; max-width: 40px; horizontal-stretch: 0.2; }
+            VerticalLayout {
+                alignment: center;
+                ViewSwitch {
+                    first: @tr("Stories");
+                    second: @tr("Podcasts");
+                    current <=> root.view;
+                    changed-view => { root.view-changed(); }
+                }
+            }
+            Rectangle { min-width: 8px; max-width: 40px; horizontal-stretch: 0.2; }
+            if root.view == 0: LineEdit {
                 text <=> root.filter;
                 placeholder-text: @tr("(Story Name or UUID filter text)");
                 edited => { root.filter-edited(); }
                 horizontal-stretch: 1;
             }
+            if root.view != 0: Rectangle { horizontal-stretch: 1; }
             IconButton {
                 icon: @image-url("../../res/refresh_db.png");
                 enabled: !root.busy;
@@ -274,39 +312,122 @@ export component MainWindow inherits Window {
             }
         }
 
-        // ---------------------------------------------------------------- stories
-        ContextMenuArea {
-            enabled: root.story-actions;
-            Menu {
-                MenuItem { title: @tr("Move Top"); enabled: root.selection-actions; activated => { root.action(Action.move-top); } }
-                MenuItem { title: @tr("Move Up"); enabled: root.selection-actions; activated => { root.action(Action.move-up); } }
-                MenuItem { title: @tr("Move Down"); enabled: root.selection-actions; activated => { root.action(Action.move-down); } }
-                MenuItem { title: @tr("Move Bottom"); enabled: root.selection-actions; activated => { root.action(Action.move-bottom); } }
-                MenuSeparator { }
-                MenuItem { title: @tr("Hide / Show"); enabled: root.selection-actions; activated => { root.action(Action.hide); } }
-                MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions && !root.is-flam; activated => { root.action(Action.night-mode); } }
-                MenuSeparator { }
-                MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action(Action.import); } }
-                MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action(Action.import-album); } }
-                MenuItem { title: @tr("Add MP3 to album"); enabled: root.can-add-to-album; activated => { root.action(Action.add-to-album); } }
-                MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
-                MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action(Action.export-all); } }
-                MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
-            }
+        // ---------------------------------------------------------------- views
+        Rectangle {
+            vertical-stretch: 1;
+            min-height: 200px;
+            VerticalLayout {
+                visible: root.view == 0;
+                width: parent.width;
+                height: parent.height;
+                spacing: 6px;
+                // ---------------------------------------------------------------- stories
+                ContextMenuArea {
+                    enabled: root.story-actions;
+                    Menu {
+                        MenuItem { title: @tr("Move Top"); enabled: root.selection-actions; activated => { root.action(Action.move-top); } }
+                        MenuItem { title: @tr("Move Up"); enabled: root.selection-actions; activated => { root.action(Action.move-up); } }
+                        MenuItem { title: @tr("Move Down"); enabled: root.selection-actions; activated => { root.action(Action.move-down); } }
+                        MenuItem { title: @tr("Move Bottom"); enabled: root.selection-actions; activated => { root.action(Action.move-bottom); } }
+                        MenuSeparator { }
+                        MenuItem { title: @tr("Hide / Show"); enabled: root.selection-actions; activated => { root.action(Action.hide); } }
+                        MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions && !root.is-flam; activated => { root.action(Action.night-mode); } }
+                        MenuSeparator { }
+                        MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action(Action.import); } }
+                        MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action(Action.import-album); } }
+                        MenuItem { title: @tr("Add MP3 to album"); enabled: root.can-add-to-album; activated => { root.action(Action.add-to-album); } }
+                        MenuItem { title: @tr("Edit the album"); enabled: root.can-add-to-album; activated => { root.action(Action.edit-album); } }
+                        MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
+                        MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action(Action.export-all); } }
+                        MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
+                    }
 
-            table := StoryTable {
-                min-height: 150px;
-                vertical-stretch: 1;
-                rows: root.rows;
-                current-row: root.current-row;
-                show-nm: root.show-nm;
-                show-size: root.show-size;
+                    table := StoryTable {
+                        min-height: 150px;
+                        vertical-stretch: 1;
+                        rows: root.rows;
+                        current-row: root.current-row;
+                        show-nm: root.show-nm;
+                        show-size: root.show-size;
+                        interactive: !root.busy;
+                        drop-hover: root.drop-hover;
+                        placeholder: root.list-placeholder;
+                        row-pointer(row, ctrl, shift, right) => { root.row-pointer(row, ctrl, shift, right); }
+                        key-nav(delta, shift) => { root.key-nav(delta, shift); }
+                        select-all => { root.select-all(); }
+                    }
+                }
+
+                // ---------------------------------------------------------------- details
+                if root.details-visible: HorizontalLayout {
+                    spacing: 6px;
+                    height: root.album-visible ? 260px : 192px;
+                    opacity: root.details-dimmed ? 0.5 : 1;
+                    if root.has-picture: VerticalLayout {
+                        alignment: start;
+                        Image {
+                            source: root.picture;
+                            width: 192px;
+                            height: 192px;
+                            image-fit: contain;
+                        }
+                    }
+                    if !root.album-visible: TextEdit {
+                        text: root.description;
+                        read-only: true;
+                        wrap: word-wrap;
+                        horizontal-stretch: 1;
+                    }
+                    if root.album-visible: VerticalLayout {
+                        spacing: 4px;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: root.description;
+                            wrap: word-wrap;
+                            max-height: 40px;
+                            overflow: elide;
+                        }
+                        AlbumEditor {
+                            vertical-stretch: 1;
+                            rows: root.album-rows;
+                            current <=> root.album-current;
+                            modified: root.album-modified;
+                            editable: root.album-editable;
+                            interactive: !root.busy;
+                            move(delta) => { root.album-move(delta); }
+                            remove => { root.album-remove(); }
+                            add-files => { root.album-add-files(); }
+                            apply => { root.album-apply(); }
+                            revert => { root.album-revert(); }
+                        }
+                    }
+                }
+            }
+            if root.view == 1: PodcastsView {
+                width: parent.width;
+                height: parent.height;
+                followed: root.podcast-followed;
+                current <=> root.podcast-current;
+                url <=> root.podcast-url;
+                adding: root.podcast-adding;
+                header: root.podcast-header;
+                loading: root.podcast-loading;
+                rows: root.podcast-rows;
+                selected-count: root.podcast-selected-count;
+                filter <=> root.podcast-filter;
+                mode <=> root.podcast-mode;
+                can-import: root.story-actions && root.can-import;
                 interactive: !root.busy;
-                drop-hover: root.drop-hover;
-                placeholder: root.list-placeholder;
-                row-pointer(row, ctrl, shift, right) => { root.row-pointer(row, ctrl, shift, right); }
-                key-nav(delta, shift) => { root.key-nav(delta, shift); }
-                select-all => { root.select-all(); }
+                focus-token: root.podcast-focus-token;
+                add => { root.podcast-add(); }
+                select(index) => { root.podcast-select(index); }
+                refresh => { root.podcast-refresh(); }
+                unfollow => { root.podcast-unfollow(); }
+                mode-changed => { root.podcast-mode-changed(); }
+                toggle(index) => { root.podcast-toggle(index); }
+                select-all(all) => { root.podcast-select-all(all); }
+                filter-edited => { root.podcast-filter-edited(); }
+                import => { root.podcast-accepted(); }
             }
         }
 
@@ -348,25 +469,6 @@ export component MainWindow inherits Window {
                 icon: @image-url("../../res/remove.png");
                 icon-size: 24px;
                 clicked => { root.abort(); }
-            }
-        }
-
-        // ---------------------------------------------------------------- details
-        if root.details-visible: HorizontalLayout {
-            spacing: 6px;
-            height: 192px;
-            opacity: root.details-dimmed ? 0.5 : 1;
-            if root.has-picture: Image {
-                source: root.picture;
-                width: 192px;
-                height: 192px;
-                image-fit: contain;
-            }
-            TextEdit {
-                text: root.description;
-                read-only: true;
-                wrap: word-wrap;
-                horizontal-stretch: 1;
             }
         }
 
@@ -492,24 +594,6 @@ export component MainWindow inherits Window {
         close => { root.dialog = DialogKind.none; }
         accepted => { root.dialog = DialogKind.none; root.night-mode-accepted(); }
         open-guide => { root.open-url(@tr("https://support.lunii.com/hc/en-gb/categories/4404826574353-The-Night-Mode")); }
-    }
-    if root.dialog == DialogKind.podcast: PodcastDialog {
-        width: root.width;
-        height: root.height;
-        url <=> root.podcast-url;
-        loading: root.podcast-loading;
-        header: root.podcast-header;
-        rows: root.podcast-rows;
-        selected-count: root.podcast-selected-count;
-        filter <=> root.podcast-filter;
-        mode <=> root.podcast-mode;
-        mode-changed => { root.podcast-mode-changed(); }
-        close => { root.dialog = DialogKind.none; }
-        load => { root.podcast-load(); }
-        toggle(index) => { root.podcast-toggle(index); }
-        select-all(all) => { root.podcast-select-all(all); }
-        filter-edited => { root.podcast-filter-edited(); }
-        accepted => { root.dialog = DialogKind.none; root.podcast-accepted(); }
     }
     if root.dialog == DialogKind.about: AboutDialog {
         width: root.width;

@@ -173,32 +173,34 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     render(0, &shot("12-progress"));
     app.handle_event(crate::worker::Event::Finished);
 
-    // podcast dialog, from a feed file (LUNII_SHOT_FEED)
+    // Podcasts view, a followed podcast from a feed file (LUNII_SHOT_FEED)
     if let Some(feed) = std::env::var_os("LUNII_SHOT_FEED") {
         let xml = std::fs::read_to_string(feed)?;
-        let podcast = lunii_core::podcast::parse_feed("https://example.org/feed.xml", &xml)?;
-        let imported: std::collections::HashSet<String> = podcast.episodes[..2]
+        let url = "https://example.org/feed.xml";
+        let podcast = lunii_core::podcast::parse_feed(url, &xml)?;
+        lunii_core::podcast::follow(&podcast)?;
+        app.handle_event(crate::worker::Event::Feed(
+            url.into(),
+            Ok(Box::new(podcast)),
+        ));
+        ui.set_view(1);
+        ui.invoke_view_changed();
+        pump(&queue, 200);
+        render(0, &shot("14-podcasts"));
+        let index = lunii_core::podcast::saved_podcasts()
             .iter()
-            .map(|e| e.guid.clone())
-            .collect();
-        ui.set_podcast_url("https://www.radiofrance.fr/franceinter/podcasts/les-odyssees".into());
-        ui.set_dialog(DialogKind::Podcast);
-        app.handle_event(crate::worker::Event::Podcast(Ok(Box::new(
-            crate::worker::PodcastView {
-                stories: imported.clone(),
-                podcast,
-                on_device: true,
-                imported,
-            },
-        ))));
+            .position(|p| p.feed_url == url)
+            .unwrap_or(0);
+        ui.invoke_podcast_select(index as i32);
         let n = ui.get_podcast_rows().row_count();
-        for row in [n - 1, n - 2, 0, 2] {
+        for row in [0, 2, n - 1] {
             let index = ui.get_podcast_rows().row_data(row).unwrap().index;
             ui.invoke_podcast_toggle(index);
         }
         pump(&queue, 300);
-        render(0, &shot("14-podcast"));
-        ui.set_dialog(DialogKind::None);
+        render(0, &shot("14-podcast-episodes"));
+        ui.set_view(0);
+        ui.invoke_view_changed();
     }
 
     // real import through the UI
@@ -210,6 +212,29 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
             pump(&queue, 100);
         }
         render(0, &shot("13-import-done"));
+
+        // an imported album: its tracks in the details panel, edited there
+        let last = ui.get_rows().row_count();
+        if last > 0 {
+            ui.invoke_row_pointer(last as i32 - 1, false, false, false);
+            pump(&queue, 300);
+            render(0, &shot("15-album-details"));
+            if ui.get_album_editable() {
+                ui.set_album_current(2);
+                ui.invoke_album_move(-1);
+                ui.invoke_album_remove();
+                pump(&queue, 100);
+                render(0, &shot("16-album-modified"));
+                ui.invoke_album_apply();
+                pump(&queue, 100);
+                let end = Instant::now() + Duration::from_secs(30);
+                while ui.get_busy() && Instant::now() < end {
+                    pump(&queue, 100);
+                }
+                pump(&queue, 300);
+                render(0, &shot("17-album-edited"));
+            }
+        }
     }
 
     // second device (Flam)

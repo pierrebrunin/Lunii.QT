@@ -500,7 +500,7 @@ impl FlamDevice {
             .filter(|(abs, _)| {
                 !matches!(
                     abs.file_name().and_then(|f| f.to_str()),
-                    Some("key") | Some("bt")
+                    Some("key") | Some("bt") | Some(album::meta::FILE_ALBUM)
                 )
             })
             .collect();
@@ -553,7 +553,7 @@ impl FlamDevice {
                 !dir.contains("img")
                     && !matches!(
                         abs.file_name().and_then(|f| f.to_str()),
-                        Some("key") | Some("bt") | Some("info")
+                        Some("key") | Some("bt") | Some("info") | Some(album::meta::FILE_ALBUM)
                     )
             })
             .collect();
@@ -754,17 +754,13 @@ impl Device for FlamDevice {
         super::uuid_from_db(dir_name).or_else(|| Some(dir_name.to_string()))
     }
 
-    fn album_track_count(&self, story: &Story) -> Option<usize> {
-        album::device_track_count(&self.story_path(story))
-    }
-
-    fn add_album_tracks(
+    fn edit_album(
         &mut self,
         ctx: &Context,
         uuid: &Uuid,
-        tracks: &[album::Track],
-    ) -> Result<usize> {
-        common::append_album_tracks(self, ctx, uuid, tracks)
+        entries: &[album::AlbumEntry],
+    ) -> Result<()> {
+        common::edit_album(self, ctx, uuid, entries)
     }
 
     fn validate_story_dir(&mut self, _ctx: &Context, _story_dir: &Path) -> bool {

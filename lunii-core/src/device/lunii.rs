@@ -777,7 +777,7 @@ impl LuniiDevice {
             .filter(|(abs, _)| {
                 !matches!(
                     abs.file_name().and_then(|f| f.to_str()),
-                    Some("bt") | Some("md")
+                    Some("bt") | Some("md") | Some(crate::album::meta::FILE_ALBUM)
                 )
             })
             .collect();
@@ -990,17 +990,13 @@ impl Device for LuniiDevice {
         })
     }
 
-    fn album_track_count(&self, story: &Story) -> Option<usize> {
-        crate::album::device_track_count(&self.story_path(story))
-    }
-
-    fn add_album_tracks(
+    fn edit_album(
         &mut self,
         ctx: &Context,
         uuid: &Uuid,
-        tracks: &[crate::album::Track],
-    ) -> Result<usize> {
-        common::append_album_tracks(self, ctx, uuid, tracks)
+        entries: &[crate::album::AlbumEntry],
+    ) -> Result<()> {
+        common::edit_album(self, ctx, uuid, entries)
     }
 
     fn validate_story_dir(&mut self, ctx: &Context, story_dir: &Path) -> bool {

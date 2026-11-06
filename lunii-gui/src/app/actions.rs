@@ -77,12 +77,7 @@ impl App {
                 };
                 self.import(files);
             }
-            Action::ImportPodcast => ui.set_dialog(DialogKind::Podcast),
-            Action::UpdatePodcasts => {
-                self.show_log();
-                let update_size = ui.get_show_size();
-                self.launch(Task::UpdatePodcasts { update_size });
-            }
+            Action::ImportPodcast => self.podcasts_focus_address(),
             Action::NormalizeVolume => {
                 let enabled = ui.get_normalize_volume();
                 if let Err(e) = lunii_core::settings::set_bool("normalize_volume", enabled) {
@@ -121,6 +116,12 @@ impl App {
                     files,
                     update_size,
                 });
+            }
+            // the tracks are edited in the details panel
+            Action::EditAlbum => {
+                ui.set_show_details(true);
+                self.state.borrow_mut().details_uuid = None;
+                self.update_details();
             }
             Action::Export | Action::ExportAll => {
                 let uuids = if action == Action::Export {

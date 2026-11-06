@@ -268,6 +268,82 @@ fn mp3_album_append_on_lunii() {
     assert!(dev.stories().get(&uuid.to_string()).is_some());
 }
 
+/// Editing an album: tracks removed, moved and added in one go, on Lunii and
+/// Flam. The titles are kept on the device (`album.json`).
+#[test]
+fn mp3_album_edit() {
+    use album::AlbumEntry::{Existing, New};
+    let _cfg = setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("Album à éditer");
+    std::fs::create_dir_all(&dir).unwrap();
+    for (i, title) in ["Un", "Deux", "Trois"].iter().enumerate() {
+        std::fs::write(
+            dir.join(format!("{i}.mp3")),
+            with_tags(title, i as u32 + 1, mp3(20 + i)),
+        )
+        .unwrap();
+    }
+    let album = album::scan(&dir).unwrap();
+    let zip = tmp.path().join("album.zip");
+    album.write_studio_zip(&zip).unwrap();
+    let extra = tmp.path().join("extra.mp3");
+    std::fs::write(&extra, with_tags("Quatre", 4, mp3(40))).unwrap();
+    let added = album::scan_files(&[extra]).unwrap().tracks.remove(0);
+    let uuid = album.uuid();
+    let ctx = Context::default();
+
+    for root in [fake_lunii_v2(tmp.path()), fake_flam(tmp.path())] {
+        let mut dev = open_device(&ctx, &root).unwrap();
+        dev.import_story(&ctx, &zip).unwrap();
+        let story = dev.stories().get(&uuid.to_string()).unwrap().clone();
+        let story_dir = dev.story_path(&story);
+        let info = dev.album_info(&story).unwrap();
+        assert_eq!(info.tracks, ["Un", "Deux", "Trois"]);
+        let trois = std::fs::read(story_dir.join("sf/000/TRK00003")).unwrap();
+        let screen_un = std::fs::read(story_dir.join("rf/000/IMG00001")).unwrap();
+
+        // "Trois" first, "Deux" removed, "Quatre" added, "Un" last
+        dev.edit_album(&ctx, &uuid, &[Existing(2), New(added.clone()), Existing(0)])
+            .unwrap();
+        let info = dev.album_info(&story).unwrap();
+        assert_eq!(info.tracks, ["Trois", "Quatre", "Un"]);
+        assert_eq!(dev.album_track_count(&story), Some(3));
+        assert_eq!(
+            std::fs::read(story_dir.join("sf/000/TRK00001")).unwrap(),
+            trois
+        );
+        // "Un" moved: its screen shows its new number
+        assert_ne!(
+            std::fs::read(story_dir.join("rf/000/IMG00003")).unwrap(),
+            screen_un
+        );
+        assert!(!story_dir.join("sf/000/TRK00004").exists());
+        assert!(!story_dir.join("edit.tmp").exists());
+        // ni (plain): cover + 3 menu entries + 3 playback nodes
+        let ni = std::fs::read(story_dir.join("ni")).unwrap();
+        assert_eq!(u32::from_le_bytes(ni[12..16].try_into().unwrap()), 7);
+        assert!(db::story_description(&uuid).ends_with("3 MP3"));
+
+        // invalid lists, the album is left as it was
+        assert!(dev.edit_album(&ctx, &uuid, &[]).is_err());
+        assert!(
+            dev.edit_album(&ctx, &uuid, &[Existing(0), Existing(0)])
+                .is_err()
+        );
+        assert!(dev.edit_album(&ctx, &uuid, &[Existing(3)]).is_err());
+        assert_eq!(dev.album_info(&story).unwrap().tracks.len(), 3);
+
+        // a single track left
+        dev.edit_album(&ctx, &uuid, &[Existing(1)]).unwrap();
+        assert_eq!(dev.album_info(&story).unwrap().tracks, ["Quatre"]);
+        assert!(!story_dir.join("rf/000/IMG00002").exists());
+        // still a valid story once the device is reopened
+        let dev = open_device(&ctx, &root).unwrap();
+        assert!(dev.stories().get(&uuid.to_string()).is_some());
+    }
+}
+
 /// A folder of sub-folders (CDs): two menus, chapter screens, the cover file
 /// of the folder; tracks can't be appended.
 #[test]
@@ -326,6 +402,10 @@ fn chapters_album_on_flam() {
     let ni = std::fs::read(story_dir.join("ni")).unwrap();
     assert_eq!(u32::from_le_bytes(ni[12..16].try_into().unwrap()), 9);
     assert_eq!(dev.album_track_count(&story), None);
+    // the titles can be displayed, not edited
+    let info = dev.album_info(&story).unwrap();
+    assert_eq!(info.tracks.len(), 3);
+    assert_eq!(info.chapters, album.chapters);
 }
 
 /// Podcast update: the albums are remembered, the new episodes found.
@@ -357,4 +437,28 @@ fn podcast_new_episodes() {
         .map(|e| e.guid)
         .collect();
     assert_eq!(new, ["c", "d"]);
+    // an older episode left out is not new
+    lunii_core::podcast::record_imported(&p, &["d".into()], false).unwrap();
+    assert!(lunii_core::podcast::new_episodes(&p).is_empty());
+    lunii_core::podcast::record_imported(&p, &["a".into(), "b".into()], true).unwrap();
+
+    // followed without import, then no longer followed
+    let url2 = "https://example.org/follow-test.xml";
+    let p2 = lunii_core::podcast::parse_feed(url2, &feed(&["x"])).unwrap();
+    lunii_core::podcast::follow(&p2).unwrap();
+    assert!(
+        lunii_core::podcast::saved_podcasts()
+            .iter()
+            .any(|s| s.feed_url == url2)
+    );
+    assert_eq!(lunii_core::podcast::new_episodes(&p2).len(), 1);
+    // following again keeps the imported episodes
+    lunii_core::podcast::follow(&p).unwrap();
+    assert_eq!(lunii_core::podcast::new_episodes(&p).len(), 2);
+    lunii_core::podcast::unfollow(&p2.album_uuid()).unwrap();
+    assert!(
+        !lunii_core::podcast::saved_podcasts()
+            .iter()
+            .any(|s| s.feed_url == url2)
+    );
 }

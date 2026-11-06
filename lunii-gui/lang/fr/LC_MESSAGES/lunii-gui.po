@@ -804,9 +804,6 @@ msgstr "✅ {} piste(s) ajoutée(s) à l'album en {} s"
 msgid "This story is not an MP3 album created by Lunii"
 msgstr "Cette histoire n'est pas un album MP3 créé par Lunii"
 
-msgid "Adding MP3 files to an album is not available on this storyteller"
-msgstr "L'ajout de MP3 à un album n'est pas disponible sur cette conteuse"
-
 msgid "No MP3 file to add"
 msgstr "Aucun fichier MP3 à ajouter"
 
@@ -879,29 +876,8 @@ msgstr "une histoire par épisode"
 msgid "{} episode(s) already on the device"
 msgstr "{} épisode(s) déjà sur l'appareil"
 
-msgid "Update podcasts"
-msgstr "Mettre à jour les podcasts"
-
 msgid "Normalize volume (albums, podcasts)"
 msgstr "Égaliser le volume (albums, podcasts)"
-
-msgid "No podcast album on this device (Import a podcast)"
-msgstr "Aucun album de podcast sur cet appareil (Importer un podcast)"
-
-msgid "🔄 Checking '{}'..."
-msgstr "🔄 Vérification de '{}'..."
-
-msgid "'{}' : up to date"
-msgstr "'{}' : à jour"
-
-msgid "🛑 Failed to update '{}'"
-msgstr "🛑 Échec de la mise à jour de '{}'"
-
-msgid "✅ Podcasts updated : {} new episode(s)"
-msgstr "✅ Podcasts mis à jour : {} nouvel(s) épisode(s)"
-
-msgid " ({} failed)"
-msgstr " ({} en échec)"
 
 msgid "Checking the written files..."
 msgstr "Vérification des fichiers écrits..."
@@ -1052,3 +1028,72 @@ msgstr "Installez FFMPEG avec le gestionnaire de paquets de votre distribution L
 
 msgid "invalid JSON file"
 msgstr "fichier JSON invalide"
+
+msgid "Edit the album"
+msgstr "Modifier l'album"
+
+msgid "Add MP3..."
+msgstr "Ajouter des MP3..."
+
+msgid "to add"
+msgstr "à ajouter"
+
+msgid "Apply"
+msgstr "Appliquer"
+
+msgid "Track {}"
+msgstr "Piste {}"
+
+msgid "{} track(s) :"
+msgstr "{} piste(s) :"
+
+msgid "Updating the album..."
+msgstr "Mise à jour de l'album..."
+
+msgid "✅ Album updated in {} s"
+msgstr "✅ Album mis à jour en {} s"
+
+msgid "An album needs at least one track"
+msgstr "Un album doit contenir au moins une piste"
+
+msgid "Invalid track number: {}"
+msgstr "Numéro de piste invalide : {}"
+
+msgid "Editing an album is not available on this storyteller"
+msgstr "La modification d'un album n'est pas disponible sur cette conteuse"
+
+msgid "Podcasts"
+msgstr "Podcasts"
+
+msgid "Followed podcasts"
+msgstr "Podcasts suivis"
+
+msgid "Podcast address or RSS feed"
+msgstr "Adresse d'un podcast ou flux RSS"
+
+msgid "Paste the address of a podcast page (radiofrance.fr...) or of its RSS feed above, then Enter."
+msgstr "Collez ci-dessus l'adresse de la page d'un podcast (radiofrance.fr...) ou de son flux RSS, puis Entrée."
+
+msgid "Choose a podcast on the left, or add one with its address."
+msgstr "Choisissez un podcast à gauche, ou ajoutez-en un avec son adresse."
+
+msgid "Unfollow"
+msgstr "Ne plus suivre"
+
+msgid "Unavailable"
+msgstr "Indisponible"
+
+msgid "{} episodes"
+msgstr "{} épisodes"
+
+msgid "Up to date"
+msgstr "À jour"
+
+msgid "{} new episode(s)"
+msgstr "{} nouvel(s) épisode(s)"
+
+msgid "'{}' is no longer followed"
+msgstr "« {} » n'est plus suivi"
+
+msgid "Album made of sub-folders: its tracks can't be changed"
+msgstr "Album à sous-dossiers : ses pistes ne peuvent pas être modifiées"

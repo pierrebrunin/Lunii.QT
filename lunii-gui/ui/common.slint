@@ -1,5 +1,7 @@
 // Shared types and small widgets.
 
+import { Palette } from "std-widgets.slint";
+
 export struct StoryRow {
     name: string,
     uuid: string,
@@ -20,6 +22,7 @@ export struct LogLine {
 export enum Action {
     about,
     add-to-album,
+    edit-album,
     exit,
     export,
     export-all,
@@ -48,7 +51,6 @@ export enum Action {
     show-log,
     show-size,
     update,
-    update-podcasts,
 }
 
 export enum DialogKind {
@@ -57,10 +59,29 @@ export enum DialogKind {
     login,
     night-mode,
     about,
-    podcast,
 }
 
-/// An episode in the podcast dialog.
+/// A track in the album dialog.
+export struct AlbumTrackRow {
+    // "3." (empty for a chapter header)
+    number: string,
+    title: string,
+    // not on the device yet
+    new: bool,
+    // sub-folder title, before its tracks
+    header: bool,
+}
+
+/// A followed podcast in the Podcasts view.
+export struct FollowedRow {
+    title: string,
+    // new episodes, or the number of episodes
+    info: string,
+    // new episodes to import in its album on the device
+    news: bool,
+}
+
+/// An episode in the Podcasts view.
 export struct EpisodeRow {
     // index in the podcast episodes
     index: int,
@@ -115,5 +136,47 @@ export component Link inherits Text {
     TouchArea {
         mouse-cursor: pointer;
         clicked => { root.clicked(); }
+    }
+}
+
+/// Two buttons switching between two views (Stories / Podcasts).
+export component ViewSwitch inherits Rectangle {
+    in property <string> first;
+    in property <string> second;
+    in-out property <int> current;
+    callback changed-view();
+
+    height: 30px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: Palette.border;
+    background: Palette.alternate-background;
+    clip: true;
+
+    HorizontalLayout {
+        for label[i] in [root.first, root.second]: Rectangle {
+            background: i == root.current ? Theme.selection : area.has-hover ? #8882 : transparent;
+            Text {
+                text: label;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                color: i == root.current ? #fff : Palette.foreground;
+            }
+            min-width: self.preferred-width;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                Text { text: label; opacity: 0; }
+            }
+            area := TouchArea {
+                mouse-cursor: pointer;
+                clicked => {
+                    if (root.current != i) {
+                        root.current = i;
+                        root.changed-view();
+                    }
+                }
+            }
+        }
     }
 }

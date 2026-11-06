@@ -1,0 +1,104 @@
+// Track list of an MP3 album, in the details panel: tracks moved, removed or
+// added, then applied in one go.
+
+import { Button, ListView, Palette } from "std-widgets.slint";
+import { Theme, AlbumTrackRow } from "common.slint";
+
+export component AlbumEditor inherits VerticalLayout {
+    in property <[AlbumTrackRow]> rows;
+    in-out property <int> current: -1;
+    // the list differs from the device
+    in property <bool> modified;
+    // albums made of sub-folders: read only
+    in property <bool> editable;
+    // no task running
+    in property <bool> interactive;
+    callback move(delta: int);
+    callback remove();
+    callback add-files();
+    callback apply();
+    callback revert();
+
+    spacing: 4px;
+
+    Rectangle {
+        vertical-stretch: 1;
+        border-width: 1px;
+        border-color: Palette.border;
+        ListView {
+            for row[i] in root.rows: Rectangle {
+                height: row.header ? 26px : 22px;
+                background: i == root.current ? Theme.selection : area.has-hover && root.editable && !row.header ? #8882 : transparent;
+                area := TouchArea {
+                    enabled: root.editable && !row.header;
+                    clicked => { root.current = i; }
+                }
+                HorizontalLayout {
+                    padding-left: 6px;
+                    padding-right: 6px;
+                    spacing: 8px;
+                    if !row.header: Text {
+                        text: row.number;
+                        width: 36px;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        color: i == root.current ? #fff : Theme.hidden-text;
+                    }
+                    Text {
+                        text: row.title;
+                        overflow: elide;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                        font-weight: row.header ? 700 : 400;
+                        color: i == root.current ? #fff : Palette.foreground;
+                    }
+                    if row.new: Text {
+                        text: @tr("to add");
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        color: i == root.current ? #fff : Theme.hidden-text;
+                    }
+                }
+            }
+        }
+    }
+    if root.editable: HorizontalLayout {
+        spacing: 6px;
+        Button {
+            text: @tr("Add MP3...");
+            enabled: root.interactive;
+            clicked => { root.add-files(); }
+        }
+        Button {
+            text: "▲";
+            enabled: root.interactive && root.current > 0;
+            clicked => { root.move(-1); }
+        }
+        Button {
+            text: "▼";
+            enabled: root.interactive && root.current >= 0 && root.current < root.rows.length - 1;
+            clicked => { root.move(1); }
+        }
+        Button {
+            text: @tr("Remove");
+            enabled: root.interactive && root.current >= 0 && root.rows.length > 1;
+            clicked => { root.remove(); }
+        }
+        Rectangle { horizontal-stretch: 1; }
+        if root.modified: Button {
+            text: @tr("Cancel");
+            clicked => { root.revert(); }
+        }
+        if root.modified: Button {
+            text: @tr("Apply");
+            primary: true;
+            enabled: root.interactive;
+            clicked => { root.apply(); }
+        }
+    }
+    if !root.editable: Text {
+        text: @tr("Album made of sub-folders: its tracks can't be changed");
+        font-size: 11px;
+        color: Theme.hidden-text;
+    }
+}

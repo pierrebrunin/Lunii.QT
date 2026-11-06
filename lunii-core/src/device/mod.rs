@@ -6,7 +6,7 @@ pub mod lunii;
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, bail};
+use anyhow::{Context as _, Result, bail};
 use uuid::Uuid;
 
 use crate::constants::DeviceVersion;
@@ -65,19 +65,50 @@ pub trait Device: Send {
     }
 
     /// Number of tracks if `story` is an MP3 album created by Lunii that
-    /// tracks can be appended to (see [`crate::album`]).
-    fn album_track_count(&self, _story: &Story) -> Option<usize> {
-        None
+    /// can be edited: tracks added, removed, moved (see [`crate::album`]).
+    fn album_track_count(&self, story: &Story) -> Option<usize> {
+        crate::album::device_track_count(&self.story_path(story))
+    }
+
+    /// Track titles if `story` is an MP3 album created by Lunii (also the
+    /// albums made of sub-folders, which can't be edited).
+    fn album_info(&self, story: &Story) -> Option<crate::album::meta::AlbumInfo> {
+        crate::album::meta::on_device(&self.story_path(story))
+    }
+
+    /// Rewrites the tracks of an album story: `entries` is the new track list
+    /// (tracks on the device, MP3 files to add), the missing tracks are
+    /// removed.
+    fn edit_album(
+        &mut self,
+        _ctx: &Context,
+        _uuid: &Uuid,
+        _entries: &[crate::album::AlbumEntry],
+    ) -> Result<()> {
+        bail!("Editing an album is not available on this storyteller")
     }
 
     /// Appends tracks to an album story, returns the number of added tracks.
     fn add_album_tracks(
         &mut self,
-        _ctx: &Context,
-        _uuid: &Uuid,
-        _tracks: &[crate::album::Track],
+        ctx: &Context,
+        uuid: &Uuid,
+        tracks: &[crate::album::Track],
     ) -> Result<usize> {
-        bail!("Adding MP3 files to an album is not available on this storyteller")
+        use crate::album::AlbumEntry;
+        let story = self.find_story(&uuid.to_string())?;
+        let count = self
+            .album_track_count(&story)
+            .context("This story is not an MP3 album created by Lunii")?;
+        if tracks.is_empty() {
+            bail!("No MP3 file to add");
+        }
+        let entries: Vec<AlbumEntry> = (0..count)
+            .map(AlbumEntry::Existing)
+            .chain(tracks.iter().cloned().map(AlbumEntry::New))
+            .collect();
+        self.edit_album(ctx, uuid, &entries)?;
+        Ok(tracks.len())
     }
     fn as_lunii_mut(&mut self) -> Option<&mut LuniiDevice> {
         None

@@ -1,0 +1,230 @@
+// Podcasts view: the followed podcasts on the left, the episodes of the
+// selected one on the right, to import on the device.
+
+import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette } from "std-widgets.slint";
+import { Theme, EpisodeRow, FollowedRow } from "common.slint";
+
+export component PodcastsView inherits HorizontalLayout {
+    // followed podcasts
+    in property <[FollowedRow]> followed;
+    in-out property <int> current: -1;
+    // address typed to follow a new podcast
+    in-out property <string> url;
+    // the address is being loaded
+    in property <bool> adding;
+    // selected podcast: title and details, or the error
+    in property <string> header;
+    // its episodes are being loaded
+    in property <bool> loading;
+    in property <[EpisodeRow]> rows;
+    in property <int> selected-count;
+    in-out property <string> filter;
+    // 0: one album (a menu to choose the episode), 1: one story per episode
+    in-out property <int> mode;
+    // a device that stories can be imported to, and no task running
+    in property <bool> can-import;
+    // no task running
+    in property <bool> interactive;
+    // changed to give the focus to the address field
+    in property <int> focus-token;
+    callback add();
+    callback select(index: int);
+    callback refresh();
+    callback unfollow();
+    callback mode-changed();
+    callback toggle(index: int);
+    callback select-all(all: bool);
+    callback filter-edited();
+    callback import();
+
+    spacing: 8px;
+
+    changed focus-token => {
+        url-edit.focus();
+        url-edit.select-all();
+    }
+
+    // ------------------------------------------------------------ followed
+    VerticalLayout {
+        width: 230px;
+        spacing: 6px;
+        Text {
+            text: @tr("Followed podcasts");
+            font-weight: 700;
+        }
+        HorizontalLayout {
+            spacing: 4px;
+            url-edit := LineEdit {
+                text <=> root.url;
+                placeholder-text: @tr("Podcast address or RSS feed");
+                enabled: !root.adding;
+                accepted => { root.add(); }
+            }
+            Button {
+                text: root.adding ? "…" : "+";
+                width: 36px;
+                enabled: !root.adding && root.url != "";
+                clicked => { root.add(); }
+            }
+        }
+        Rectangle {
+            vertical-stretch: 1;
+            border-width: 1px;
+            border-color: Palette.border;
+            if root.followed.length == 0: Text {
+                x: 10px;
+                width: parent.width - 20px;
+                text: @tr("Paste the address of a podcast page (radiofrance.fr...) or of its RSS feed above, then Enter.");
+                wrap: word-wrap;
+                color: Theme.hidden-text;
+                vertical-alignment: center;
+            }
+            ListView {
+                for row[i] in root.followed: Rectangle {
+                    height: 42px;
+                    background: i == root.current ? Theme.selection : feed-area.has-hover ? #8882 : transparent;
+                    feed-area := TouchArea {
+                        clicked => { root.select(i); }
+                    }
+                    VerticalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        alignment: center;
+                        Text {
+                            text: row.title;
+                            overflow: elide;
+                            font-weight: row.news ? 700 : 400;
+                            color: i == root.current ? #fff : Palette.foreground;
+                        }
+                        Text {
+                            text: row.info;
+                            font-size: 11px;
+                            overflow: elide;
+                            color: i == root.current ? #fff : row.news ? Theme.selection : Theme.hidden-text;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------ episodes
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 6px;
+        if root.current < 0 && root.header == "": Rectangle {
+            vertical-stretch: 1;
+            border-width: 1px;
+            border-color: Palette.border;
+            Text {
+                width: parent.width - 40px;
+                text: @tr("Choose a podcast on the left, or add one with its address.");
+                wrap: word-wrap;
+                horizontal-alignment: center;
+                color: Theme.hidden-text;
+            }
+        }
+        if root.current >= 0 || root.header != "": HorizontalLayout {
+            spacing: 6px;
+            Text {
+                text: root.loading ? @tr("Loading...") : root.header;
+                font-weight: 600;
+                wrap: word-wrap;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            if root.current >= 0: VerticalLayout {
+                alignment: start;
+                HorizontalLayout {
+                    spacing: 6px;
+                    Button {
+                        text: "↻";
+                        width: 36px;
+                        enabled: !root.loading;
+                        clicked => { root.refresh(); }
+                    }
+                    Button {
+                        text: @tr("Unfollow");
+                        enabled: root.interactive;
+                        clicked => { root.unfollow(); }
+                    }
+                }
+            }
+        }
+        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
+            spacing: 6px;
+            Text {
+                text: @tr("Import as:");
+                vertical-alignment: center;
+            }
+            ComboBox {
+                model: [@tr("an album (a menu to choose the episode)"), @tr("one story per episode")];
+                current-index <=> root.mode;
+                selected => { root.mode-changed(); }
+                horizontal-stretch: 1;
+            }
+        }
+        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
+            spacing: 6px;
+            LineEdit {
+                text <=> root.filter;
+                placeholder-text: @tr("(Episode filter text)");
+                edited => { root.filter-edited(); }
+                horizontal-stretch: 1;
+            }
+            Button { text: @tr("All"); clicked => { root.select-all(true); } }
+            Button { text: @tr("None"); clicked => { root.select-all(false); } }
+        }
+        if root.rows.length > 0 || root.filter != "": Rectangle {
+            vertical-stretch: 1;
+            border-width: 1px;
+            border-color: Palette.border;
+            ListView {
+                for row in root.rows: Rectangle {
+                    height: 40px;
+                    background: area.has-hover && !row.present ? #8882 : transparent;
+                    area := TouchArea {
+                        enabled: !row.present;
+                        clicked => { root.toggle(row.index); }
+                    }
+                    HorizontalLayout {
+                        padding-left: 6px;
+                        padding-right: 6px;
+                        spacing: 6px;
+                        CheckBox {
+                            checked: row.checked || row.present;
+                            enabled: !row.present;
+                            toggled => { root.toggle(row.index); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: row.title;
+                                overflow: elide;
+                                color: row.present ? Theme.hidden-text : Palette.foreground;
+                            }
+                            Text {
+                                text: row.present ? row.info + " · " + @tr("already on the device") : row.info;
+                                font-size: 11px;
+                                color: Theme.hidden-text;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (root.current >= 0 || root.header != "") && root.rows.length == 0 && root.filter == "": Rectangle {
+            vertical-stretch: 1;
+        }
+        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
+            spacing: 6px;
+            Rectangle { horizontal-stretch: 1; }
+            Button {
+                text: @tr("Import ({})", root.selected-count);
+                primary: true;
+                enabled: root.can-import && root.selected-count > 0;
+                clicked => { root.import(); }
+            }
+        }
+    }
+}

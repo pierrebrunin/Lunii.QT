@@ -3,7 +3,6 @@
 //! A task runs in its own thread and talks to the UI with [`Event`]s, delivered
 //! in order on the Slint event loop.
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -71,17 +70,6 @@ impl Drop for TempDir {
     }
 }
 
-/// A podcast loaded for the selection dialog.
-pub struct PodcastView {
-    pub podcast: Podcast,
-    /// its album is on the device: the episodes will be appended
-    pub on_device: bool,
-    /// episodes already in the album
-    pub imported: HashSet<String>,
-    /// episodes already on the device as stories of their own
-    pub stories: HashSet<String>,
-}
-
 /// Files to import: (requested file, archive to import + `true` if temporary).
 /// The temporary archives are removed on drop, abort included.
 struct PreparedFiles<'a>(Vec<(&'a PathBuf, anyhow::Result<(PathBuf, bool)>)>);
@@ -139,8 +127,8 @@ pub enum Event {
     Total(usize, usize),
     /// An import starts: expected number of bytes written to the device
     ImportPlan(u64),
-    /// Podcast loaded for the selection dialog (or the error)
-    Podcast(Result<Box<PodcastView>, String>),
+    /// Podcast feed loaded (requested address, podcast or error)
+    Feed(String, Result<Box<Podcast>, String>),
     Story(String, usize, usize),
     File(String, u64, u64),
     Stories(Vec<StoryInfo>),
@@ -184,10 +172,6 @@ pub enum Task {
     Remove {
         uuids: Vec<String>,
     },
-    /// Loads a podcast feed for the selection dialog
-    FetchPodcast {
-        url: String,
-    },
     /// Episodes of a podcast imported as an album (or appended to it)
     ImportPodcast {
         podcast: Box<Podcast>,
@@ -196,14 +180,16 @@ pub enum Task {
         as_stories: bool,
         update_size: bool,
     },
-    /// New episodes of the podcasts imported as albums on the device
-    UpdatePodcasts {
-        update_size: bool,
-    },
     /// MP3 files appended to an album story
     AddToAlbum {
         uuid: Uuid,
         files: Vec<PathBuf>,
+        update_size: bool,
+    },
+    /// New track list of an album (tracks moved, removed, added)
+    EditAlbum {
+        uuid: Uuid,
+        entries: Vec<album::AlbumEntry>,
         update_size: bool,
     },
     Size,
@@ -373,6 +359,51 @@ impl Runner {
         Ok(())
     }
 
+    fn edit_album(
+        &self,
+        uuid: &Uuid,
+        mut entries: Vec<album::AlbumEntry>,
+        update_size: bool,
+    ) -> anyhow::Result<()> {
+        use album::AlbumEntry;
+        self.message(tr("Updating the album..."));
+        let new: Vec<album::Track> = entries
+            .iter()
+            .filter_map(|e| match e {
+                AlbumEntry::New(t) => Some(t.clone()),
+                AlbumEntry::Existing(_) => None,
+            })
+            .collect();
+        self.emit(Event::ImportPlan(append_expected(
+            new.iter().map(|t| t.path.as_path()),
+        )));
+        self.emit(Event::Total(0, 1));
+        let start = Instant::now();
+        album::check_ffmpeg(&new)?;
+        let work = TempDir(std::env::temp_dir().join(format!("lunii-edit-{uuid}")));
+        // the added tracks, normalized if required
+        let mut prepared = album::prepare_tracks(&self.ctx, &new, self.audio, &work.0)?.into_iter();
+        for entry in &mut entries {
+            if let AlbumEntry::New(track) = entry
+                && let Some(p) = prepared.next()
+            {
+                *track = p;
+            }
+        }
+        let result = self.on_device(|d| d.edit_album(&self.ctx, uuid, &entries));
+        self.refresh();
+        result?;
+        if update_size {
+            self.on_device(|d| d.compute_sizes(&self.ctx))?;
+            self.refresh();
+        }
+        self.message(trf(
+            "✅ Album updated in {} s",
+            &[&start.elapsed().as_secs().to_string()],
+        ));
+        Ok(())
+    }
+
     /// Is the album `uuid` on the device (tracks can be appended)?
     fn album_on_device(&self, uuid: &Uuid) -> bool {
         self.with_device(|d| {
@@ -382,40 +413,6 @@ impl Runner {
                 .is_some_and(|s| d.album_track_count(&s).is_some())
         })
         .unwrap_or(false)
-    }
-
-    fn fetch_podcast(&self, url: &str) {
-        let result = podcast::fetch(url).map(|podcast| {
-            let uuid = podcast.album_uuid();
-            let on_device = self.album_on_device(&uuid);
-            let stories = self
-                .with_device(|d| {
-                    podcast
-                        .episodes
-                        .iter()
-                        .filter(|e| {
-                            d.stories()
-                                .get(&podcast.episode_uuid(e).to_string())
-                                .is_some()
-                        })
-                        .map(|e| e.guid.clone())
-                        .collect()
-                })
-                .unwrap_or_default();
-            Box::new(PodcastView {
-                imported: if on_device {
-                    podcast::imported_episodes(&uuid)
-                } else {
-                    HashSet::new()
-                },
-                on_device,
-                stories,
-                podcast,
-            })
-        });
-        self.emit(Event::Podcast(
-            result.map_err(|e| crate::i18n::tr_message(&format!("{e:#}"))),
-        ));
     }
 
     fn import_podcast(
@@ -474,57 +471,6 @@ impl Runner {
                 &format_secs(start.elapsed().as_secs()),
             ],
         ));
-        Ok(())
-    }
-
-    /// Appends their new episodes to the podcast albums of the device.
-    fn update_podcasts(&self, update_size: bool) -> anyhow::Result<()> {
-        let saved: Vec<_> = podcast::saved_podcasts()
-            .into_iter()
-            .filter(|p| self.album_on_device(&p.album))
-            .collect();
-        if saved.is_empty() {
-            self.message(tr("No podcast album on this device (Import a podcast)"));
-            return Ok(());
-        }
-        let mut added = 0;
-        let mut failed = 0;
-        for (i, entry) in saved.iter().enumerate() {
-            lunii_core::report::check_abort(&self.ctx)?;
-            self.emit(Event::Total(i, saved.len()));
-            self.message(trf("🔄 Checking '{}'...", &[&entry.title]));
-            let result = podcast::parse_feed_url(&entry.feed_url).and_then(|podcast| {
-                let new = podcast::new_episodes(&podcast);
-                if new.is_empty() {
-                    self.message(trf("'{}' : up to date", &[&podcast.title]));
-                    return Ok(0);
-                }
-                self.import_podcast(&podcast, &new, false, false)?;
-                Ok(new.len())
-            });
-            match result {
-                Ok(n) => added += n,
-                Err(e) if e.is::<Aborted>() => return Err(e),
-                Err(e) => {
-                    failed += 1;
-                    self.emit(Event::Log(Level::Error, format!("{e:#}")));
-                    self.emit(Event::ShowLog);
-                    self.message(trf("🛑 Failed to update '{}'", &[&entry.title]));
-                }
-            }
-        }
-        if update_size && added > 0 {
-            self.on_device(|d| d.compute_sizes(&self.ctx))?;
-            self.refresh();
-        }
-        let mut done = trf(
-            "✅ Podcasts updated : {} new episode(s)",
-            &[&added.to_string()],
-        );
-        if failed > 0 {
-            done.push_str(&trf(" ({} failed)", &[&failed.to_string()]));
-        }
-        self.message(done);
         Ok(())
     }
 
@@ -651,8 +597,11 @@ impl Runner {
                 files,
                 update_size,
             } => self.add_to_album(&uuid, &files, update_size)?,
-            Task::FetchPodcast { url } => self.fetch_podcast(&url),
-            Task::UpdatePodcasts { update_size } => self.update_podcasts(update_size)?,
+            Task::EditAlbum {
+                uuid,
+                entries,
+                update_size,
+            } => self.edit_album(&uuid, entries, update_size)?,
             Task::ImportPodcast {
                 podcast,
                 episodes,
@@ -786,6 +735,22 @@ pub fn fetch_details(uuid: Uuid, sink: Sink) {
         let desc = db::story_description(&uuid);
         let picture = db::story_picture(&uuid, false);
         sink(Event::Details(uuid, desc, picture));
+    });
+}
+
+/// Loads a podcast feed in the background (`discover`: `url` may be the page of
+/// the podcast). Not a task: the device is not involved.
+pub fn fetch_feed(url: String, discover: bool, sink: Sink) {
+    std::thread::spawn(move || {
+        let result = if discover {
+            podcast::fetch(&url)
+        } else {
+            podcast::parse_feed_url(&url)
+        };
+        let result = result
+            .map(Box::new)
+            .map_err(|e| crate::i18n::tr_message(&format!("{e:#}")));
+        sink(Event::Feed(url, result));
     });
 }
 

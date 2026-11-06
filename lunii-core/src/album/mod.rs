@@ -38,6 +38,7 @@ use crate::convert::audio::{self, AudioOptions, silent_mp3};
 use crate::report::{Context, check_abort};
 
 mod layout;
+pub mod meta;
 mod scan;
 mod screens;
 
@@ -59,7 +60,7 @@ const EPISODE_SOUND: &str = "EPISODE1.mp3";
 /// sub-folders, see [`device_track_count`].
 pub(super) const CHAPTER_PREFIX: &str = "CHP";
 
-pub(super) fn track_asset(prefix: &str, index: usize, ext: &str) -> String {
+pub(crate) fn track_asset(prefix: &str, index: usize, ext: &str) -> String {
     format!("{prefix}{:05}.{ext}", index + 1)
 }
 
@@ -77,7 +78,7 @@ pub struct Track {
 
 /// A sub-folder of an album: `len` tracks, following the previous chapters'
 /// ones in [`Album::tracks`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chapter {
     pub title: String,
     pub len: usize,
@@ -316,6 +317,16 @@ pub fn needs_transcoding(tracks: &[Track]) -> bool {
     })
 }
 
+/// A track of an album being edited on the device (see
+/// [`crate::device::Device::edit_album`]).
+#[derive(Debug, Clone)]
+pub enum AlbumEntry {
+    /// the track at this position (0 based) on the device
+    Existing(usize),
+    /// an MP3 file to add
+    New(Track),
+}
+
 /// A file of a track, in its source format (PNG screen, MP3 sounds), named as
 /// in the STUdio archive.
 pub struct Asset {
@@ -359,6 +370,20 @@ fn numbered_track_assets(
             data: audio,
         },
     ])
+}
+
+/// Screen of the track at `index` (0 based): `header` above the title, the
+/// number below.
+pub fn track_screen_asset(
+    font: &FontRef,
+    header: &str,
+    title: &str,
+    index: usize,
+) -> Result<Asset> {
+    Ok(Asset {
+        name: track_asset("IMG", index, "png"),
+        data: png(&track_screen(font, header, title, index + 1))?,
+    })
 }
 
 fn track_audio(path: &Path) -> Result<Vec<u8>> {

@@ -15,10 +15,12 @@ use uuid::Uuid;
 
 use crate::i18n::{tr, trf};
 use crate::logfile;
-use crate::worker::{self, Event, GuiReporter, PodcastView, SharedDevice, Sink, StoryInfo, Task};
+use crate::worker::{self, Event, GuiReporter, SharedDevice, Sink, StoryInfo, Task};
 use crate::{EpisodeRow, LogLine, MainWindow, StoryRow, Theme};
+use podcast::PodcastView;
 
 mod actions;
+mod album;
 mod log_panel;
 mod podcast;
 
@@ -141,6 +143,10 @@ struct State {
     eta: Option<Eta>,
     /// podcast of the selection dialog, and its selected episodes
     podcast: Option<(Box<PodcastView>, HashSet<usize>)>,
+    /// followed podcasts and their feeds (Podcasts view)
+    podcasts: podcast::Podcasts,
+    /// album shown in the details panel, with its pending changes
+    album: Option<album::AlbumEdit>,
 }
 
 pub struct App {
@@ -320,8 +326,21 @@ impl App {
         ui.on_login_accepted(with(|app| app.firmware_login()));
         ui.on_night_mode_accepted(with(|app| app.save_night_mode()));
 
-        // podcast dialog
-        ui.on_podcast_load(with(|app| app.podcast_load()));
+        // Podcasts view
+        ui.on_view_changed(with(|app| {
+            if app.ui().get_view() == 1 {
+                app.podcasts_show();
+            }
+        }));
+        ui.on_podcast_add(with(|app| app.podcast_add()));
+        ui.on_podcast_refresh(with(|app| app.podcast_refresh()));
+        ui.on_podcast_unfollow(with(|app| app.podcast_unfollow()));
+        let w = Rc::downgrade(self);
+        ui.on_podcast_select(move |index| {
+            if let Some(app) = w.upgrade() {
+                app.podcast_select(index);
+            }
+        });
         ui.on_podcast_filter_edited(with(|app| app.rebuild_podcast_rows()));
         ui.on_podcast_mode_changed(with(|app| app.podcast_mode_changed()));
         ui.on_podcast_accepted(with(|app| app.podcast_import()));
@@ -335,6 +354,17 @@ impl App {
         ui.on_podcast_select_all(move |all| {
             if let Some(app) = w.upgrade() {
                 app.podcast_select_all(all);
+            }
+        });
+        // album tracks (details panel)
+        ui.on_album_remove(with(|app| app.album_remove()));
+        ui.on_album_add_files(with(|app| app.album_add_files()));
+        ui.on_album_apply(with(|app| app.album_apply()));
+        ui.on_album_revert(with(|app| app.album_revert()));
+        let w = Rc::downgrade(self);
+        ui.on_album_move(move |delta| {
+            if let Some(app) = w.upgrade() {
+                app.album_move(delta);
             }
         });
         ui.on_open_url(|url| {
@@ -832,6 +862,7 @@ impl App {
         let Some((uuid, hidden)) = single else {
             ui.set_details_visible(false);
             self.state.borrow_mut().details_uuid = None;
+            self.album_hide();
             return;
         };
         ui.set_details_dimmed(hidden);
@@ -839,6 +870,7 @@ impl App {
             return;
         }
         self.state.borrow_mut().details_uuid = Some(uuid);
+        self.album_load(uuid);
         worker::fetch_details(uuid, sink());
     }
 
@@ -849,11 +881,17 @@ impl App {
         let ui = self.ui();
         let image = picture.as_deref().and_then(decode_image);
         let no_desc = desc.is_empty() || desc == DESC_NOT_FOUND;
-        if no_desc && image.is_none() {
+        let album = ui.get_album_visible();
+        if no_desc && image.is_none() && !album {
             ui.set_details_visible(false);
             return;
         }
-        ui.set_description(if no_desc { tr(DESC_NOT_FOUND) } else { desc }.into());
+        let desc = match (no_desc, album) {
+            (true, true) => String::new(),
+            (true, false) => tr(DESC_NOT_FOUND),
+            (false, _) => desc,
+        };
+        ui.set_description(desc.into());
         ui.set_has_picture(image.is_some());
         ui.set_picture(image.unwrap_or_default());
         ui.set_details_visible(true);
@@ -1032,7 +1070,7 @@ impl App {
                 });
             }
             Event::ImportPlan(total) => self.start_eta(total),
-            Event::Podcast(result) => self.podcast_loaded(result),
+            Event::Feed(url, result) => self.feed_loaded(url, result),
             Event::Story(uuid, current, total) => {
                 ui.set_story_visible(true);
                 ui.set_story_text(uuid.into());
@@ -1085,7 +1123,8 @@ impl App {
             Event::Details(uuid, desc, picture) => self.details_ready(uuid, desc, picture),
             Event::Finished => {
                 self.stop_eta();
-                ui.set_podcast_loading(false);
+                // the album shown may have changed
+                self.state.borrow_mut().details_uuid = None;
                 if let Some((handle, _)) = self.state.borrow_mut().worker.take() {
                     let _ = handle.join();
                 }
@@ -1096,6 +1135,7 @@ impl App {
                 ui.set_abort_visible(false);
                 ui.set_ffmpeg_present(which_ffmpeg().is_some());
                 self.selection_changed();
+                self.podcasts_refresh_device();
                 // firmware login done: choose where to save the files
                 if self.state.borrow().fw.is_some() {
                     let app = self.clone();

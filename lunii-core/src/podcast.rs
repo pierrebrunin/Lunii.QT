@@ -488,7 +488,8 @@ pub struct SavedPodcast {
     pub title: String,
 }
 
-/// The podcasts imported as albums (on any device), by title.
+/// The followed podcasts: added in the Podcasts view or imported as albums
+/// (on any device), by title.
 pub fn saved_podcasts() -> Vec<SavedPodcast> {
     let mut list: Vec<SavedPodcast> = load_state()
         .into_iter()
@@ -508,15 +509,54 @@ pub fn saved_podcasts() -> Vec<SavedPodcast> {
     list
 }
 
-/// Episodes of `podcast` not imported in its album yet, oldest first.
+/// Episodes of `podcast` published after the latest one imported in its
+/// album, oldest first (the older ones were left out on purpose). All of
+/// them if none was imported.
 pub fn new_episodes(podcast: &Podcast) -> Vec<Episode> {
     let imported = imported_episodes(&podcast.album_uuid());
-    podcast
+    // episodes are oldest first: after the last imported one
+    let start = podcast
         .episodes
+        .iter()
+        .rposition(|e| imported.contains(&e.guid))
+        .map_or(0, |i| i + 1);
+    podcast.episodes[start..]
         .iter()
         .filter(|e| !imported.contains(&e.guid))
         .cloned()
         .collect()
+}
+
+/// Adds `podcast` to the followed podcasts (kept if already followed).
+pub fn follow(podcast: &Podcast) -> Result<()> {
+    let mut state = load_state();
+    let key = podcast.album_uuid().to_string();
+    let episodes = state
+        .get(&key)
+        .and_then(|p| p.get("episodes"))
+        .cloned()
+        .unwrap_or_else(|| json!([]));
+    state.insert(
+        key,
+        json!({"feed": podcast.feed_url, "title": podcast.title, "episodes": episodes}),
+    );
+    save_state(&state)
+}
+
+/// Removes a podcast from the followed podcasts (its album on a device is
+/// kept, but no longer updated).
+pub fn unfollow(album: &Uuid) -> Result<()> {
+    let mut state = load_state();
+    if state.remove(&album.to_string()).is_some() {
+        save_state(&state)?;
+    }
+    Ok(())
+}
+
+fn save_state(state: &BTreeMap<String, Value>) -> Result<()> {
+    ensure_cfg_dir()?;
+    std::fs::write(state_file(), serde_json::to_vec_pretty(state)?)?;
+    Ok(())
 }
 
 /// Records the episodes of the album (`reset`: a new album, previous records dropped).
@@ -539,9 +579,7 @@ pub fn record_imported(podcast: &Podcast, guids: &[String], reset: bool) -> Resu
         uuid.to_string(),
         json!({"feed": podcast.feed_url, "title": podcast.title, "episodes": known}),
     );
-    ensure_cfg_dir()?;
-    std::fs::write(state_file(), serde_json::to_vec_pretty(&state)?)?;
-    Ok(())
+    save_state(&state)
 }
 
 #[cfg(test)]

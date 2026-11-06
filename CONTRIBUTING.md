@@ -16,9 +16,10 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   ├── src/archive.rs       lecture uniforme zip / 7z
 │   ├── src/convert/         images (BMP RLE4, LIFF) et audio (MP3, ffmpeg, volume)
 │   ├── src/device/          trait Device, Lunii v1/v2/v3, Flam ; common.rs : import
-│   │                        STUdio et ajout de pistes partagés (trait StoryWriter)
+│   │                        STUdio et modification d'album partagés (trait StoryWriter)
 │   ├── src/album/           dossier de MP3 → histoire : scan.rs (tags, sous-dossiers,
-│   │                        pochette), layout.rs (story.json), screens.rs (écrans)
+│   │                        pochette), layout.rs (story.json), screens.rs (écrans),
+│   │                        meta.rs (titres des pistes sur l'appareil, album.json)
 │   ├── src/podcast.rs       flux RSS, téléchargement, préparation de l'import
 │   ├── src/settings.rs      réglages (~/.lunii/settings.json)
 │   ├── src/firmware.rs      téléchargement des firmwares
@@ -26,10 +27,11 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   └── tests/               scénarios complets sur de faux appareils
 ├── lunii-cli/         outil en ligne de commande
 └── lunii-gui/         interface graphique Slint (binaire `lunii`)
-    ├── ui/                  écrans .slint (fenêtre principale, liste, dialogues, journal)
-    ├── src/app/             contrôleur (port de main_window.py / nm_window.py / debug_ui.py) :
-    │                        mod.rs, actions.rs (menus, enum Action), podcast.rs, log_panel.rs
-    ├── src/worker.rs        tâches longues en arrière-plan (port de ierWorker.py)
+    ├── ui/                  écrans .slint (fenêtre, liste, vue Podcasts, pistes d'album, dialogues, journal)
+    ├── src/app/             contrôleur de la fenêtre (mode nuit, journal) :
+    │                        mod.rs, actions.rs (menus, enum Action), podcast.rs (vue
+    │                        Podcasts), album.rs (pistes d'un album), log_panel.rs
+    ├── src/worker.rs        tâches longues en arrière-plan
     ├── src/i18n.rs          traductions des messages côté Rust (un test vérifie que les
     │                        messages de lunii-core sont tous traduits)
     ├── src/logfile.rs       fichier de log persistant et logger de la façade `log`
@@ -179,6 +181,11 @@ d'état (un clic sur le SNU copie les détails de l'appareil), menus et raccourc
 réglages du mode nuit, connexion Luniistore pour le firmware, journal de debug,
 vérification des mises à jour, glisser-déposer d'archives.
 
+Deux vues, au choix en haut de la fenêtre : **Histoires** (la liste de
+l'appareil) et **Podcasts**. Les dialogues (suppression, connexion, mode nuit, à
+propos) sont modaux : tant que l'un est ouvert, les menus et leurs raccourcis
+sont désactivés ; Échap ou la croix le ferme.
+
 ### Albums MP3
 
 Histoires / **Importer un album MP3** (Ctrl+Maj+I) transforme un dossier de MP3
@@ -220,12 +227,20 @@ par le chemin STUdio habituel.
 
 ### Podcasts
 
-Histoires / **Importer un podcast** (Ctrl+P) : coller l'adresse de la page du
-podcast (par exemple `https://www.radiofrance.fr/franceinter/podcasts/les-odyssees`)
-ou directement son flux RSS, puis **choisir les épisodes** à importer (filtre,
-Tous / Aucun).
+La vue **Podcasts** (ou Histoires / Importer un podcast, Ctrl+P, qui y place
+le curseur dans le champ d'adresse) :
+- **à gauche, les podcasts suivis**. On en ajoute un en collant l'adresse de sa
+  page (par exemple `https://www.radiofrance.fr/franceinter/podcasts/les-odyssees`)
+  ou de son flux RSS, puis Entrée. Leurs flux sont chargés en arrière-plan,
+  sans bloquer l'application. Sous chaque podcast : ses nouveaux épisodes si
+  son album est sur l'appareil, son nombre d'épisodes sinon. Ils sont
+  enregistrés dans `~/.lunii/podcasts.json`, comme les épisodes importés ;
+- **à droite, les épisodes** du podcast sélectionné, à cocher (filtre, Tous /
+  Aucun), le mode d'import, puis **Importer (n)**. ↻ recharge le flux, **Ne plus
+  suivre** retire le podcast de la liste (son album reste sur l'appareil, mais
+  n'est plus mis à jour).
 
-- Deux façons de les importer, au choix dans la fenêtre :
+- Deux façons de les importer :
   - **un album** (par défaut, sur Lunii comme sur Flam) : une seule histoire,
     un épisode par piste, dans l'ordre chronologique, avec un menu pour choisir
     l'épisode et l'image du podcast en couverture ;
@@ -238,24 +253,41 @@ Tous / Aucun).
 - L'UUID de l'album est dérivé de l'adresse du flux. Si l'album est déjà sur
   l'appareil, les épisodes choisis y sont **ajoutés**. Les épisodes déjà importés
   sont retenus dans `~/.lunii/podcasts.json` et grisés dans la liste.
-- **Mettre à jour les podcasts** (menu Histoires) : pour chaque podcast importé
-  en album et présent sur l'appareil, relit son flux et ajoute les épisodes pas
-  encore importés, sans rien demander. L'opération peut être interrompue.
+- **Tout mettre à jour** (ou Histoires / Mettre à jour les podcasts) : pour
+  chaque podcast suivi dont l'album est sur l'appareil, relit son flux et ajoute
+  les épisodes publiés après le plus récent déjà importé (les plus anciens
+  laissés de côté ne sont pas ajoutés), sans rien demander. L'opération peut
+  être interrompue.
 - Les épisodes de Radio France sont en M4A : ffmpeg est nécessaire pour les
   convertir. Il lit depuis un fichier temporaire et non depuis un pipe, car
   l'index de ces fichiers est à la fin.
 - Les podcasts de Radio France sont destinés à l'écoute privée : ne pas
   redistribuer les fichiers.
 
-**Ajouter des MP3 à un album** (Lunii et Flam) : sélectionner l'album, puis Histoires /
-Ajouter des MP3 à l'album. Un album créé par Lunii se reconnaît à ses noms de
-fichiers sur l'appareil (`sf/000/SNDCOVER`, `TRK00001`…), sans fichier
-supplémentaire.
-- Seuls les fichiers des nouvelles pistes sont écrits (écran, audio),
-  à la suite des pistes existantes. Les tables `ni`/`ri`/`si`/`li` (et sur
-  Lunii v1/v2 le fichier d'autorisation `bt`, dérivé de `ri`) sont
-  régénérées en dernier : si l'opération est interrompue, l'album reste tel
-  qu'il était.
+**Pistes d'un album** (Lunii et Flam, albums MP3 et podcasts importés en
+album) : le panneau de détails liste les pistes de l'album sélectionné, par
+sous-dossier s'il y en a, et permet de les modifier. Un album créé par Lunii se reconnaît à ses noms de
+fichiers sur l'appareil (`sf/000/SNDCOVER`, `TRK00001`…). Les titres, qui ne
+sont sinon que dessinés dans les écrans, sont gardés en texte dans
+`album.json`, dans le dossier de l'histoire (JSON non chiffré, ignoré par les
+conteuses et exclu des exports « plain »). Pour les albums importés avant ce
+fichier, les titres sont inconnus : « Piste 1 », « Piste 2 »…
+
+**Modifier un album** : dans le panneau de détails de l'album, choisir une
+piste puis ▲ / ▼ / Supprimer, ou Ajouter des MP3… ; Appliquer écrit tout en une
+fois, Annuler revient à l'album de l'appareil. Changer de sélection abandonne
+les changements non appliqués. Histoires / Modifier l'album affiche le panneau
+s'il est masqué ; Ajouter des MP3 à l'album ajoute directement à la fin. Pas
+disponible pour les albums à sous-dossiers (leurs pistes sont seulement
+listées).
+- Les nouvelles pistes et les écrans des pistes déplacées (leur numéro change)
+  sont d'abord préparés dans un dossier temporaire : si l'opération est
+  interrompue à ce stade, l'album reste tel qu'il était. Les fichiers sont
+  ensuite renommés sur place, puis les tables `ni`/`ri`/`si`/`li` (et sur
+  Lunii v1/v2 le fichier d'autorisation `bt`, dérivé de `ri`) régénérées.
+- Une piste déplacée dont le titre est inconnu garde son ancien écran, donc
+  son ancien numéro.
+- La description « Artiste - N MP3 » suit le nouveau nombre de pistes.
 - Les écrans de piste affichent leur numéro seul, sans « n / total », qui
   deviendrait faux après un ajout. Les albums importés avant ce changement
   gardent leurs « n / total » sur les pistes déjà présentes.
@@ -273,8 +305,8 @@ La langue suit le système (français ou anglais) ; `LUNII_LANG=en` ou
 | `LUNII_CFG_DIR=…` | autre répertoire de configuration que `~/.lunii` |
 | `LUNII_LANG=fr` / `en` | force la langue |
 | `LUNII_SCREENSHOT=<dossier>` | (feature `screenshot`) rend les écrans en PNG sans affichage, puis quitte |
-| `LUNII_SHOT_FEED=<flux.xml>` | (captures) ajoute la fenêtre podcast, avec ce flux RSS local |
-| `LUNII_SHOT_IMPORT=<a>:<b>` | (captures) importe ces archives par l'interface, pour capturer la progression |
+| `LUNII_SHOT_FEED=<flux.xml>` | (captures) ajoute la vue Podcasts, avec ce flux RSS local suivi |
+| `LUNII_SHOT_IMPORT=<a>:<b>` | (captures) importe ces archives ou dossiers par l'interface ; si le dernier est un album, capture aussi ses pistes et son dialogue de modification (qui est appliquée) |
 
 Captures d'écran sans affichage (rendu logiciel), avec la feature `screenshot` :
 
