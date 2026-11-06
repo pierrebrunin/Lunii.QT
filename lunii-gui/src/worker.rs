@@ -101,6 +101,13 @@ pub struct StoryInfo {
     pub album: bool,
 }
 
+/// A device opened in the background, with what the UI needs (read there too).
+pub struct OpenedDevice {
+    pub dev: Box<dyn Device>,
+    pub info: crate::app::DevInfo,
+    pub stories: Vec<StoryInfo>,
+}
+
 pub fn snapshot(dev: &dyn Device) -> Vec<StoryInfo> {
     dev.stories()
         .iter()
@@ -140,8 +147,8 @@ pub enum Event {
     Details(Uuid, String, Option<Vec<u8>>),
     /// Background device search done (search id, devices and their names)
     DevicesFound(u32, Vec<PathBuf>, Vec<String>),
-    /// Background device opening done (search id, path, device or error)
-    DeviceOpened(u32, PathBuf, Result<Box<dyn Device>, String>),
+    /// Background device opening done (search id, device or error)
+    DeviceOpened(u32, Result<Box<OpenedDevice>, String>),
     Finished,
 }
 

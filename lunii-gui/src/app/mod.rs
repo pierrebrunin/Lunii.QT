@@ -112,7 +112,7 @@ fn format_eta(d: Duration) -> String {
 }
 
 /// Cached details of the opened device.
-struct DevInfo {
+pub(crate) struct DevInfo {
     mount: PathBuf,
     version: DeviceVersion,
     snu: String,
@@ -702,19 +702,28 @@ impl App {
         let ctx = self.ctx();
         let sink = sink();
         std::thread::spawn(move || {
-            let opened = device::open_device(&ctx, &path).map_err(|e| format!("{e:#}"));
-            sink(Event::DeviceOpened(scan, path, opened));
+            // everything that reads the device (all the stories) is done here
+            let opened = device::open_device(&ctx, &path)
+                .map(|dev| {
+                    Box::new(worker::OpenedDevice {
+                        info: describe_device(dev.as_ref(), &path),
+                        stories: worker::snapshot(dev.as_ref()),
+                        dev,
+                    })
+                })
+                .map_err(|e| format!("{e:#}"));
+            sink(Event::DeviceOpened(scan, opened));
         });
     }
 
-    fn device_opened(&self, scan: u32, path: PathBuf, opened: Result<Box<dyn Device>, String>) {
+    fn device_opened(&self, scan: u32, opened: Result<Box<worker::OpenedDevice>, String>) {
         if scan != self.state.borrow().scan {
             return;
         }
         let ui = self.ui();
         ui.set_scanning(false);
-        let dev = match opened {
-            Ok(d) => d,
+        let worker::OpenedDevice { dev, info, stories } = match opened {
+            Ok(d) => *d,
             Err(e) => {
                 let error = tr("🛑 PermissionError : Unable to open this device");
                 self.log(Level::Error, &e);
@@ -722,35 +731,8 @@ impl App {
                 return;
             }
         };
-        let version = dev.version();
+        let version = info.version;
         let is_flam = version == DeviceVersion::FlamV1;
-        let lunii = dev.as_lunii();
-        let firmware = if is_flam {
-            dev.info()
-                .lines()
-                .find_map(|l| l.strip_prefix("- Main firmware : ").map(str::to_string))
-                .unwrap_or_default()
-        } else {
-            lunii.map(|l| l.firmware()).unwrap_or_default()
-        };
-        let model = tr(&version.to_string());
-        let hw_text = format!("{model}, FW: {firmware}");
-        let export_all = is_flam
-            || version < DeviceVersion::LuniiV3
-            || lunii.is_some_and(|l| l.device_key.is_some());
-        let info = DevInfo {
-            mount: path.clone(),
-            version,
-            snu: dev.snu_str(),
-            info: dev.info(),
-            model,
-            firmware,
-            hw_text,
-            can_import: dev.can_import(),
-            export_all,
-            config: lunii.map(|l| l.config.clone()),
-        };
-        let stories = worker::snapshot(dev.as_ref());
         let sizes_unknown = stories.iter().any(|s| s.size.is_none());
         let nm_active = info
             .config
@@ -1204,7 +1186,7 @@ impl App {
             Event::Log(level, msg) => self.log(level, &msg),
             Event::Status(msg) => self.status(&msg),
             Event::DevicesFound(scan, devices, labels) => self.devices_found(scan, devices, labels),
-            Event::DeviceOpened(scan, path, opened) => self.device_opened(scan, path, opened),
+            Event::DeviceOpened(scan, opened) => self.device_opened(scan, opened),
             Event::ShowLog => self.show_log(),
             Event::Total(current, total) => {
                 ui.set_total_visible(true);
@@ -1245,14 +1227,15 @@ impl App {
                     self.log(Level::Warn, "Failed to fetch official DB");
                 }
                 let device = self.state.borrow().device.clone();
-                // busy: the task refreshes the list at its end
-                if let (Some(dev), false) = (device, ui.get_busy())
-                    && let Ok(dev) = Self::lock_device(&dev)
-                {
-                    let stories = worker::snapshot(dev.as_ref());
-                    drop(dev);
-                    self.state.borrow_mut().stories = stories;
-                    self.rebuild_rows();
+                // the names may have changed: list read again in the background
+                // (busy: the task refreshes the list at its end)
+                if let (Some(dev), false) = (device, ui.get_busy()) {
+                    let sink = sink();
+                    std::thread::spawn(move || {
+                        if let Ok(dev) = Self::lock_device(&dev) {
+                            sink(Event::Stories(worker::snapshot(dev.as_ref())));
+                        }
+                    });
                 }
             }
             Event::DbRefreshed(ok) => {
@@ -1340,6 +1323,38 @@ fn dirs_home() -> PathBuf {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
         .map(PathBuf::from)
         .unwrap_or_default()
+}
+
+/// Details of an opened device (reads it: in the background).
+fn describe_device(dev: &dyn Device, path: &Path) -> DevInfo {
+    let version = dev.version();
+    let is_flam = version == DeviceVersion::FlamV1;
+    let lunii = dev.as_lunii();
+    let info = dev.info();
+    let firmware = if is_flam {
+        info.lines()
+            .find_map(|l| l.strip_prefix("- Main firmware : ").map(str::to_string))
+            .unwrap_or_default()
+    } else {
+        lunii.map(|l| l.firmware()).unwrap_or_default()
+    };
+    let model = tr(&version.to_string());
+    let hw_text = format!("{model}, FW: {firmware}");
+    let export_all = is_flam
+        || version < DeviceVersion::LuniiV3
+        || lunii.is_some_and(|l| l.device_key.is_some());
+    DevInfo {
+        mount: path.to_path_buf(),
+        version,
+        snu: dev.snu_str(),
+        info,
+        model,
+        firmware,
+        hw_text,
+        can_import: dev.can_import(),
+        export_all,
+        config: lunii.map(|l| l.config.clone()),
+    }
 }
 
 /// Names of the devices in the selector: their model ("Lunii v3", "Flam"),
