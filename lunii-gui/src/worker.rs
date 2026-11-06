@@ -138,6 +138,10 @@ pub enum Event {
     FirmwareFiles(AuthToken, Vec<String>),
     UpdateCheck(Option<String>),
     Details(Uuid, String, Option<Vec<u8>>),
+    /// Background device search done (search id, devices and their names)
+    DevicesFound(u32, Vec<PathBuf>, Vec<String>),
+    /// Background device opening done (search id, path, device or error)
+    DeviceOpened(u32, PathBuf, Result<Box<dyn Device>, String>),
     Finished,
 }
 

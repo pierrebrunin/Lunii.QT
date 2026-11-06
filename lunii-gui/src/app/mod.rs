@@ -132,6 +132,8 @@ struct State {
     devices: Vec<PathBuf>,
     /// names of `devices` in the selector
     device_labels: Vec<String>,
+    /// id of the last device search / opening: older results are ignored
+    scan: u32,
     device: Option<SharedDevice>,
     dev: Option<DevInfo>,
     stories: Vec<StoryInfo>,
@@ -580,6 +582,10 @@ impl App {
 
     fn set_devices(&self, devices: Vec<PathBuf>) {
         let labels = device_labels(&devices);
+        self.set_devices_labelled(devices, labels);
+    }
+
+    fn set_devices_labelled(&self, devices: Vec<PathBuf>, labels: Vec<String>) {
         self.devices_model.set_vec(
             labels
                 .iter()
@@ -591,19 +597,46 @@ impl App {
         st.device_labels = labels;
     }
 
+    /// A new device search / opening: its id, the previous ones are outdated.
+    fn next_scan(&self) -> u32 {
+        let mut st = self.state.borrow_mut();
+        st.scan = st.scan.wrapping_add(1);
+        st.scan
+    }
+
+    /// Searches the devices in the background (slow drives, network mounts:
+    /// the window stays responsive), see `devices_found`.
     pub fn refresh_devices(&self) {
-        // LUNII_DEVICES replaces the detection (tests, or devices mounted elsewhere)
-        let devices = match std::env::var_os("LUNII_DEVICES") {
-            Some(list) => std::env::split_paths(&list)
-                .filter(|p| device::is_lunii(p) || device::is_flam(p))
-                .collect(),
-            None => device::find_devices(None),
-        };
+        let scan = self.next_scan();
         self.close_device();
-        self.set_devices(devices.clone());
+        self.set_devices_labelled(Vec::new(), Vec::new());
         let ui = self.ui();
         self.set_device_index(-1);
         ui.set_device_icon(lunii_icon());
+        ui.set_scanning(true);
+        ui.set_device_placeholder(tr("Searching for devices...").into());
+        self.status(&tr("🔍 Searching for Lunii and Flam devices..."));
+        let sink = sink();
+        std::thread::spawn(move || {
+            // LUNII_DEVICES replaces the detection (tests, or devices mounted elsewhere)
+            let devices: Vec<PathBuf> = match std::env::var_os("LUNII_DEVICES") {
+                Some(list) => std::env::split_paths(&list)
+                    .filter(|p| device::is_lunii(p) || device::is_flam(p))
+                    .collect(),
+                None => device::find_devices(None),
+            };
+            let labels = device_labels(&devices);
+            sink(Event::DevicesFound(scan, devices, labels));
+        });
+    }
+
+    fn devices_found(&self, scan: u32, devices: Vec<PathBuf>, labels: Vec<String>) {
+        if scan != self.state.borrow().scan {
+            return;
+        }
+        let ui = self.ui();
+        ui.set_scanning(false);
+        self.set_devices_labelled(devices.clone(), labels);
         self.status("");
 
         if devices.is_empty() {
@@ -655,17 +688,40 @@ impl App {
             return;
         }
 
-        let opened = device::open_device(&self.ctx(), &path);
+        // read in the background (all the stories): see `device_opened`
+        let scan = self.next_scan();
+        let label = self
+            .state
+            .borrow()
+            .device_labels
+            .get(index as usize)
+            .cloned()
+            .unwrap_or_default();
+        ui.set_scanning(true);
+        self.status(&trf("⏳ Reading {}...", &[&label]));
+        let ctx = self.ctx();
+        let sink = sink();
+        std::thread::spawn(move || {
+            let opened = device::open_device(&ctx, &path).map_err(|e| format!("{e:#}"));
+            sink(Event::DeviceOpened(scan, path, opened));
+        });
+    }
+
+    fn device_opened(&self, scan: u32, path: PathBuf, opened: Result<Box<dyn Device>, String>) {
+        if scan != self.state.borrow().scan {
+            return;
+        }
+        let ui = self.ui();
+        ui.set_scanning(false);
         let dev = match opened {
             Ok(d) => d,
             Err(e) => {
                 let error = tr("🛑 PermissionError : Unable to open this device");
-                self.log(Level::Error, &format!("{e:#}"));
+                self.log(Level::Error, &e);
                 self.status(&error);
                 return;
             }
         };
-
         let version = dev.version();
         let is_flam = version == DeviceVersion::FlamV1;
         let lunii = dev.as_lunii();
@@ -1147,6 +1203,8 @@ impl App {
         match event {
             Event::Log(level, msg) => self.log(level, &msg),
             Event::Status(msg) => self.status(&msg),
+            Event::DevicesFound(scan, devices, labels) => self.devices_found(scan, devices, labels),
+            Event::DeviceOpened(scan, path, opened) => self.device_opened(scan, path, opened),
             Event::ShowLog => self.show_log(),
             Event::Total(current, total) => {
                 ui.set_total_visible(true);

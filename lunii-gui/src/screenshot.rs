@@ -102,6 +102,9 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     let app = App::new(&ui);
     ui.show()?;
     app.start();
+    // search in progress: the waiting indicator
+    pump(&queue, 0);
+    render(0, &out.join(format!("{lang}-00-searching.png")));
     pump(&queue, 300);
     if ui.get_device_index() < 0 && app_devices(&ui) > 0 {
         ui.set_device_index(0);

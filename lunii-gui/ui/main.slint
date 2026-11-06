@@ -1,6 +1,6 @@
 // Main window.
 
-import { ComboBox, LineEdit, ProgressIndicator, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
+import { ComboBox, LineEdit, ProgressIndicator, Spinner, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
 import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow, ViewSwitch } from "common.slint";
 import { StoryTable } from "story_table.slint";
 import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, DeviceInfoDialog } from "dialogs.slint";
@@ -73,6 +73,8 @@ export component MainWindow inherits Window {
 
     // progress
     in property <bool> busy;
+    // devices being searched or opened (in the background)
+    in property <bool> scanning;
     in property <string> total-text;
     in property <float> total-progress;
     in property <bool> total-visible;
@@ -183,7 +185,7 @@ export component MainWindow inherits Window {
 
     // a dialog is open: the menus (and their shortcuts) are disabled
     property <bool> modal: root.dialog != DialogKind.none;
-    property <bool> idle: !root.busy && !root.modal;
+    property <bool> idle: !root.busy && !root.scanning && !root.modal;
     property <bool> story-actions: root.device-ready && root.idle;
     // after the change, whatever toggled it (menu, settings)
     changed show-size => { root.action(Action.show-size); }
@@ -266,10 +268,19 @@ export component MainWindow inherits Window {
         // ---------------------------------------------------------------- top bar
         HorizontalLayout {
             spacing: 4px;
-            IconButton {
+            if !root.scanning: IconButton {
                 icon: @image-url("../../res/refresh.png");
                 enabled: !root.busy;
                 clicked => { root.action(Action.refresh-devices); }
+            }
+            // devices being searched / opened: wait
+            if root.scanning: Rectangle {
+                width: 30px;
+                Spinner {
+                    indeterminate: true;
+                    width: 22px;
+                    height: 22px;
+                }
             }
             Rectangle {
                 max-width: 220px;
@@ -279,7 +290,7 @@ export component MainWindow inherits Window {
                     model: root.devices;
                     current-index <=> root.device-index;
                     current-value <=> root.device-value;
-                    enabled: !root.busy && root.devices.length > 0;
+                    enabled: !root.busy && !root.scanning && root.devices.length > 0;
                     selected => { root.device-selected(self.current-index); }
                 }
                 if root.device-index < 0: Text {

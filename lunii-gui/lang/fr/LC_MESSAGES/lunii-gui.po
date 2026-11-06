@@ -1142,3 +1142,12 @@ msgstr "Import d'histoires"
 
 msgid "Unknown device"
 msgstr "Appareil inconnu"
+
+msgid "Searching for devices..."
+msgstr "Recherche des appareils…"
+
+msgid "🔍 Searching for Lunii and Flam devices..."
+msgstr "🔍 Recherche des Lunii et Flam…"
+
+msgid "⏳ Reading {}..."
+msgstr "⏳ Lecture de {}…"
