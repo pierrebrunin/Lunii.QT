@@ -191,7 +191,7 @@ Lunii vous offre la possibilité de sauvegarder la dernière version du Firmware
 ### Guide Pratique - Lunii
 1. Récupération du firmware
    1. Sélectionnez une Lunii
-   2. Menu **Outils/Récupérer le firmware**
+   2. Menu **Outils/Avancé/Récupérer le firmware**
    3. Vous serez invité à vous connecter  
    <img src="./res/screenshot_login.png" width="170">  
 
@@ -219,7 +219,7 @@ Lunii vous offre la possibilité de sauvegarder la dernière version du Firmware
 ### Guide Pratique - Flam
 1. Récupération du firmware
    1. Sélectionnez votre Flam dans la liste des appareils
-   2. Menu **Outils/Récupérer le firmware**
+   2. Menu **Outils/Avancé/Récupérer le firmware**
    3. Vous serez invité à vous connecter  
    <img src="./res/screenshot_login.png" width="170">  
 

@@ -188,7 +188,7 @@ Lunii allows you to backup the latest firmware version available from Lunii serv
 ### HowTo - Lunii
 1. Firmware retrieval  
    1. Select a Lunii/Flam device
-   2. Menu **Tools/Get FW Update**
+   2. Menu **Tools/Advanced/Get FW Update**
    3. You'll be prompted for login entry  
    <img src="./res/screenshot_login.png" width="170">  
 
@@ -216,7 +216,7 @@ Lunii allows you to backup the latest firmware version available from Lunii serv
 ### HowTo - Flam
 1. Firmware retrieval  
    1. Select a Flam device
-   2. Menu **Tools/Get FW** Update
+   2. Menu **Tools/Advanced/Get FW Update**
    3. You'll be prompted for login entry  
    <img src="./res/screenshot_login.png" width="170">  
 

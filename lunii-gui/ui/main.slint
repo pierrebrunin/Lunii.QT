@@ -218,23 +218,26 @@ export component MainWindow inherits Window {
             MenuItem { enabled: !root.modal; title: @tr("Show size"); checkable: true; checked <=> root.show-size; activated => { root.action(Action.show-size); } }
             MenuItem { enabled: !root.modal; title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action(Action.show-details); } }
             MenuSeparator { }
-            MenuItem { enabled: !root.modal; title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action(Action.show-log); } }
-            MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action(Action.get-firmware); } }
-            MenuSeparator { }
-            Menu {
-                title: @tr("Lost stories");
-                enabled: root.story-actions;
-                MenuItem { enabled: !root.modal; title: @tr("Find"); activated => { root.action(Action.find-lost); } }
-                MenuItem { enabled: !root.modal; title: @tr("Recover"); activated => { root.action(Action.recover-lost); } }
-                MenuItem { enabled: !root.modal; title: @tr("Remove"); activated => { root.action(Action.remove-lost); } }
-            }
-            MenuSeparator { }
             MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: root.ffmpeg-present && !root.modal; activated => { root.action(Action.normalize-volume); } }
             MenuItem {
                 title: root.ffmpeg-present ? @tr("FFMPEG detected") : @tr("FFMPEG is missing (📥)");
                 checked: root.ffmpeg-present;
                 enabled: root.idle;
                 activated => { root.action(Action.ffmpeg); }
+            }
+            MenuSeparator { }
+            Menu {
+                title: @tr("Advanced");
+                MenuItem { enabled: !root.modal; title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action(Action.show-log); } }
+                MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action(Action.get-firmware); } }
+                MenuSeparator { }
+                Menu {
+                    title: @tr("Lost stories");
+                    enabled: root.story-actions;
+                    MenuItem { enabled: !root.modal; title: @tr("Find"); activated => { root.action(Action.find-lost); } }
+                    MenuItem { enabled: !root.modal; title: @tr("Recover"); activated => { root.action(Action.recover-lost); } }
+                    MenuItem { enabled: !root.modal; title: @tr("Remove"); activated => { root.action(Action.remove-lost); } }
+                }
             }
         }
         Menu {

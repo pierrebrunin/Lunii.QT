@@ -408,6 +408,9 @@ msgstr "&Outils"
 msgid "Tools"
 msgstr "Outils"
 
+msgid "Advanced"
+msgstr "Avancé"
+
 msgid "Lost stories"
 msgstr "Histoires perdues"
 
@@ -996,8 +999,8 @@ msgstr "Histoire perdue ignorée (semble abîmée ou incomplète) - {}"
 msgid "Story dir {} does not exist or already {}"
 msgstr "Le dossier d'histoire {} n'existe pas ou est déjà {}"
 
-msgid "💡 Try to use menu 'Tools/Recover or Remove lost stories' to fix it"
-msgstr "💡 Essayez le menu « Outils / Histoires perdues » (Récupérer ou Supprimer) pour corriger"
+msgid "💡 Try to use menu 'Tools/Advanced/Lost stories' (Recover or Remove) to fix it"
+msgstr "💡 Essayez le menu « Outils / Avancé / Histoires perdues » (Récupérer ou Supprimer) pour corriger"
 
 msgid "🔊 Normalizing the volume : {}"
 msgstr "🔊 Égalisation du volume : {}"
