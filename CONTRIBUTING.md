@@ -232,7 +232,10 @@ La vue **Podcasts** (ou Histoires / Importer un podcast, Ctrl+P, qui y place
 le curseur dans le champ d'adresse) :
 - **à gauche, les podcasts suivis**. On en ajoute un en collant l'adresse de sa
   page (par exemple `https://www.radiofrance.fr/franceinter/podcasts/les-odyssees`)
-  ou de son flux RSS, puis Entrée. Leurs flux sont chargés en arrière-plan,
+  ou de son flux RSS, puis Entrée. Les séries et sélections Radio France
+  n'ont pas de flux : leurs épisodes sont lus sur la page de chacun (ceux qui
+  renvoient vers une autre série, sans audio dans la page, sont ignorés).
+  Leurs flux sont chargés en arrière-plan,
   sans bloquer l'application. Sous chaque podcast : ses nouveaux épisodes si
   son album est sur l'appareil, son nombre d'épisodes sinon. Ils sont
   enregistrés dans `~/.lunii/podcasts.json`, comme les épisodes importés ;

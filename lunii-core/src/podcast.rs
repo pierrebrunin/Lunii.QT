@@ -7,7 +7,9 @@
 //! `~/.lunii/podcasts.json`.
 //!
 //! The address can be the feed itself or a web page announcing it (Radio
-//! France podcast pages, `<link rel="alternate" type="application/rss+xml">`).
+//! France podcast pages, `<link rel="alternate" type="application/rss+xml">`),
+//! or a Radio France series or selection page, without feed: its episodes are
+//! then read from their own pages.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -130,19 +132,191 @@ pub fn fetch(address: &str) -> Result<Podcast> {
         bail!("The podcast address must start with https://");
     }
     let body = get_text(address)?;
-    let (feed_url, feed) = if looks_like_feed(&body) {
-        (address.to_string(), body)
-    } else {
-        let feed_url = feed_in_page(&body).context("No podcast feed found at this address")?;
-        let feed = get_text(&feed_url)?;
-        (feed_url, feed)
-    };
-    parse_feed(&feed_url, &feed)
+    if looks_like_feed(&body) {
+        return parse_feed(address, &body);
+    }
+    match feed_in_page(&body) {
+        Some(feed_url) => parse_feed(&feed_url, &get_text(&feed_url)?),
+        None => page_podcast(address, &body),
+    }
 }
 
-/// Loads a podcast from its feed address (no web page lookup).
+/// Loads a followed podcast from its address: a feed, or a page listing its
+/// episodes (see [`page_podcast`]).
 pub fn parse_feed_url(feed_url: &str) -> Result<Podcast> {
-    parse_feed(feed_url, &get_text(feed_url)?)
+    let body = get_text(feed_url)?;
+    if looks_like_feed(&body) {
+        parse_feed(feed_url, &body)
+    } else {
+        page_podcast(feed_url, &body)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pages without feed (Radio France series and selections)
+// ---------------------------------------------------------------------------
+
+/// The schema.org objects of a page (`<script type="application/ld+json">`,
+/// `@graph` flattened).
+fn json_ld(page: &str) -> Vec<Value> {
+    const START: &str = "<script type=\"application/ld+json\"";
+    let mut objects = Vec::new();
+    let mut rest = page;
+    while let Some(pos) = rest.find(START) {
+        rest = &rest[pos + START.len()..];
+        let Some(open) = rest.find('>') else { break };
+        let Some(close) = rest.find("</script>") else {
+            break;
+        };
+        if open < close
+            && let Ok(value) = serde_json::from_str::<Value>(&rest[open + 1..close])
+        {
+            match value.get("@graph").and_then(Value::as_array) {
+                Some(graph) => objects.extend(graph.iter().cloned()),
+                None => objects.push(value),
+            }
+        }
+        rest = &rest[close..];
+    }
+    objects
+}
+
+fn of_type<'a>(objects: &'a [Value], kind: &str) -> impl Iterator<Item = &'a Value> {
+    objects
+        .iter()
+        .filter(move |o| o.get("@type").and_then(Value::as_str) == Some(kind))
+}
+
+fn str_field(object: &Value, name: &str) -> Option<String> {
+    object
+        .get(name)
+        .and_then(Value::as_str)
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// `content` of `<meta property="og:{name}">`.
+fn og_meta(page: &str, name: &str) -> Option<String> {
+    let tag = format!("<meta property=\"og:{name}\" content=\"");
+    let start = page.find(&tag)? + tag.len();
+    let value = &page[start..start + page[start..].find('"')?];
+    Some(value.trim().to_string()).filter(|v| !v.is_empty())
+}
+
+/// ISO 8601 duration (`P0Y0M0DT0H22M50S`) in seconds.
+fn parse_iso_duration(value: &str) -> Option<u32> {
+    let time = value.split_once('T')?.1;
+    let mut total = 0;
+    let mut number = String::new();
+    for c in time.chars() {
+        if c.is_ascii_digit() {
+            number.push(c);
+            continue;
+        }
+        let n: u32 = number.parse().ok()?;
+        number.clear();
+        total += n * match c {
+            'H' => 3600,
+            'M' => 60,
+            'S' => 1,
+            _ => return None,
+        };
+    }
+    Some(total)
+}
+
+/// The episode described by an episode page (`RadioEpisode` and its audio).
+fn page_episode(url: &str, page: &str) -> Option<Episode> {
+    let objects = json_ld(page);
+    let episode = of_type(&objects, "RadioEpisode").find(|e| {
+        e.pointer("/mainEntity/contentUrl")
+            .and_then(Value::as_str)
+            .is_some()
+    })?;
+    let audio = episode.get("mainEntity")?;
+    // "Title : épisode 1/4 du podcast ... | France Culture": the article headline
+    let title = of_type(&objects, "NewsArticle")
+        .find_map(|a| str_field(a, "headline"))
+        .or_else(|| {
+            str_field(episode, "name").map(|n| n.split(" | ").next().unwrap_or(&n).to_string())
+        })
+        .unwrap_or_else(|| "?".into());
+    Some(Episode {
+        guid: url.to_string(),
+        title,
+        date: str_field(episode, "dateCreated")
+            .map(|d| d.chars().take(10).collect())
+            .unwrap_or_default(),
+        duration: str_field(audio, "duration").and_then(|d| parse_iso_duration(&d)),
+        url: str_field(audio, "contentUrl")?,
+        size: None,
+    })
+}
+
+/// The pages listed by a page (`ItemList`), in order.
+fn listed_pages(page: &str) -> Vec<String> {
+    of_type(&json_ld(page), "ItemList")
+        .filter_map(|l| l.get("itemListElement").and_then(Value::as_array))
+        .flatten()
+        .filter_map(|item| str_field(item, "url"))
+        .collect()
+}
+
+/// A podcast made from a page without feed that lists episode pages
+/// (Radio France series and selections): each episode is read from its page.
+/// The listed pages that are not episodes (other series) are skipped.
+fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
+    let mut urls = listed_pages(page);
+    // next pages of the list: `?p=2`...
+    let base = page_url.split(['?', '#']).next().unwrap_or(page_url);
+    let path = base
+        .split_once("://")
+        .map_or(base, |(_, p)| &p[p.find('/').unwrap_or(p.len())..]);
+    let mut next = 2;
+    let mut current = page.to_string();
+    while next <= 20 && current.contains(&format!("{path}?p={next}\"")) {
+        current = get_text(&format!("{base}?p={next}"))?;
+        urls.extend(listed_pages(&current));
+        next += 1;
+    }
+    let mut seen = HashSet::new();
+    urls.retain(|u| seen.insert(u.clone()));
+    if urls.is_empty() {
+        bail!("No podcast feed found at this address");
+    }
+
+    let episodes: Vec<Option<Episode>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = urls
+            .iter()
+            .map(|url| scope.spawn(move || get_text(url).ok().and_then(|p| page_episode(url, &p))))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().ok().flatten())
+            .collect()
+    });
+    let skipped = episodes.iter().filter(|e| e.is_none()).count();
+    let episodes: Vec<Episode> = episodes.into_iter().flatten().collect();
+    if episodes.is_empty() {
+        bail!("No podcast feed found at this address");
+    }
+    if skipped > 0 {
+        log::warn!("{page_url}: {skipped} listed page(s) without audio skipped");
+    }
+
+    let objects = json_ld(page);
+    let title = of_type(&objects, "WebPage")
+        .filter_map(|p| str_field(p, "name"))
+        .find(|n| !n.starts_with("Écouter"))
+        .or_else(|| og_meta(page, "title"))
+        .unwrap_or_else(|| "Podcast".into());
+    Ok(Podcast {
+        feed_url: page_url.to_string(),
+        title,
+        author: None,
+        image_url: og_meta(page, "image"),
+        episodes,
+    })
 }
 
 const ITUNES: &str = "http://www.itunes.com/dtds/podcast-1.0.dtd";
@@ -667,5 +841,29 @@ mod tests {
         assert_eq!(parse_date("n'importe quoi").0, "");
         assert_eq!(parse_duration("59:30"), Some(3570));
         assert_eq!(parse_duration("abc"), None);
+    }
+
+    #[test]
+    fn radio_france_episode_page() {
+        let page = r#"<head><meta property="og:image" content="https://img/x.jpg">
+<script type="application/ld+json" data-x="1">{"@context":"https://schema.org","@graph":[
+ {"@type":"NewsArticle","headline":"Une étrange coïncidence"},
+ {"@type":"RadioEpisode","name":"Une étrange coïncidence : épisode 1/4 | France Culture",
+  "dateCreated":"2023-06-24T08:06:00.000Z",
+  "mainEntity":{"@type":"AudioObject","contentUrl":"https://media/a.m4a","duration":"P0Y0M0DT0H22M50S"}}
+]}</script></head>"#;
+        let e = page_episode("https://rf/ep-1", page).unwrap();
+        assert_eq!(e.title, "Une étrange coïncidence");
+        assert_eq!(e.date, "2023-06-24");
+        assert_eq!(e.duration, Some(22 * 60 + 50));
+        assert_eq!(e.url, "https://media/a.m4a");
+        assert_eq!(e.guid, "https://rf/ep-1");
+        assert_eq!(og_meta(page, "image").as_deref(), Some("https://img/x.jpg"));
+        // a series page: no audio, but the list of its episodes
+        let series = r#"<script type="application/ld+json">{"@type":"ItemList","itemListElement":[
+ {"@type":"ListItem","position":1,"url":"https://rf/ep-1"},{"@type":"ListItem","position":2,"url":"https://rf/ep-2"}]}</script>"#;
+        assert!(page_episode("https://rf/serie", series).is_none());
+        assert_eq!(listed_pages(series), ["https://rf/ep-1", "https://rf/ep-2"]);
+        assert_eq!(parse_iso_duration("PT1H2M3S"), Some(3723));
     }
 }
