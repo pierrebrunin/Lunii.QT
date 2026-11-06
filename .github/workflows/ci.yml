@@ -29,8 +29,6 @@ jobs:
 
       # Rust toolchain pinned in mise.toml
       - uses: jdx/mise-action@v5
-        with:
-          install_args: rust
 
       - uses: Swatinem/rust-cache@v2
 
