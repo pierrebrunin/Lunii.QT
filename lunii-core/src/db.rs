@@ -1,7 +1,6 @@
 //! Story databases (official Lunii DB + third-party / STUdio DB) and thumbnails cache.
 //!
-//! Port of the `DB_OFFICIAL` / `DB_THIRD_PARTY` globals of `pkg/api/stories.py`.
-//! The files are shared with the Python application (`~/.lunii/official.db`,
+//! The files are shared with earlier versions (`~/.lunii/official.db`,
 //! `~/.lunii/third-party.db`, `~/.lunii/cache/`).
 
 use std::sync::{LazyLock, Mutex, RwLock};
@@ -60,7 +59,7 @@ fn load_db_file(path: &std::path::Path) -> Option<IndexMap<String, Value>> {
     let parsed: Map<String, Value> = match serde_json::from_slice(&content) {
         Ok(m) => m,
         Err(_) => {
-            // corrupted file, removing it (as the Python version does)
+            // corrupted file, removing it
             let _ = std::fs::remove_file(path);
             return None;
         }

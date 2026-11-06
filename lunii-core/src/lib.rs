@@ -1,6 +1,6 @@
 //! # lunii-core
 //!
-//! Rust port of the Lunii business logic (`pkg/api`): management of Lunii
+//! Lunii business logic: management of Lunii
 //! (v1, v2, v3) and Flam storytellers, story import / export, STUdio
 //! conversion, story databases and firmware download.
 //!

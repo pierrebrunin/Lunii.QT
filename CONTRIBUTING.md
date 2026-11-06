@@ -1,15 +1,8 @@
 # Lunii — développement
 
-Version Rust de Lunii. Elle remplace l'application Python, qui a été
-supprimée du dépôt ; elle reste consultable dans l'historique git
-(jusqu'au commit `c8afe43`).
-
-| Étape | Contenu | État |
-|-------|---------|------|
-| 1 | `lunii-core` (port de `pkg/api`) + `lunii-cli` | ✅ fait |
-| 2 | `lunii-gui` : interface [Slint](https://slint.dev) (port de `pkg/ui`, `main_window.py`, workers) | ✅ fait |
-| 3 | Suppression du code Python | ✅ fait |
-| 4 | Packaging et CI (Windows / macOS / Linux) | ✅ fait |
+Lunii est écrit en Rust, avec une interface [Slint](https://slint.dev).
+Les versions 3.1 et antérieures, en Python, restent consultables dans
+l'historique git, jusqu'au commit `c8afe43`.
 
 ## Organisation
 
@@ -54,14 +47,14 @@ renommé en `~/.lunii` au premier lancement.
 ## Prérequis
 
 - **[mise](https://mise.jdx.dev)** : les versions des outils (Rust avec
-  `rustfmt` et `clippy`, Python) sont fixées dans `mise.toml`, à la racine du
+  `rustfmt` et `clippy`) sont fixées dans `mise.toml`, à la racine du
   dépôt, et nulle part ailleurs. La CI lit le même fichier. Pour les
   installer :
   ```bash
   mise install
   ```
   mise installe rustup s'il manque, puis la toolchain demandée. Pour changer
-  de version de Rust ou de Python, il suffit de modifier `mise.toml`.
+  de version de Rust, il suffit de modifier `mise.toml`.
 - **Linux** : un compilateur C, `pkg-config` et les en-têtes fontconfig
   (Slint). Sur Debian / Ubuntu :
   ```bash
@@ -76,8 +69,6 @@ renommé en `~/.lunii` au premier lancement.
 - **ffmpeg** (facultatif) : transcodage de l'audio non conforme, podcasts M4A,
   égalisation du volume. Il est cherché dans `~/.lunii`, puis dans le
   `PATH`. Sans lui, les tests qui en ont besoin sont ignorés (ils l'indiquent).
-- **Python** (installé par mise) : seulement pour régénérer le fichier de
-  traduction (voir [Traductions](#traductions)).
 
 ## Compilation
 
@@ -326,10 +317,11 @@ nommés du code (`{name}`) s'écrivent `{}` dans le `.po`.
   tournent en arrière-plan au lieu de bloquer l'interface.
 - **Raccourci F2** (déblocage de l'export des histoires officielles) : il n'est
   pas repris.
-- **Factory reset** : l'entrée était cachée et non implémentée en Python ; elle
-  n'est pas reprise.
+- **Factory reset** : l'entrée était cachée et non implémentée ; elle n'est
+  pas reprise.
 - **Mode nuit d'une histoire masquée** : il est conservé à la réouverture de
-  l'appareil. Python le cherchait dans `.content/` au lieu de `.content.hidden/`.
+  l'appareil. La version 3.1 le cherchait dans `.content/` au lieu de
+  `.content.hidden/`.
 
 ## Utilisation du CLI
 
@@ -354,30 +346,30 @@ lunii-cli firmware --email moi@exemple.fr -o .
 trouvé), `-v` affiche les messages de debug, `Ctrl-C` interrompt proprement
 l'opération en cours.
 
-Comme l'application Python, l'ouverture d'un appareil réécrit son index
+Comme dans les versions précédentes, l'ouverture d'un appareil réécrit son index
 (`.pi` / `etc/library/list`).
 
-## Différences avec la version Python
+## Différences avec la version 3.1
 
-Le comportement a été vérifié octet par octet contre le code Python d'origine :
+Le comportement a été vérifié octet par octet contre la version 3.1 :
 mêmes fichiers sur l'appareil et mêmes exports pour Lunii v2, Lunii v3 et Flam,
 avec des archives plain.pk, v2 (zip et 7z), STUdio (conversion d'images,
 suppression des tags, transcodage ffmpeg) et Flam plain.
 
-Écarts volontaires, qui corrigent des bugs du code Python :
+Écarts volontaires, qui corrigent des bugs de la version 3.1 :
 
-- **Restauration d'une sauvegarde Lunii v3** : Python écrivait l'histoire dans
+- **Restauration d'une sauvegarde Lunii v3** : la version 3.1 écrivait l'histoire dans
   `.content/<UUID complet>/` au lieu de `.content/<8 derniers caractères>/`.
-- **Images STUdio au format BMP** : Python les convertissait à l'envers (il ne
-  retournait que les sources non BMP, alors que Pillow décode déjà les BMP dans
-  le bon sens).
+- **Images STUdio au format BMP** : la version 3.1 les convertissait à
+  l'envers (elle ne retournait que les sources non BMP, alors que les BMP sont déjà
+  décodées dans le bon sens).
 - **Export des histoires officielles** : refusé dans la bibliothèque elle-même
-  pour les Lunii v1/v2. Python ne le bloquait que dans l'interface, et seulement
+  pour les Lunii v1/v2. La version 3.1 ne le bloquait que dans l'interface, et seulement
   quand une seule histoire était sélectionnée. Sur Lunii v3 et sur Flam, une
   histoire officielle n'est exportée que sous forme de sauvegarde chiffrée, à
-  remettre sur un appareil, jamais déchiffrée. Python l'exportait en clair dès
-  que les clés étaient connues.
-- **Récupération des histoires perdues** : Python ne trouvait rien si
+  remettre sur un appareil, jamais déchiffrée. La version 3.1 l'exportait en
+  clair dès que les clés étaient connues.
+- **Récupération des histoires perdues** : la version 3.1 ne trouvait rien si
   `.content.hidden/` n'existait pas.
 - **Vignette Flam manquante** : avertissement au lieu d'un plantage.
 - **Archive STUdio en 7z** : les tags ID3 sont supprimés, comme pour le zip.
@@ -387,7 +379,7 @@ suppression des tags, transcodage ffmpeg) et Flam plain.
 - **Export interrompu ou en erreur** : l'archive partielle est supprimée.
 
 Le redimensionnement des images (bicubique) n'est pas identique au bit près à
-Pillow (écart moyen mesuré inférieur à 0,1/255).
+celui de la version 3.1 (écart moyen mesuré inférieur à 0,1/255).
 
 Les messages de la bibliothèque sont en anglais ; l'interface les traduit à
 l'affichage.

@@ -197,7 +197,7 @@ Lunii vous offre la possibilité de sauvegarder la dernière version du Firmware
 
    4. Entrez vos identifiants Luniistore (ils ne sont pas sauvegardés pour des raisons de sécurité).  
    Vous pouvez vérifier ce point ici  
-   https://github.com/o-daneel/Lunii.QT/blob/a8bd30e1864552687f235004085a417d7c6b00e6/pkg/main_window.py#L468-L475  
+   [`firmware_login` dans lunii-gui/src/app/actions.rs](lunii-gui/src/app/actions.rs) et [`luniistore_get_authtoken` dans lunii-core/src/firmware.rs](lunii-core/src/firmware.rs)  
    
    5. Choisissez un emplacement où sauvegarder votre firmware (deux fichiers pour une Lunii v1)
 
@@ -225,7 +225,7 @@ Lunii vous offre la possibilité de sauvegarder la dernière version du Firmware
 
    4. Entrez vos identifiants Luniistore (ils ne sont pas sauvegardés pour des raisons de sécurité).  
    Vous pouvez vérifier ce point ici  
-   https://github.com/o-daneel/Lunii.QT/blob/a8bd30e1864552687f235004085a417d7c6b00e6/pkg/main_window.py#L468-L475  
+   [`firmware_login` dans lunii-gui/src/app/actions.rs](lunii-gui/src/app/actions.rs) et [`luniistore_get_authtoken` dans lunii-core/src/firmware.rs](lunii-core/src/firmware.rs)  
    
    5. Choisissez un emplacement où sauvegarder vos firmwares (`update-main.enc` and `update-comm.enc`)
 

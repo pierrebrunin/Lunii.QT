@@ -1,6 +1,6 @@
 [package]
 name = "lunii-core"
-description = "Core library to manage Lunii and Flam storytellers (port of Lunii pkg/api)"
+description = "Core library to manage Lunii and Flam storytellers"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

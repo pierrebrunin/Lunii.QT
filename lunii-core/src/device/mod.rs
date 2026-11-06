@@ -17,12 +17,12 @@ use crate::story::{Story, StoryList, move_stories};
 pub use flam::FlamDevice;
 pub use lunii::LuniiDevice;
 
-/// Behaviour shared by every storyteller (replaces Python duck typing).
+/// Behaviour shared by every storyteller.
 pub trait Device: Send {
     fn mount_point(&self) -> &Path;
     fn version(&self) -> DeviceVersion;
     fn snu_str(&self) -> String;
-    /// Multi-line human readable description (Python `__repr__`).
+    /// Multi-line human readable description.
     fn info(&self) -> String;
 
     fn stories(&self) -> &StoryList;

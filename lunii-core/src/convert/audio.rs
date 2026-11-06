@@ -1,4 +1,4 @@
-//! Audio checks and transcoding (port of `pkg/api/convert_audio.py`).
+//! Audio checks and transcoding.
 //!
 //! The MP3 analysis replaces `mutagen`: it only extracts what the storytellers
 //! care about (sample rate, channel mode, bitrate mode and ID3 tags).

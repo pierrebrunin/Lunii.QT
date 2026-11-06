@@ -1,5 +1,4 @@
-//! Stories model, STUdio story conversion and archive type detection
-//! (port of `pkg/api/stories.py`).
+//! Stories model, STUdio story conversion and archive type detection.
 
 use std::path::Path;
 
@@ -182,7 +181,7 @@ pub fn move_stories(list: &mut Vec<Story>, selected: &[Uuid], offset: i32) {
         }
     }
 
-    // stable sort, like Python
+    // stable sort
     working.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     list.extend(working.into_iter().map(|(s, _)| s));
 

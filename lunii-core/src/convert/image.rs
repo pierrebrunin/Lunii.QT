@@ -1,4 +1,4 @@
-//! Image conversions (port of `pkg/api/convert_image.py`).
+//! Image conversions.
 
 use anyhow::{Context as _, Result};
 use image::imageops::FilterType;
@@ -15,7 +15,7 @@ pub fn pixel_to_rgb565(r: u8, g: u8, b: u8) -> [u8; 2] {
     ((r5 << 11) | (g6 << 5) | b5).to_le_bytes()
 }
 
-/// Thumbnail size computation of Pillow's `Image.thumbnail` (aspect ratio preserved).
+/// Size of a thumbnail fitting in `max` x `max` (aspect ratio preserved).
 fn thumbnail_size(width: u32, height: u32, max: u32) -> Option<(u32, u32)> {
     if max >= width && max >= height {
         return None;

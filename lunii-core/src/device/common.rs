@@ -27,7 +27,7 @@ pub fn secure_filename(filename: &str) -> String {
         .collect()
 }
 
-/// Thousands separator like Python's `{:,}`.
+/// Thousands separator: `1234567` → `1,234,567`.
 pub fn group_thousands(n: u64) -> String {
     let s = n.to_string();
     let mut out = String::with_capacity(s.len() + s.len() / 3);
@@ -183,7 +183,7 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Zip writer (stored, like Python's `zipfile.ZipFile(path, 'w')`), removing the
+/// Zip writer (stored, no compression), removing the
 /// partial file if not finished.
 pub struct StoryZip {
     path: PathBuf,
@@ -239,7 +239,7 @@ pub fn progress_iter<'a, T>(
     })
 }
 
-/// Python's `str.removesuffix`.
+/// `s` without `suffix`, or `s` unchanged if it does not end with it.
 pub fn remove_suffix<'a>(s: &'a str, suffix: &str) -> &'a str {
     s.strip_suffix(suffix).unwrap_or(s)
 }
@@ -272,7 +272,7 @@ pub fn join_path(dir: &str, base: &str) -> String {
     }
 }
 
-/// Python slicing `s[n:]` on an ASCII-ish string.
+/// `s` without its first `n` characters.
 pub fn skip_chars(s: &str, n: usize) -> String {
     s.chars().skip(n).collect()
 }

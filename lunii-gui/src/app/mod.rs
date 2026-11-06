@@ -1,5 +1,4 @@
-//! Main window controller (port of `pkg/main_window.py`, `pkg/nm_window.py`
-//! and `pkg/ui/debug_ui.py`).
+//! Main window controller (with the night mode and log panels).
 
 use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
@@ -873,7 +872,7 @@ impl App {
         }
     }
 
-    /// Applies a quick change on the device (UI thread, like the Python version).
+    /// Applies a quick change on the device (on the UI thread).
     fn device_op(&self, op: impl FnOnce(&mut dyn Device, &Context) -> anyhow::Result<()>) -> bool {
         let Some(dev) = self.state.borrow().device.clone() else {
             return false;

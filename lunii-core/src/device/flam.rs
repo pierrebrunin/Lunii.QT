@@ -1,4 +1,4 @@
-//! Flam storytellers (port of `pkg/api/device_flam.py`).
+//! Flam storytellers.
 
 use std::path::{Path, PathBuf};
 

@@ -6,9 +6,6 @@ msgstr ""
 msgid "About"
 msgstr "A propos"
 
-msgid "\n<h2><b>Lunii</b></h2>\n<br />\n\n\nThis application is a PoC that allows to manage the contents of your own Lunii Storyteller,\nincluding changing stories order, backup (for personal usage only), restore, and downloading \nyour latest Lunii firmware (to eventually restore from a broken device).<br />\n  \n<br />Powered by Python 3.11, PySide 6.7<br />\n<br />\n\nIcons are provided freely by <a href=\"https://icons8.com\">icon8</a><br />\n \nLogos are provided by <b>malexxx</b><br /><br />\n\n<b>URL : </b><a href=\"https://github.com/o-daneel/Lunii.QT\">https://github.com/o-daneel/Lunii.QT</a>\n"
-msgstr "\n<h2><b>Lunii</b></h2>\n<br />\n\nCette application est une preuve de concept (PoC) qui permet de gérer le contenu de votre \nFabrique à histoires Lunii, modifier l’ordre des histoires, effectuer une sauvegarde \n(à usage strictement personnel), restaurer et télécharger la dernière version du firmware Lunii \n(afin de pouvoir éventuellement restaurer un appareil défectueux).<br />\n  \n<br />Développé avec Python 3.11, PySide 6.7<br />\n<br />\n\nLes icônes sont fournies gratuitement par <a href=\"https://icons8.com\">icon8</a><br />\n \nLes logos sont fournis par <b>malexxx</b><br /><br />\n\n<b>URL : </b><a href=\"https://github.com/o-daneel/Lunii.QT\">https://github.com/o-daneel/Lunii.QT</a>\n"
-
 msgid "Debug Log"
 msgstr "Journal de debug"
 

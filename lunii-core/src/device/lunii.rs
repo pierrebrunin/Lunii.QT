@@ -1,4 +1,4 @@
-//! Lunii storytellers v1 / v2 / v3 (port of `pkg/api/device_lunii.py`).
+//! Lunii storytellers v1 / v2 / v3.
 
 use std::path::{Path, PathBuf};
 

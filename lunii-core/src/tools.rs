@@ -1,4 +1,4 @@
-//! Misc tasks of the Python worker: STUdio DB import, ffmpeg install,
+//! Misc tasks: STUdio DB import, ffmpeg install,
 //! downloads and application update check.
 
 use std::io::{Read, Write};

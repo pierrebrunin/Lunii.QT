@@ -1,4 +1,4 @@
-//! Background tasks (port of `pkg/ierWorker.py`).
+//! Background tasks.
 //!
 //! A task runs in its own thread and talks to the UI with [`Event`]s, delivered
 //! in order on the Slint event loop.

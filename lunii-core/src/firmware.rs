@@ -1,4 +1,4 @@
-//! Firmware download from Lunii servers (port of `pkg/api/firmware.py`).
+//! Firmware download from Lunii servers.
 
 use std::path::Path;
 use std::time::Duration;

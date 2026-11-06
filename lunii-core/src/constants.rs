@@ -1,4 +1,4 @@
-//! Constants shared by every module (port of `pkg/api/constants.py`).
+//! Constants shared by every module.
 
 use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
@@ -137,7 +137,7 @@ pub fn transcoding_supported() -> bool {
 // Hardware
 // ---------------------------------------------------------------------------
 
-/// Kind of storyteller. The numeric values match the Python constants.
+/// Kind of storyteller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DeviceVersion {
     LuniiV1or2Unknown = 0,
