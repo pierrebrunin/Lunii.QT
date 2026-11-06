@@ -40,8 +40,7 @@ supprimée du dépôt ; elle reste consultable dans l'historique git
     ├── src/i18n.rs          traductions des messages côté Rust (un test vérifie que les
     │                        messages de lunii-core sont tous traduits)
     ├── src/logfile.rs       fichier de log persistant et logger de la façade `log`
-    ├── lang/fr/…/lunii-gui.po  traduction française (générée)
-    └── tools/ts2po.py       conversion de locales/fr_FR.ts vers .po
+    └── lang/fr/…/lunii-gui.po  traduction française
 ```
 
 Les signaux Qt des appareils Python sont remplacés par le trait `Reporter`
@@ -115,8 +114,8 @@ dépendance ou de version, lancer `cargo build`, puis commiter `Cargo.lock`.
   - texte Rust : `tr()` / `trf()` ;
   - message de `lunii-core` : en anglais, traduit à l'affichage.
 
-  Dans tous les cas, ajouter sa traduction à `lunii-gui/tools/extra_fr.po`,
-  puis régénérer le `.po` (voir [Traductions](#traductions)). Le test
+  Dans tous les cas, ajouter sa traduction au `.po` (voir
+  [Traductions](#traductions)). Le test
   `core_messages_are_translated` échoue si un message de `lunii-core` n'a pas
   de traduction.
 
@@ -296,17 +295,9 @@ LUNII_QT_SCREENSHOT=/tmp/captures target/debug/lunii-qt
 ### Traductions
 
 Les textes de l'interface Slint (`@tr(...)`) et les messages produits en Rust
-utilisent le même fichier `lang/fr/LC_MESSAGES/lunii-gui.po`. Il est généré à
-partir de la traduction Qt existante, plus `tools/extra_fr.po` pour les textes
-propres à la version Rust :
-
-```bash
-cd lunii-gui
-python3 tools/ts2po.py ../../locales/fr_FR.ts tools/extra_fr.po > lang/fr/LC_MESSAGES/lunii-gui.po
-```
-
-Le fichier généré est commité (il est inclus dans le binaire à la compilation) :
-après une modification de `extra_fr.po`, le régénérer et commiter les deux.
+utilisent le même fichier `lunii-gui/lang/fr/LC_MESSAGES/lunii-gui.po`, à
+modifier directement (une entrée `msgid` / `msgstr` par texte). Il est inclus
+dans le binaire à la compilation.
 
 Les messages de `lunii-core` (en anglais) sont traduits à l'affichage en les
 comparant aux modèles `{}` du catalogue (« Missing {} in {} »). Les arguments
@@ -397,5 +388,5 @@ suppression des tags, transcodage ffmpeg) et Flam plain.
 Le redimensionnement des images (bicubique) n'est pas identique au bit près à
 Pillow (écart moyen mesuré inférieur à 0,1/255).
 
-Les messages de la bibliothèque sont en anglais. La traduction (`locales/fr_FR.ts`)
-sera reprise avec l'interface Slint.
+Les messages de la bibliothèque sont en anglais ; l'interface les traduit à
+l'affichage.

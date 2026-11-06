@@ -2,5 +2,3 @@
 # local (`mise install`) et par la CI (jdx/mise-action).
 [tools]
 rust = { version = "1.99.1", components = "rustfmt,clippy" }
-# régénération du fichier de traduction (lunii-gui/tools/ts2po.py)
-python = "3.13.7"

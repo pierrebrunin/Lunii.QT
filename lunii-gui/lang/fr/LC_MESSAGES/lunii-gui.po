@@ -3,8 +3,6 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Language: fr\n"
 
-# Converted from locales/fr_FR.ts by tools/ts2po.py
-
 msgid "About"
 msgstr "A propos"
 
@@ -670,8 +668,6 @@ msgstr "<h4>Désactiver après la mise en veille"
 
 msgid "By enabling this feature, the device will automatically return to Day Mode after shutting down."
 msgstr "En activant cette fonction, l'appareil repassera automatiquement en Mode Jour après s'être arrêté."
-
-# Strings specific to the Rust version (tools/extra_fr.po)
 
 msgid "All files"
 msgstr "Tous les fichiers"
