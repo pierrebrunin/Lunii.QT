@@ -31,9 +31,9 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
 OutputBaseFilename=Lunii.Qt-{#AppVersion}-win64_setup
-SetupIconFile=..\..\..\res\lunii.ico
+SetupIconFile=..\..\res\lunii.ico
 UninstallDisplayIcon={app}\lunii-qt.exe
-LicenseFile=..\..\..\LICENSE
+LicenseFile=..\..\LICENSE
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -48,7 +48,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#SourceDir}\lunii-qt.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\lunii-cli.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"
+Source: "..\..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"
 
 [Icons]
 Name: "{group}\Lunii.QT"; Filename: "{app}\lunii-qt.exe"

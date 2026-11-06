@@ -229,7 +229,7 @@ export component MainWindow inherits Window {
         HorizontalLayout {
             spacing: 4px;
             IconButton {
-                icon: @image-url("../../../res/refresh.png");
+                icon: @image-url("../../res/refresh.png");
                 enabled: !root.busy;
                 clicked => { root.action(Action.refresh-devices); }
             }
@@ -254,7 +254,7 @@ export component MainWindow inherits Window {
                 }
             }
             IconButton {
-                icon: root.nm-active ? @image-url("../../../res/mode_night.png") : @image-url("../../../res/mode_day.png");
+                icon: root.nm-active ? @image-url("../../res/mode_night.png") : @image-url("../../res/mode_day.png");
                 icon-size: 22px;
                 icon-width: 47px;
                 enabled: root.nm-available && !root.busy;
@@ -268,7 +268,7 @@ export component MainWindow inherits Window {
                 horizontal-stretch: 1;
             }
             IconButton {
-                icon: @image-url("../../../res/refresh_db.png");
+                icon: @image-url("../../res/refresh_db.png");
                 enabled: !root.busy;
                 clicked => { root.action(Action.refresh-db); }
             }
@@ -345,7 +345,7 @@ export component MainWindow inherits Window {
                 }
             }
             if root.abort-visible: IconButton {
-                icon: @image-url("../../../res/remove.png");
+                icon: @image-url("../../res/remove.png");
                 icon-size: 24px;
                 clicked => { root.abort(); }
             }
@@ -444,7 +444,7 @@ export component MainWindow inherits Window {
             Rectangle {
                 width: 20px;
                 Image {
-                    source: @image-url("../../../res/debug_log.png");
+                    source: @image-url("../../res/debug_log.png");
                     width: 16px;
                     height: 16px;
                     opacity: root.log-visible || log-toggle.has-hover ? 1 : 0.6;

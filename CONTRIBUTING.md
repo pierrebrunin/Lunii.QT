@@ -14,7 +14,7 @@ supprimée du dépôt ; elle reste consultable dans l'historique git
 ## Organisation
 
 ```
-rust/
+.
 ├── lunii-core/        bibliothèque, sans dépendance à une interface
 │   ├── src/constants.rs     constantes, répertoire ~/.lunii-qt
 │   ├── src/crypto.rs        XXTEA (rounds Lunii), AES-CBC
@@ -166,7 +166,7 @@ packaging/macos/package.sh v3.1.4 dist                      # macOS, après les 
 
 **Faire une release :**
 
-1. Changer `version` dans `rust/Cargo.toml` (`[workspace.package]`), puis
+1. Changer `version` dans `Cargo.toml` (`[workspace.package]`), puis
    lancer `cargo build` pour mettre à jour `Cargo.lock`.
 2. Commiter, puis créer et pousser le tag :
    `git tag v3.2.0 && git push origin v3.2.0`. La release vérifie que le tag

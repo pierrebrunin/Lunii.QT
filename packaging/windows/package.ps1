@@ -3,7 +3,7 @@
 #   cargo build --release
 #   pwsh packaging/windows/package.ps1 -Version v3.1.4 -OutDir dist
 #
-# Run from `rust/`. Inno Setup 6 is needed for the installer
+# Run from the repository root. Inno Setup 6 is needed for the installer
 # (`choco install innosetup`); without it only the portable zip is made.
 param(
     [Parameter(Mandatory = $true)][string]$Version,
@@ -24,7 +24,7 @@ $stage = Join-Path ([System.IO.Path]::GetTempPath()) "lunii-qt-portable-$PID"
 $dir = Join-Path $stage "Lunii.QT"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 Copy-Item (Join-Path $bin "lunii-qt.exe"), (Join-Path $bin "lunii-cli.exe") $dir
-Copy-Item "..\LICENSE" (Join-Path $dir "LICENSE.txt")
+Copy-Item "LICENSE" (Join-Path $dir "LICENSE.txt")
 $zip = Join-Path $out "Lunii.Qt-$Version-win64_portable.zip"
 Compress-Archive -Path $dir -DestinationPath $zip -CompressionLevel Optimal -Force
 Remove-Item -Recurse -Force $stage

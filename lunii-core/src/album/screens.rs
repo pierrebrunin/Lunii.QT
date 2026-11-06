@@ -9,7 +9,7 @@ use image::{DynamicImage, GrayImage, ImageFormat, Luma, imageops::FilterType};
 
 use crate::convert::image::{LUNII_H, LUNII_W};
 
-pub(super) const FONT: &[u8] = include_bytes!("../../../../res/fonts/DejaVuSans-Bold.ttf");
+pub(super) const FONT: &[u8] = include_bytes!("../../../res/fonts/DejaVuSans-Bold.ttf");
 
 /// The embedded font, to draw the screens.
 pub fn font() -> Result<FontRef<'static>> {

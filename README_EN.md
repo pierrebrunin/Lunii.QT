@@ -327,7 +327,7 @@ Lunii.QT allows you to backup the latest firmware version available from Lunii s
 ## Building
 
 The application is written in Rust (UI made with [Slint](https://slint.dev)). The
-code lives in the [`rust/`](rust/README.md) folder (in French), which documents
+development guide is [`CONTRIBUTING.md`](CONTRIBUTING.md) (in French), which documents
 the prerequisites, the build, the checks to run before pushing, the useful
 environment variables and the translation workflow.
 
@@ -378,7 +378,7 @@ file dialogs go through `xdg-desktop-portal`. If they don't open, install
 your desktop's portal (e.g. `xdg-desktop-portal-gtk` or
 `xdg-desktop-portal-kde`).
 
-To build the application, see the prerequisites in [`rust/README.md`](rust/README.md#prérequis) (in French).
+To build the application, see the prerequisites in [`CONTRIBUTING.md`](CONTRIBUTING.md#prérequis) (in French).
 
 ### v3 export
 In order to suport story export from Lunii v3 hardware, you must place your device keys in here :

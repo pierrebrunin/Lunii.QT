@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::constants::*;
 use crate::http;
 
-const EMBEDDED_THIRD_PARTY_DB: &str = include_str!("../../../res/unofficial.json");
+const EMBEDDED_THIRD_PARTY_DB: &str = include_str!("../../res/unofficial.json");
 
 #[derive(Default)]
 struct Databases {

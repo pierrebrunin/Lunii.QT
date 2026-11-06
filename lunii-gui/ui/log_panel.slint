@@ -48,7 +48,7 @@ export component LogPanel inherits Rectangle {
             Button { text: @tr("Clear"); clicked => { root.clear-clicked(); } }
             Button { text: @tr("Open log folder"); clicked => { root.open-folder-clicked(); } }
             IconButton {
-                icon: @image-url("../../../res/remove.png");
+                icon: @image-url("../../res/remove.png");
                 icon-size: 18px;
                 y: (parent.height - self.height) / 2;
                 clicked => { root.close-clicked(); }

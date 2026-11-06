@@ -25,9 +25,9 @@ jobs:
       - id: version
         name: Check the tag against Cargo.toml
         run: |
-          crate="v$(sed -n 's/^version = "\(.*\)"/\1/p' rust/Cargo.toml | head -1)"
+          crate="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
           if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "$crate" ]]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match the version in rust/Cargo.toml ($crate)"
+            echo "::error::tag $GITHUB_REF_NAME does not match the version in Cargo.toml ($crate)"
             exit 1
           fi
           echo "version=$crate" >> "$GITHUB_OUTPUT"
@@ -37,9 +37,6 @@ jobs:
     needs: version
     # oldest supported runner: the binaries need its glibc (2.35) or newer
     runs-on: ubuntu-22.04
-    defaults:
-      run:
-        working-directory: rust
     steps:
       - uses: actions/checkout@v4
       # Rust toolchain pinned in mise.toml
@@ -47,8 +44,6 @@ jobs:
         with:
           install_args: rust
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
       - name: Dependencies
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev desktop-file-utils
       - name: Build
@@ -60,16 +55,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: rust/dist/*
+          path: dist/*
           if-no-files-found: error
 
   windows:
     name: Windows
     needs: version
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: rust
     steps:
       - uses: actions/checkout@v4
       # Rust toolchain pinned in mise.toml
@@ -77,8 +69,6 @@ jobs:
         with:
           install_args: rust
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
       - name: Build
         run: cargo build --release --locked --workspace
       - name: Inno Setup
@@ -89,7 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: rust/dist/*
+          path: dist/*
           if-no-files-found: error
 
   macos:
@@ -99,9 +89,6 @@ jobs:
     env:
       # oldest supported macOS (Big Sur)
       MACOSX_DEPLOYMENT_TARGET: "11.0"
-    defaults:
-      run:
-        working-directory: rust
     steps:
       - uses: actions/checkout@v4
       # Rust toolchain pinned in mise.toml
@@ -111,8 +98,6 @@ jobs:
       - name: Rust targets
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: rust
       - name: Build (Apple Silicon)
         run: cargo build --release --locked --workspace --target aarch64-apple-darwin
       - name: Build (Intel)
@@ -124,7 +109,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: rust/dist/*
+          path: dist/*
           if-no-files-found: error
 
   release:

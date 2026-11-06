@@ -10,7 +10,7 @@ fn main() {
         #[cfg(windows)]
         {
             let mut res = winresource::WindowsResource::new();
-            res.set_icon("../../res/lunii.ico")
+            res.set_icon("../res/lunii.ico")
                 .set("ProductName", "Lunii.QT")
                 .set(
                     "FileDescription",
@@ -18,6 +18,6 @@ fn main() {
                 );
             res.compile().expect("Windows resources");
         }
-        println!("cargo:rerun-if-changed=../../res/lunii.ico");
+        println!("cargo:rerun-if-changed=../res/lunii.ico");
     }
 }

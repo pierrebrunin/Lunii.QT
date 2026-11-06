@@ -4,7 +4,7 @@
 #   cargo build --release
 #   packaging/linux/package.sh v3.1.4 dist
 #
-# Run from `rust/`. appimagetool is taken from $APPIMAGETOOL, the PATH, or
+# Run from the repository root. appimagetool is taken from $APPIMAGETOOL, the PATH, or
 # downloaded. In containers without FUSE, set APPIMAGE_EXTRACT_AND_RUN=1.
 set -euo pipefail
 
@@ -27,7 +27,7 @@ mkdir -p "$STAGE/$NAME"
 cp target/release/lunii-qt target/release/lunii-cli "$STAGE/$NAME/"
 cp packaging/linux/lunii-qt.desktop "$STAGE/$NAME/"
 cp lunii-gui/ui/img/lunii.png "$STAGE/$NAME/lunii-qt.png"
-cp ../LICENSE "$STAGE/$NAME/"
+cp LICENSE "$STAGE/$NAME/"
 tar -C "$STAGE" -czf "$OUT/$NAME.tar.gz" "$NAME"
 echo "$OUT/$NAME.tar.gz"
 

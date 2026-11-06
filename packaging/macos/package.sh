@@ -5,7 +5,7 @@
 #   cargo build --release --target x86_64-apple-darwin
 #   packaging/macos/package.sh v3.1.4 dist
 #
-# Run from `rust/`. The application is signed ad hoc only (no Apple developer
+# Run from the repository root. The application is signed ad hoc only (no Apple developer
 # certificate): Gatekeeper asks for a confirmation at the first launch, see the
 # "macOS" section of the README.
 set -euo pipefail
@@ -29,8 +29,8 @@ for bin in lunii-qt lunii-cli; do
 done
 lipo -info "$APP/Contents/MacOS/lunii-qt"
 sed "s/@VERSION@/${VERSION#v}/g" packaging/macos/Info.plist > "$APP/Contents/Info.plist"
-cp ../res/dmg_icon.icns "$APP/Contents/Resources/AppIcon.icns"
-cp ../LICENSE "$APP/Contents/Resources/"
+cp res/dmg_icon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp LICENSE "$APP/Contents/Resources/"
 
 # ad hoc signature: required for arm64 executables modified after linking (lipo)
 codesign --force --deep --sign - "$APP"
@@ -43,8 +43,8 @@ if command -v create-dmg >/dev/null; then
     # Applications link on the right
     create-dmg \
         --volname "luniiQt-$VERSION Installer" \
-        --volicon ../res/dmg_icon.icns \
-        --background ../res/dmg_background.png \
+        --volicon res/dmg_icon.icns \
+        --background res/dmg_background.png \
         --window-pos 200 120 \
         --window-size 600 425 \
         --icon-size 70 \

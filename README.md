@@ -333,8 +333,8 @@ Lunii.QT vous offre la possibilité de sauvegarder la dernière version du Firmw
 
 ## Compilation
 
-L'application est écrite en Rust (interface [Slint](https://slint.dev)). Le code
-est dans le dossier [`rust/`](rust/README.md), qui décrit les prérequis, la
+L'application est écrite en Rust (interface [Slint](https://slint.dev)). Le guide de
+développement, [`CONTRIBUTING.md`](CONTRIBUTING.md), décrit les prérequis, la
 compilation, les vérifications avant de pousser, les variables d'environnement
 utiles et la génération des traductions.
 
@@ -387,7 +387,7 @@ courantes. Les boîtes de dialogue d'ouverture de fichiers passent par
 `xdg-desktop-portal`. Si elles ne s'ouvrent pas, installez le portail de votre
 bureau (par exemple `xdg-desktop-portal-gtk` ou `xdg-desktop-portal-kde`).
 
-Pour compiler l'application, voir les prérequis dans [`rust/README.md`](rust/README.md#prérequis).
+Pour compiler l'application, voir les prérequis dans [`CONTRIBUTING.md`](CONTRIBUTING.md#prérequis).
 
 ### Exportation V3
 Afin de supporter l'exportation d'histoires depuis une Luniis v3, vous devez placer vos clés de périphérique ici :
