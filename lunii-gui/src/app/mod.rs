@@ -1344,6 +1344,14 @@ impl App {
                 self.state.borrow_mut().measuring = false;
                 self.ensure_durations();
             }
+            Event::DeviceStories(device, stories) => {
+                // another device may have been opened meanwhile
+                let current = self.state.borrow().device.clone();
+                if current.is_some_and(|d| Arc::ptr_eq(&d, &device)) {
+                    self.state.borrow_mut().stories = stories;
+                    self.rebuild_rows();
+                }
+            }
             Event::Stories(stories) => {
                 self.state.borrow_mut().stories = stories;
                 self.rebuild_rows();
@@ -1358,9 +1366,11 @@ impl App {
                 if let (Some(dev), false) = (device, ui.get_busy()) {
                     let sink = sink();
                     std::thread::spawn(move || {
-                        if let Ok(dev) = Self::lock_device(&dev) {
-                            sink(Event::Stories(worker::snapshot(dev.as_ref())));
-                        }
+                        let stories = match Self::lock_device(&dev) {
+                            Ok(d) => worker::snapshot(d.as_ref()),
+                            Err(_) => return,
+                        };
+                        sink(Event::DeviceStories(dev, stories));
                     });
                 }
             }

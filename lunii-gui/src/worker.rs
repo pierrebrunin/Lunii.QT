@@ -148,6 +148,9 @@ pub enum Event {
     Story(String, usize, usize),
     File(String, u64, u64),
     Stories(Vec<StoryInfo>),
+    /// Stories read again outside a task: kept only if this device is still
+    /// the one opened
+    DeviceStories(SharedDevice, Vec<StoryInfo>),
     DbRefreshed(bool),
     /// Databases loaded at startup
     DbLoaded(bool),
