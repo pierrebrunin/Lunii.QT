@@ -344,14 +344,15 @@ impl App {
                 if let Some(n) = r.episodes {
                     info.push(trf("{} episodes", &[&n.to_string()]));
                 }
-                if r.feed_url.is_none() {
+                if r.feed_url.is_none() && r.apple_url.is_none() {
                     info.push(tr("feed not public"));
                 }
                 PodcastResult {
                     title: r.title.as_str().into(),
                     info: info.join(" · ").into(),
                     image: Default::default(),
-                    available: r.feed_url.is_some(),
+                    // no feed in the answer: found from the Apple Podcasts page
+                    available: r.feed_url.is_some() || r.apple_url.is_some(),
                 }
             })
             .collect();
@@ -363,14 +364,20 @@ impl App {
 
     /// A search result clicked: its feed is checked.
     pub(super) fn podcast_add_choose(&self, index: i32) {
-        let Some(feed_url) = usize::try_from(index).ok().and_then(|i| {
+        let Some((address, page)) = usize::try_from(index).ok().and_then(|i| {
             self.state
                 .borrow()
                 .podcasts
                 .add
                 .results
                 .get(i)
-                .and_then(|r| r.feed_url.clone())
+                .and_then(|r| {
+                    // (address, may be a page or an Apple Podcasts link)
+                    r.feed_url
+                        .clone()
+                        .map(|f| (f, false))
+                        .or_else(|| r.apple_url.clone().map(|a| (a, true)))
+                })
         }) else {
             return;
         };
@@ -380,7 +387,7 @@ impl App {
         ui.set_podcast_add_can_follow(false);
         ui.set_podcast_add_working(true);
         self.podcast_add_message(&tr("Loading..."), false);
-        worker::check_feed(token, feed_url, false, sink());
+        worker::check_feed(token, address, page, sink());
     }
 
     pub(super) fn podcast_add_checked(&self, token: u32, result: Result<Box<Podcast>, String>) {
@@ -441,7 +448,14 @@ impl App {
     pub(super) fn podcast_add_artwork(&self, token: u32, index: usize, data: &[u8]) {
         let st = self.state.borrow();
         let add = &st.podcasts.add;
-        if token != add.token && (add.results.is_empty() || token != add.search_token) {
+        // the covers of the results shown, or the one of the podcast at an
+        // address (its only row; not the one of a result being checked)
+        let wanted = if add.results.is_empty() {
+            token == add.token
+        } else {
+            token == add.search_token
+        };
+        if !wanted {
             return;
         }
         if let (Some(mut row), Some(image)) = (add.rows.row_data(index), decode_image(data)) {

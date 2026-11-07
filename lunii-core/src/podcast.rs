@@ -266,22 +266,60 @@ fn apple_feed_url(id: &str, country: Option<&str>) -> Result<String> {
     if let Some(country) = country {
         url.push_str(&format!("&country={country}"));
     }
-    parse_lookup(&get_text(&url)?)
+    if let Some(feed) = parse_lookup(&get_text(&url)?)? {
+        return Ok(feed);
+    }
+    // not given by the API (some publishers): its Apple Podcasts page has it
+    let page = format!(
+        "https://podcasts.apple.com/{}/podcast/id{id}",
+        country.unwrap_or("us")
+    );
+    match get_text(&page).ok().and_then(|p| apple_page_feed(&p, id)) {
+        Some(feed) => Ok(feed),
+        None => bail!(
+            "Apple Podcasts does not give the RSS feed of this podcast: paste the address of its feed or of its page"
+        ),
+    }
 }
 
-/// Feed address in an answer of the iTunes lookup API.
-fn parse_lookup(json: &str) -> Result<String> {
+/// Feed address in an answer of the iTunes lookup API (`None`: the podcast
+/// is known, without its feed).
+fn parse_lookup(json: &str) -> Result<Option<String>> {
     let data: Value = serde_json::from_str(json).context("Invalid answer of Apple Podcasts")?;
     let result = data["results"]
         .as_array()
         .and_then(|r| r.iter().find(|r| r["kind"] == "podcast"))
         .context("Podcast not found on Apple Podcasts")?;
-    match result["feedUrl"].as_str() {
-        Some(feed) if feed.starts_with("http") => Ok(feed.to_string()),
-        _ => bail!(
-            "Apple Podcasts does not give the RSS feed of this podcast: paste the address of its feed or of its page"
-        ),
+    Ok(result["feedUrl"]
+        .as_str()
+        .filter(|feed| feed.starts_with("http"))
+        .map(str::to_string))
+}
+
+/// Feed address of the podcast `id` in its Apple Podcasts page: the data of
+/// the page give it next to its id (`"adamId":"…","feedUrl":"…"`), among
+/// those of the other podcasts shown.
+fn apple_page_feed(page: &str, id: &str) -> Option<String> {
+    let key = format!("\"adamId\":\"{id}\"");
+    let mut from = 0;
+    while let Some(pos) = page[from..].find(&key) {
+        let at = from + pos;
+        // the fields of the same object
+        let start = page[..at].rfind('{').unwrap_or(0);
+        let end = page[at..].find('}').map_or(page.len(), |e| at + e);
+        let object = &page[start..end];
+        if let Some(f) = object.find("\"feedUrl\":\"") {
+            let value = &object[f + "\"feedUrl\":\"".len()..];
+            let feed = value[..value.find('"').unwrap_or(value.len())]
+                .replace("\\u002F", "/")
+                .replace("\\/", "/");
+            if feed.starts_with("http") {
+                return Some(feed);
+            }
+        }
+        from = at + key.len();
     }
+    None
 }
 
 /// A podcast found by [`search`].
@@ -289,8 +327,11 @@ fn parse_lookup(json: &str) -> Result<String> {
 pub struct SearchResult {
     pub title: String,
     pub author: Option<String>,
-    /// `None`: the publisher does not give its feed to Apple
+    /// `None`: the publisher does not give its feed to the API (it is then
+    /// read from the Apple Podcasts page, see `apple_url`)
     pub feed_url: Option<String>,
+    /// its Apple Podcasts page
+    pub apple_url: Option<String>,
     /// small cover (100×100)
     pub artwork_url: Option<String>,
     pub episodes: Option<u32>,
@@ -346,6 +387,7 @@ fn parse_search(json: &str) -> Result<Vec<SearchResult>> {
                 title: text(r, "collectionName").or_else(|| text(r, "trackName"))?,
                 author: text(r, "artistName"),
                 feed_url: text(r, "feedUrl").filter(|u| u.starts_with("http")),
+                apple_url: text(r, "collectionViewUrl").filter(|u| u.starts_with("https://")),
                 artwork_url: text(r, "artworkUrl100").or_else(|| text(r, "artworkUrl60")),
                 episodes: r["trackCount"].as_u64().map(|n| n as u32),
             })
@@ -1330,7 +1372,8 @@ mod tests {
         let json = r#"{"resultCount":3,"results":[
  {"kind":"podcast","collectionName":"Un podcast à soi","artistName":"ARTE Radio",
   "feedUrl":"https://www.arteradio.com/xml","artworkUrl100":"https://img/100.jpg","trackCount":69},
- {"kind":"podcast","collectionName":"Contes du soir","artistName":"Radio Exemple","trackCount":203},
+ {"kind":"podcast","collectionName":"Contes du soir","artistName":"Radio Exemple","trackCount":203,
+  "collectionViewUrl":"https://podcasts.apple.com/fr/podcast/contes-du-soir/id42?uo=4"},
  {"kind":"podcast-episode","trackName":"Un épisode"}]}"#;
         let r = parse_search(json).unwrap();
         assert_eq!(r.len(), 2);
@@ -1342,8 +1385,12 @@ mod tests {
         );
         assert_eq!(r[0].artwork_url.as_deref(), Some("https://img/100.jpg"));
         assert_eq!(r[0].episodes, Some(69));
-        // feed not given to Apple
+        // feed not given to the API: its Apple Podcasts page
         assert_eq!(r[1].feed_url, None);
+        assert_eq!(
+            r[1].apple_url.as_deref(),
+            Some("https://podcasts.apple.com/fr/podcast/contes-du-soir/id42?uo=4")
+        );
         assert!(parse_search("<html>").is_err());
         assert_eq!(
             query_encode("contes à lire & co"),
@@ -1357,16 +1404,37 @@ mod tests {
     fn apple_lookup() {
         let found =
             r#"{"resultCount":1,"results":[{"kind":"podcast","feedUrl":"https://ex/feed.xml"}]}"#;
-        assert_eq!(parse_lookup(found).unwrap(), "https://ex/feed.xml");
-        // publisher not giving its feed to Apple, unknown id, not JSON
+        assert_eq!(
+            parse_lookup(found).unwrap().as_deref(),
+            Some("https://ex/feed.xml")
+        );
+        // publisher not giving its feed to the API, unknown id, not JSON
         let hidden = r#"{"resultCount":1,"results":[{"kind":"podcast","collectionName":"x"}]}"#;
-        let e = parse_lookup(hidden).unwrap_err().to_string();
-        assert!(e.contains("does not give the RSS feed"), "{e}");
+        assert_eq!(parse_lookup(hidden).unwrap(), None);
         let e = parse_lookup(r#"{"resultCount":0,"results":[]}"#)
             .unwrap_err()
             .to_string();
         assert_eq!(e, "Podcast not found on Apple Podcasts");
         assert!(parse_lookup("<html>").is_err());
+    }
+
+    /// The feed in an Apple Podcasts page, among those of other podcasts.
+    #[test]
+    fn apple_page() {
+        let page = r#"<script>{"shelves":[{"items":[
+ {"title":"Autre podcast","adamId":"111","feedUrl":"https://ex/autre.xml","showType":"episodic"},
+ {"podcastOffer":{"title":"Contes","adamId":"1811582936","feedUrl":"https:\/\/ex\/contes.xml","storeUrl":"https://podcasts.apple.com/x"}},
+ {"title":"Sans flux","adamId":"222","showType":"episodic"}]}]}</script>"#;
+        assert_eq!(
+            apple_page_feed(page, "1811582936").as_deref(),
+            Some("https://ex/contes.xml")
+        );
+        assert_eq!(
+            apple_page_feed(page, "111").as_deref(),
+            Some("https://ex/autre.xml")
+        );
+        assert_eq!(apple_page_feed(page, "222"), None);
+        assert_eq!(apple_page_feed(page, "333"), None);
     }
 
     #[test]
