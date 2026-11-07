@@ -51,15 +51,19 @@ fn has_id3v1(data: &[u8]) -> bool {
     data.len() >= 128 && &data[data.len() - 128..data.len() - 125] == b"TAG"
 }
 
-struct FrameHeader {
-    mpeg1: bool,
-    layer: u8,
-    sample_rate: u32,
-    mono: bool,
-    frame_len: usize,
+/// An MPEG audio frame header.
+pub(crate) struct FrameHeader {
+    pub(crate) mpeg1: bool,
+    pub(crate) layer: u8,
+    pub(crate) sample_rate: u32,
+    pub(crate) mono: bool,
+    /// bytes, header included
+    pub(crate) frame_len: usize,
+    /// samples per channel
+    pub(crate) samples: u32,
 }
 
-fn parse_frame_header(h: &[u8]) -> Option<FrameHeader> {
+pub(crate) fn parse_frame_header(h: &[u8]) -> Option<FrameHeader> {
     if h.len() < 4 || h[0] != 0xFF || h[1] & 0xE0 != 0xE0 {
         return None;
     }
@@ -120,6 +124,11 @@ fn parse_frame_header(h: &[u8]) -> Option<FrameHeader> {
         sample_rate,
         mono,
         frame_len,
+        samples: match layer {
+            1 => 384,
+            3 if !mpeg1 => 576,
+            _ => 1152,
+        },
     })
 }
 
