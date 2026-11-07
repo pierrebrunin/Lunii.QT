@@ -296,28 +296,29 @@ fn parse_lookup(json: &str) -> Result<Option<String>> {
         .map(str::to_string))
 }
 
-/// Feed address of the podcast `id` in its Apple Podcasts page: the data of
-/// the page give it next to its id (`"adamId":"…","feedUrl":"…"`), among
-/// those of the other podcasts shown.
+/// Feed address of the podcast `id` in its Apple Podcasts page: the JSON data
+/// of the page hold, among those of the other podcasts shown, an object with
+/// its id (`adamId`) and its `feedUrl`.
 fn apple_page_feed(page: &str, id: &str) -> Option<String> {
-    let key = format!("\"adamId\":\"{id}\"");
-    let mut from = 0;
-    while let Some(pos) = page[from..].find(&key) {
-        let at = from + pos;
-        // the fields of the same object
-        let start = page[..at].rfind('{').unwrap_or(0);
-        let end = page[at..].find('}').map_or(page.len(), |e| at + e);
-        let object = &page[start..end];
-        if let Some(f) = object.find("\"feedUrl\":\"") {
-            let value = &object[f + "\"feedUrl\":\"".len()..];
-            let feed = value[..value.find('"').unwrap_or(value.len())]
-                .replace("\\u002F", "/")
-                .replace("\\/", "/");
-            if feed.starts_with("http") {
-                return Some(feed);
+    let mut stack = script_json(page, "application/json");
+    while let Some(value) = stack.pop() {
+        match value {
+            Value::Array(items) => stack.extend(items),
+            Value::Object(object) => {
+                let same_id = match object.get("adamId") {
+                    Some(Value::String(a)) => a == id,
+                    Some(Value::Number(n)) => n.to_string() == id,
+                    _ => false,
+                };
+                if let (true, Some(Value::String(feed))) = (same_id, object.get("feedUrl"))
+                    && feed.starts_with("http")
+                {
+                    return Some(feed.clone());
+                }
+                stack.extend(object.into_iter().map(|(_, v)| v));
             }
+            _ => {}
         }
-        from = at + key.len();
     }
     None
 }
@@ -439,8 +440,27 @@ pub fn parse_feed_url(feed_url: &str) -> Result<Podcast> {
 /// The schema.org objects of a page (`<script type="application/ld+json">`,
 /// `@graph` and arrays flattened).
 fn json_ld(page: &str) -> Vec<Value> {
-    let lower = page.to_ascii_lowercase();
     let mut objects = Vec::new();
+    for value in script_json(page, "application/ld+json") {
+        let mut stack = vec![value];
+        while let Some(value) = stack.pop() {
+            match value {
+                Value::Array(items) => stack.extend(items.into_iter().rev()),
+                Value::Object(ref o) if o.get("@graph").is_some_and(Value::is_array) => {
+                    stack.push(o["@graph"].clone())
+                }
+                value => objects.push(value),
+            }
+        }
+    }
+    objects
+}
+
+/// The JSON contents of the `<script type="{kind}">` of a page (invalid ones
+/// skipped).
+fn script_json(page: &str, kind: &str) -> Vec<Value> {
+    let lower = page.to_ascii_lowercase();
+    let mut values = Vec::new();
     let mut from = 0;
     while let Some(pos) = lower[from..].find("<script") {
         let start = from + pos + "<script".len();
@@ -457,26 +477,15 @@ fn json_ld(page: &str) -> Vec<Value> {
         let attributes = html_attributes(&page[start..start + open]);
         if !attributes
             .get("type")
-            .is_some_and(|t| t.eq_ignore_ascii_case("application/ld+json"))
+            .is_some_and(|t| t.eq_ignore_ascii_case(kind))
         {
             continue;
         }
-        let Ok(value) = serde_json::from_str::<Value>(&page[start + open + 1..start + close])
-        else {
-            continue;
-        };
-        let mut stack = vec![value];
-        while let Some(value) = stack.pop() {
-            match value {
-                Value::Array(items) => stack.extend(items.into_iter().rev()),
-                Value::Object(ref o) if o.get("@graph").is_some_and(Value::is_array) => {
-                    stack.push(o["@graph"].clone())
-                }
-                value => objects.push(value),
-            }
+        if let Ok(value) = serde_json::from_str::<Value>(&page[start + open + 1..start + close]) {
+            values.push(value);
         }
     }
-    objects
+    values
 }
 
 /// `@type` of a schema.org object (a name or a list of names).
@@ -1427,13 +1436,16 @@ mod tests {
     /// The feed in an Apple Podcasts page, among those of other podcasts.
     #[test]
     fn apple_page() {
-        let page = r#"<script>{"shelves":[{"items":[
- {"title":"Autre podcast","adamId":"111","feedUrl":"https://ex/autre.xml","showType":"episodic"},
- {"podcastOffer":{"title":"Contes","adamId":"1811582936","feedUrl":"https:\/\/ex\/contes.xml","storeUrl":"https://podcasts.apple.com/x"}},
- {"title":"Sans flux","adamId":"222","showType":"episodic"}]}]}</script>"#;
+        let page = r#"<script type="application/json" id="serialized-server-data">{"shelves":[{"items":[
+ {"title":"Autre podcast","adamId":"111","feedUrl":"https://ex/autre.xml"},
+ {"related":{"feedUrl":"https://ex/voisin.xml"},"podcastOffer":{"title":"Contes","adamId":"1811582936",
+   "artwork":{"url":"https://img"},"feedUrl":"https:\/\/ex\/contes.xml?a=1\u0026b=2"}},
+ {"title":"Sans flux","adamId":222}]}]}</script>
+<script type="application/json">{invalide</script>"#;
+        // nested objects around, escaped characters
         assert_eq!(
             apple_page_feed(page, "1811582936").as_deref(),
-            Some("https://ex/contes.xml")
+            Some("https://ex/contes.xml?a=1&b=2")
         );
         assert_eq!(
             apple_page_feed(page, "111").as_deref(),
