@@ -33,8 +33,12 @@ l'historique git, jusqu'au commit `c8afe43`.
 └── lunii-gui/         interface graphique Slint (binaire `lunii`)
     ├── ui/                  écrans .slint (fenêtre, liste, vue Podcasts, pistes d'album, dialogues, journal)
     ├── src/app/             contrôleur de la fenêtre (mode nuit, journal) :
-    │                        mod.rs, actions.rs (menus, enum Action), podcast.rs (vue
-    │                        Podcasts), album.rs (pistes d'un album), log_panel.rs
+    │                        mod.rs (état, événements),
+    │                        devices.rs (recherche et ouverture des appareils),
+    │                        stories.rs (liste, sélection, détails, durées),
+    │                        progress.rs (tâches, temps restant), actions.rs (menus,
+    │                        enum Action), podcast.rs (vue Podcasts), album.rs
+    │                        (pistes d'un album), log_panel.rs (journal)
     ├── src/worker.rs        tâches longues en arrière-plan
     ├── src/i18n.rs          traductions des messages côté Rust (un test vérifie que les
     │                        messages de lunii-core sont tous traduits)
