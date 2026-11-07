@@ -2,7 +2,7 @@
 # Linux packages: `.tar.gz` (both binaries) and AppImage (graphical interface).
 #
 #   cargo build --release
-#   packaging/linux/package.sh v3.1.4 dist
+#   packaging/linux/package.sh v4.0.0 dist
 #
 # Run from the repository root. appimagetool is taken from $APPIMAGETOOL, the PATH, or
 # downloaded. In containers without FUSE, set APPIMAGE_EXTRACT_AND_RUN=1.

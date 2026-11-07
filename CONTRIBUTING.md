@@ -159,9 +159,9 @@ fonctionne aussi en local. Outils nécessaires :
 
 ```bash
 cargo build --release
-packaging/linux/package.sh v3.1.4 dist                      # Linux
-pwsh packaging/windows/package.ps1 -Version v3.1.4          # Windows (Inno Setup 6)
-packaging/macos/package.sh v3.1.4 dist                      # macOS, après les builds
+packaging/linux/package.sh v4.0.0 dist                      # Linux
+pwsh packaging/windows/package.ps1 -Version v4.0.0          # Windows (Inno Setup 6)
+packaging/macos/package.sh v4.0.0 dist                      # macOS, après les builds
                                                             # --target aarch64/x86_64-apple-darwin
 ```
 

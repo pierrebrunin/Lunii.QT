@@ -1,7 +1,7 @@
 # Windows packages: installer (Inno Setup) and portable zip.
 #
 #   cargo build --release
-#   pwsh packaging/windows/package.ps1 -Version v3.1.4 -OutDir dist
+#   pwsh packaging/windows/package.ps1 -Version v4.0.0 -OutDir dist
 #
 # Run from the repository root. Inno Setup 6 is needed for the installer
 # (`choco install innosetup`); without it only the portable zip is made.

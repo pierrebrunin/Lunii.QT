@@ -3,7 +3,7 @@
 #
 #   cargo build --release --target aarch64-apple-darwin
 #   cargo build --release --target x86_64-apple-darwin
-#   packaging/macos/package.sh v3.1.4 dist
+#   packaging/macos/package.sh v4.0.0 dist
 #
 # Run from the repository root. The application is signed ad hoc only (no Apple developer
 # certificate): Gatekeeper asks for a confirmation at the first launch, see the

@@ -1,5 +1,5 @@
 ; Windows installer (Inno Setup 6), built by package.ps1:
-;   ISCC.exe /DAppVersion=v3.1.4 /DSourceDir=<binaries> /DOutputDir=<dist> installer.iss
+;   ISCC.exe /DAppVersion=v4.0.0 /DSourceDir=<binaries> /DOutputDir=<dist> installer.iss
 ; Installs for the current user (no administrator rights needed), or for all
 ; users if chosen in the wizard.
 
