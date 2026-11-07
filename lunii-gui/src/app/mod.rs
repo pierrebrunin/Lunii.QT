@@ -350,7 +350,15 @@ impl App {
                 app.podcasts_show();
             }
         }));
-        ui.on_podcast_add(with(|app| app.podcast_add()));
+        ui.on_podcast_add(with(|app| app.podcast_add_open()));
+        ui.on_podcast_add_submit(with(|app| app.podcast_add_submit()));
+        ui.on_podcast_add_follow(with(|app| app.podcast_add_follow()));
+        let w = Rc::downgrade(self);
+        ui.on_podcast_add_choose(move |index| {
+            if let Some(app) = w.upgrade() {
+                app.podcast_add_choose(index);
+            }
+        });
         ui.on_podcast_refresh(with(|app| app.podcast_refresh()));
         ui.on_podcast_unfollow(with(|app| app.podcast_unfollow()));
         let w = Rc::downgrade(self);
@@ -1199,6 +1207,11 @@ impl App {
             }
             Event::ImportPlan(total) => self.start_eta(total),
             Event::Feed(url, result) => self.feed_loaded(url, result),
+            Event::PodcastSearch(token, results) => self.podcast_add_found(token, results),
+            Event::PodcastChecked(token, result) => self.podcast_add_checked(token, result),
+            Event::PodcastArtwork(token, index, data) => {
+                self.podcast_add_artwork(token, index, &data)
+            }
             Event::Story(uuid, current, total) => {
                 ui.set_story_visible(true);
                 ui.set_story_text(uuid.into());

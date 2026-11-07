@@ -8,10 +8,6 @@ export component PodcastsView inherits HorizontalLayout {
     // followed podcasts
     in property <[FollowedRow]> followed;
     in-out property <int> current: -1;
-    // address typed to follow a new podcast
-    in-out property <string> url;
-    // the address is being loaded
-    in property <bool> adding;
     // selected podcast: title and details, or the error
     in property <string> header;
     // its episodes are being loaded
@@ -25,8 +21,7 @@ export component PodcastsView inherits HorizontalLayout {
     in property <bool> can-import;
     // no task running
     in property <bool> interactive;
-    // changed to give the focus to the address field
-    in property <int> focus-token;
+    // "+": the dialog adding a podcast
     callback add();
     callback select(index: int);
     callback refresh();
@@ -39,31 +34,21 @@ export component PodcastsView inherits HorizontalLayout {
 
     spacing: 8px;
 
-    changed focus-token => {
-        url-edit.focus();
-        url-edit.select-all();
-    }
-
     // ------------------------------------------------------------ followed
     VerticalLayout {
         width: 230px;
         spacing: 6px;
-        Text {
-            text: @tr("Followed podcasts");
-            font-weight: 700;
-        }
         HorizontalLayout {
             spacing: 4px;
-            url-edit := LineEdit {
-                text <=> root.url;
-                placeholder-text: @tr("Podcast address or RSS feed");
-                enabled: !root.adding;
-                accepted => { root.add(); }
+            Text {
+                text: @tr("Followed podcasts");
+                font-weight: 700;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
             }
             Button {
-                text: root.adding ? "…" : "+";
+                text: "+";
                 width: 36px;
-                enabled: !root.adding && root.url != "";
                 clicked => { root.add(); }
             }
         }
@@ -74,7 +59,7 @@ export component PodcastsView inherits HorizontalLayout {
             if root.followed.length == 0: Text {
                 x: 10px;
                 width: parent.width - 20px;
-                text: @tr("Paste above the address of a podcast: its RSS or Atom feed, its page (Radio France...) or its Apple Podcasts link, then Enter.");
+                text: @tr("Click + to add a podcast: search it by its name, or paste its address.");
                 wrap: word-wrap;
                 color: Theme.hidden-text;
                 vertical-alignment: center;
@@ -118,7 +103,7 @@ export component PodcastsView inherits HorizontalLayout {
             border-color: Palette.border;
             Text {
                 width: parent.width - 40px;
-                text: @tr("Choose a podcast on the left, or add one with its address.");
+                text: @tr("Choose a podcast on the left, or add one with +.");
                 wrap: word-wrap;
                 horizontal-alignment: center;
                 color: Theme.hidden-text;

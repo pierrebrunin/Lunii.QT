@@ -61,6 +61,7 @@ export enum DialogKind {
     night-mode,
     about,
     device-info,
+    add-podcast,
 }
 
 /// A line of the device information dialog.
@@ -87,6 +88,16 @@ export struct FollowedRow {
     info: string,
     // new episodes to import in its album on the device
     news: bool,
+}
+
+/// A podcast found by the search of the "Add a podcast" dialog.
+export struct PodcastResult {
+    title: string,
+    // author, number of episodes
+    info: string,
+    image: image,
+    // its feed is known: it can be followed
+    available: bool,
 }
 
 /// An episode in the Podcasts view.

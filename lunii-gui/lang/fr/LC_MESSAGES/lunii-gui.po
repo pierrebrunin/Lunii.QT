@@ -1077,17 +1077,50 @@ msgstr "La modification d'un album n'est pas disponible sur cette conteuse"
 msgid "Podcasts"
 msgstr "Podcasts"
 
+msgid "Click + to add a podcast: search it by its name, or paste its address."
+msgstr "Cliquez sur + pour ajouter un podcast : cherchez-le par son nom, ou collez son adresse."
+
+msgid "Choose a podcast on the left, or add one with +."
+msgstr "Choisissez un podcast à gauche, ou ajoutez-en un avec +."
+
+msgid "Add a podcast"
+msgstr "Ajouter un podcast"
+
+msgid "Podcast name or address"
+msgstr "Nom ou adresse du podcast"
+
+msgid "Search a podcast by its name, or paste the address of its RSS feed, of its page or its Apple Podcasts link."
+msgstr "Cherchez un podcast par son nom, ou collez l'adresse de son flux RSS, de sa page ou son lien Apple Podcasts."
+
+msgid "Search"
+msgstr "Rechercher"
+
+msgid "Follow"
+msgstr "Suivre"
+
+msgid "Checking the address..."
+msgstr "Vérification de l'adresse…"
+
+msgid "Searching..."
+msgstr "Recherche…"
+
+msgid "No podcast found"
+msgstr "Aucun podcast trouvé"
+
+msgid "Choose a podcast in the list."
+msgstr "Choisissez un podcast dans la liste."
+
+msgid "feed not public"
+msgstr "flux non public"
+
+msgid "This feed has no episode with audio"
+msgstr "Ce flux ne contient aucun épisode audio"
+
+msgid "already followed"
+msgstr "déjà suivi"
+
 msgid "Followed podcasts"
 msgstr "Podcasts suivis"
-
-msgid "Podcast address or RSS feed"
-msgstr "Adresse d'un podcast ou flux RSS"
-
-msgid "Paste above the address of a podcast: its RSS or Atom feed, its page (Radio France...) or its Apple Podcasts link, then Enter."
-msgstr "Collez ci-dessus l'adresse d'un podcast : son flux RSS ou Atom, sa page (Radio France…) ou son lien Apple Podcasts, puis Entrée."
-
-msgid "Choose a podcast on the left, or add one with its address."
-msgstr "Choisissez un podcast à gauche, ou ajoutez-en un avec son adresse."
 
 msgid "Unfollow"
 msgstr "Ne plus suivre"

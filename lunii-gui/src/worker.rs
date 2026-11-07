@@ -10,7 +10,7 @@ use std::time::Instant;
 use lunii_core::constants::DeviceVersion;
 use lunii_core::convert::audio::AudioOptions;
 use lunii_core::firmware::{self, AuthToken};
-use lunii_core::podcast::{self, Episode, ImportMode, ImportPlan, Podcast};
+use lunii_core::podcast::{self, Episode, ImportMode, ImportPlan, Podcast, SearchResult};
 use lunii_core::{Aborted, Context, Device, Level, Reporter, album, db, tools};
 use uuid::Uuid;
 
@@ -136,6 +136,12 @@ pub enum Event {
     ImportPlan(u64),
     /// Podcast feed loaded (requested address, podcast or error)
     Feed(String, Result<Box<Podcast>, String>),
+    /// "Add a podcast" dialog (request number): podcasts found
+    PodcastSearch(u32, Result<Vec<SearchResult>, String>),
+    /// "Add a podcast" dialog: feed checked
+    PodcastChecked(u32, Result<Box<Podcast>, String>),
+    /// "Add a podcast" dialog: cover of the result at this index
+    PodcastArtwork(u32, usize, Vec<u8>),
     Story(String, usize, usize),
     File(String, u64, u64),
     Stories(Vec<StoryInfo>),
@@ -749,19 +755,66 @@ pub fn fetch_details(uuid: Uuid, sink: Sink) {
     });
 }
 
-/// Loads a podcast feed in the background (`discover`: `url` may be the page of
-/// the podcast). Not a task: the device is not involved.
-pub fn fetch_feed(url: String, discover: bool, sink: Sink) {
+/// Loads the feed of a followed podcast in the background. Not a task: the
+/// device is not involved.
+pub fn fetch_feed(url: String, sink: Sink) {
     std::thread::spawn(move || {
-        let result = if discover {
+        let result = podcast::parse_feed_url(&url)
+            .map(Box::new)
+            .map_err(|e| crate::i18n::tr_message(&format!("{e:#}")));
+        sink(Event::Feed(url, result));
+    });
+}
+
+/// Searches podcasts by name (Apple Podcasts), then downloads their covers.
+pub fn search_podcasts(token: u32, term: String, country: String, sink: Sink) {
+    std::thread::spawn(move || {
+        let results = podcast::search(&term, &country)
+            .map_err(|e| crate::i18n::tr_message(&format!("{e:#}")));
+        let artworks: Vec<(usize, String)> = results
+            .iter()
+            .flatten()
+            .enumerate()
+            .filter_map(|(i, r)| r.artwork_url.clone().map(|u| (i, u)))
+            .collect();
+        sink(Event::PodcastSearch(token, results));
+        // a few at a time
+        for chunk in artworks.chunks(8) {
+            std::thread::scope(|scope| {
+                for (index, url) in chunk {
+                    let sink = &sink;
+                    scope.spawn(move || {
+                        if let Some(data) = podcast::download_artwork(url) {
+                            sink(Event::PodcastArtwork(token, *index, data));
+                        }
+                    });
+                }
+            });
+        }
+    });
+}
+
+/// Loads a feed to follow (`address`: typed by the user, may be a page or an
+/// Apple Podcasts link; its cover is then downloaded as result 0).
+pub fn check_feed(token: u32, url: String, address: bool, sink: Sink) {
+    std::thread::spawn(move || {
+        let result = if address {
             podcast::fetch(&url)
         } else {
             podcast::parse_feed_url(&url)
         };
+        let image = result
+            .as_ref()
+            .ok()
+            .filter(|_| address)
+            .and_then(|p| p.image_url.clone());
         let result = result
             .map(Box::new)
             .map_err(|e| crate::i18n::tr_message(&format!("{e:#}")));
-        sink(Event::Feed(url, result));
+        sink(Event::PodcastChecked(token, result));
+        if let Some(data) = image.and_then(|u| podcast::download_artwork(&u)) {
+            sink(Event::PodcastArtwork(token, 0, data));
+        }
     });
 }
 

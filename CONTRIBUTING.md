@@ -228,18 +228,26 @@ par le chemin STUdio habituel.
 
 ### Podcasts
 
-La vue **Podcasts** (ou Histoires / Importer un podcast, Ctrl+P, qui y place
-le curseur dans le champ d'adresse) :
-- **à gauche, les podcasts suivis**. On en ajoute un en collant l'adresse de sa
-  flux RSS ou Atom (le format standard des podcasts, quelle que soit la source),
-  de sa page (par exemple
-  `https://www.radiofrance.fr/franceinter/podcasts/les-odyssees`, ou toute page
-  annonçant son flux par `<link rel="alternate">`) ou son lien Apple Podcasts
-  (le flux est demandé à l'API iTunes ; certains éditeurs, dont Radio France,
-  ne l'y publient pas), puis Entrée. Les séries et sélections Radio France
+La vue **Podcasts** (ou Histoires / Importer un podcast, Ctrl+P, qui ouvre
+directement la fenêtre d'ajout) :
+- **à gauche, les podcasts suivis**. **+** ouvre la fenêtre « Ajouter un
+  podcast », avec un seul champ :
+  - des **mots** : recherche dans le catalogue Apple Podcasts (API publique
+    `itunes.apple.com/search`, sans clé, environ 20 requêtes par minute, d'où
+    une recherche sur Entrée seulement ; catalogue du pays de la langue du
+    système). Les podcasts dont l'éditeur ne donne pas le flux à Apple (Radio
+    France par exemple) sont grisés (« flux non public ») ;
+  - une **adresse** `http(s)://` : son flux RSS ou Atom (le format standard des
+    podcasts, quelle que soit la source), sa page (par exemple
+    `https://www.radiofrance.fr/franceinter/podcasts/les-odyssees`, ou toute
+    page annonçant son flux par `<link rel="alternate">`) ou son lien Apple
+    Podcasts (le flux est demandé à l'API iTunes).
+
+  Le podcast choisi est chargé et vérifié (titre, nombre d'épisodes) avant que
+  **Suivre** ne soit possible. Les séries et sélections Radio France
   n'ont pas de flux : leurs épisodes sont lus sur la page de chacun (ceux qui
   renvoient vers une autre série, sans audio dans la page, sont ignorés).
-  Leurs flux sont chargés en arrière-plan,
+  Les flux des podcasts suivis sont chargés en arrière-plan,
   sans bloquer l'application. Sous chaque podcast : ses nouveaux épisodes si
   son album est sur l'appareil, son nombre d'épisodes sinon. Ils sont
   enregistrés dans `~/.lunii/podcasts.json`, comme les épisodes importés ;
@@ -314,6 +322,7 @@ La langue suit le système (français ou anglais) ; `LUNII_LANG=en` ou
 | `LUNII_LANG=fr` / `en` | force la langue |
 | `LUNII_SCREENSHOT=<dossier>` | (feature `screenshot`) rend les écrans en PNG sans affichage, puis quitte |
 | `LUNII_SHOT_FEED=<flux.xml>` | (captures) ajoute la vue Podcasts, avec ce flux RSS local suivi |
+| `LUNII_SHOT_SEARCH=<mots ou adresse>` | (captures, avec `LUNII_SHOT_FEED`) ajoute la fenêtre d'ajout d'un podcast : vraie recherche (réseau), premier résultat vérifié puis suivi |
 | `LUNII_SHOT_IMPORT=<a>:<b>` | (captures) importe ces archives ou dossiers par l'interface ; si le dernier est un album, capture aussi ses pistes et son dialogue de modification (qui est appliquée) |
 
 Captures d'écran sans affichage (rendu logiciel), avec la feature `screenshot` :

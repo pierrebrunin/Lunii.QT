@@ -207,6 +207,38 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
         }
         pump(&queue, 300);
         render(0, &shot("14-podcast-episodes"));
+
+        // "+": a real search (network) of LUNII_SHOT_SEARCH, a result checked
+        if let Ok(term) = std::env::var("LUNII_SHOT_SEARCH") {
+            ui.invoke_podcast_add();
+            pump(&queue, 200);
+            render(0, &shot("16-add-podcast"));
+            let wait = |queue: &Queue| {
+                let end = Instant::now() + Duration::from_secs(20);
+                pump(queue, 100);
+                while ui.get_podcast_add_working() && Instant::now() < end {
+                    pump(queue, 100);
+                }
+                // covers
+                pump(queue, 1500);
+            };
+            ui.set_podcast_add_query(term.into());
+            ui.invoke_podcast_add_submit();
+            wait(&queue);
+            render(0, &shot("16-add-podcast-results"));
+            let results = ui.get_podcast_add_results();
+            if let Some(i) =
+                (0..results.row_count()).find(|&i| results.row_data(i).is_some_and(|r| r.available))
+            {
+                ui.invoke_podcast_add_choose(i as i32);
+                wait(&queue);
+                render(0, &shot("16-add-podcast-checked"));
+                ui.invoke_podcast_add_follow();
+                pump(&queue, 300);
+                render(0, &shot("16-add-podcast-followed"));
+            }
+            ui.set_dialog(DialogKind::None);
+        }
         ui.set_view(0);
         ui.invoke_view_changed();
     }

@@ -3,14 +3,16 @@
 
 use std::collections::{HashMap, HashSet};
 
-use lunii_core::podcast::{self, Podcast, SavedPodcast};
-use slint::ModelRc;
+use std::rc::Rc;
+
+use lunii_core::podcast::{self, Podcast, SavedPodcast, SearchResult};
+use slint::{Model as _, ModelRc, VecModel};
 use uuid::Uuid;
 
-use super::{App, sink};
+use super::{App, decode_image, sink};
 use crate::i18n::{tr, trf};
 use crate::worker::{self, Task};
-use crate::{EpisodeRow, FollowedRow};
+use crate::{DialogKind, EpisodeRow, FollowedRow, PodcastResult};
 
 /// The podcast displayed, with what is already on the device.
 pub struct PodcastView {
@@ -28,8 +30,23 @@ pub(super) struct Podcasts {
     followed: Vec<SavedPodcast>,
     /// feeds by address: `None` while loading
     feeds: HashMap<String, Option<Result<Podcast, String>>>,
-    /// address typed to follow a podcast, being loaded
-    adding: Option<String>,
+    /// "Add a podcast" dialog
+    add: AddDialog,
+}
+
+/// "Add a podcast" dialog: a search (several results) or an address (one).
+#[derive(Default)]
+struct AddDialog {
+    /// number of the last request: the answers of the previous ones are ignored
+    token: u32,
+    /// search results (empty for an address)
+    results: Vec<SearchResult>,
+    /// request of these results (their covers keep coming once one is chosen)
+    search_token: u32,
+    /// rows displayed
+    rows: Rc<VecModel<PodcastResult>>,
+    /// feed checked, followed by "Follow"
+    podcast: Option<Podcast>,
 }
 
 impl App {
@@ -52,7 +69,7 @@ impl App {
             urls
         };
         for url in to_load {
-            worker::fetch_feed(url, false, sink());
+            worker::fetch_feed(url, sink());
         }
         let current = self.ui().get_podcast_current();
         if current >= self.state.borrow().podcasts.followed.len() as i32 {
@@ -62,18 +79,14 @@ impl App {
         self.podcast_show_current();
     }
 
-    /// Ctrl+P: the Podcasts view, the address field focused.
-    pub(super) fn podcasts_focus_address(&self) {
+    /// Ctrl+P: the Podcasts view, with the dialog adding a podcast.
+    pub(super) fn podcasts_add_from_menu(&self) {
         let ui = self.ui();
-        ui.set_view(1);
-        self.podcasts_show();
-        // once the view is created
-        let weak = self.ui.clone();
-        slint::Timer::single_shot(std::time::Duration::from_millis(50), move || {
-            if let Some(ui) = weak.upgrade() {
-                ui.set_podcast_focus_token(ui.get_podcast_focus_token() + 1);
-            }
-        });
+        if ui.get_view() != 1 {
+            ui.set_view(1);
+            self.podcasts_show();
+        }
+        self.podcast_add_open();
     }
 
     fn album_on_device(&self, uuid: &Uuid) -> bool {
@@ -137,9 +150,7 @@ impl App {
                 .cloned()
             else {
                 drop(st);
-                if self.state.borrow().podcasts.adding.is_none() {
-                    ui.set_podcast_loading(false);
-                }
+                ui.set_podcast_loading(false);
                 self.state.borrow_mut().podcast = None;
                 self.rebuild_podcast_rows();
                 return;
@@ -223,61 +234,13 @@ impl App {
             st.podcasts.feeds.insert(url.clone(), None);
             url
         };
-        worker::fetch_feed(url, false, sink());
+        worker::fetch_feed(url, sink());
         self.rebuild_followed();
         self.podcast_show_current();
     }
 
-    /// Follows the podcast of the typed address, once its feed is loaded.
-    pub(super) fn podcast_add(&self) {
-        let ui = self.ui();
-        let url = ui.get_podcast_url().trim().to_string();
-        if url.is_empty() || self.state.borrow().podcasts.adding.is_some() {
-            return;
-        }
-        self.state.borrow_mut().podcasts.adding = Some(url.clone());
-        ui.set_podcast_adding(true);
-        worker::fetch_feed(url, true, sink());
-    }
-
     pub(super) fn feed_loaded(&self, url: String, result: Result<Box<Podcast>, String>) {
         let ui = self.ui();
-        let added = self.state.borrow().podcasts.adding.as_deref() == Some(url.as_str());
-        if added {
-            self.state.borrow_mut().podcasts.adding = None;
-            ui.set_podcast_adding(false);
-            match result {
-                Ok(p) => {
-                    if let Err(e) = podcast::follow(&p) {
-                        self.status(&format!("🛑 {e:#}"));
-                    }
-                    let feed_url = p.feed_url.clone();
-                    self.state
-                        .borrow_mut()
-                        .podcasts
-                        .feeds
-                        .insert(feed_url.clone(), Some(Ok(*p)));
-                    ui.set_podcast_url("".into());
-                    self.podcasts_show();
-                    let index = self
-                        .state
-                        .borrow()
-                        .podcasts
-                        .followed
-                        .iter()
-                        .position(|f| f.feed_url == feed_url);
-                    self.podcast_select(index.map_or(-1, |i| i as i32));
-                }
-                Err(e) => {
-                    ui.set_podcast_current(-1);
-                    self.state.borrow_mut().podcast = None;
-                    self.rebuild_podcast_rows();
-                    ui.set_podcast_loading(false);
-                    ui.set_podcast_header(format!("🛑 {e}").into());
-                }
-            }
-            return;
-        }
         self.state
             .borrow_mut()
             .podcasts
@@ -292,6 +255,227 @@ impl App {
         if shown {
             self.podcast_show_current();
         }
+    }
+
+    // ------------------------------------------------------------ add dialog
+
+    /// "+": the dialog adding a podcast, empty.
+    pub(super) fn podcast_add_open(&self) {
+        let ui = self.ui();
+        let rows = {
+            let mut st = self.state.borrow_mut();
+            let add = &mut st.podcasts.add;
+            add.token += 1;
+            add.results.clear();
+            add.podcast = None;
+            add.rows.set_vec(Vec::new());
+            add.rows.clone()
+        };
+        ui.set_podcast_add_results(ModelRc::from(rows));
+        ui.set_podcast_add_query("".into());
+        ui.set_podcast_add_selected(-1);
+        ui.set_podcast_add_working(false);
+        ui.set_podcast_add_can_follow(false);
+        self.podcast_add_message("", false);
+        ui.set_dialog(DialogKind::AddPodcast);
+    }
+
+    fn podcast_add_message(&self, message: &str, error: bool) {
+        let ui = self.ui();
+        ui.set_podcast_add_message(message.into());
+        ui.set_podcast_add_error(error);
+    }
+
+    /// A new request: the answers of the previous one will be ignored.
+    fn podcast_add_request(&self) -> u32 {
+        let mut st = self.state.borrow_mut();
+        let add = &mut st.podcasts.add;
+        add.token += 1;
+        add.podcast = None;
+        add.token
+    }
+
+    /// Enter / 🔍: an address is loaded, words are searched.
+    pub(super) fn podcast_add_submit(&self) {
+        let ui = self.ui();
+        let query = ui.get_podcast_add_query().trim().to_string();
+        if query.is_empty() {
+            return;
+        }
+        let token = self.podcast_add_request();
+        {
+            let mut st = self.state.borrow_mut();
+            st.podcasts.add.results.clear();
+            st.podcasts.add.rows.set_vec(Vec::new());
+        }
+        ui.set_podcast_add_selected(-1);
+        ui.set_podcast_add_can_follow(false);
+        ui.set_podcast_add_working(true);
+        if podcast::is_address(&query) {
+            self.podcast_add_message(&tr("Checking the address..."), false);
+            worker::check_feed(token, query, true, sink());
+        } else {
+            self.podcast_add_message(&tr("Searching..."), false);
+            worker::search_podcasts(token, query, store_country(), sink());
+        }
+    }
+
+    pub(super) fn podcast_add_found(&self, token: u32, results: Result<Vec<SearchResult>, String>) {
+        if token != self.state.borrow().podcasts.add.token {
+            return;
+        }
+        self.ui().set_podcast_add_working(false);
+        let results = match results {
+            Ok(results) => results,
+            Err(e) => {
+                self.podcast_add_message(&format!("🛑 {e}"), true);
+                return;
+            }
+        };
+        if results.is_empty() {
+            self.podcast_add_message(&tr("No podcast found"), true);
+        } else {
+            self.podcast_add_message(&tr("Choose a podcast in the list."), false);
+        }
+        let rows: Vec<PodcastResult> = results
+            .iter()
+            .map(|r| {
+                let mut info: Vec<String> = r.author.iter().cloned().collect();
+                if let Some(n) = r.episodes {
+                    info.push(trf("{} episodes", &[&n.to_string()]));
+                }
+                if r.feed_url.is_none() {
+                    info.push(tr("feed not public"));
+                }
+                PodcastResult {
+                    title: r.title.as_str().into(),
+                    info: info.join(" · ").into(),
+                    image: Default::default(),
+                    available: r.feed_url.is_some(),
+                }
+            })
+            .collect();
+        let mut st = self.state.borrow_mut();
+        st.podcasts.add.rows.set_vec(rows);
+        st.podcasts.add.results = results;
+        st.podcasts.add.search_token = token;
+    }
+
+    /// A search result clicked: its feed is checked.
+    pub(super) fn podcast_add_choose(&self, index: i32) {
+        let Some(feed_url) = usize::try_from(index).ok().and_then(|i| {
+            self.state
+                .borrow()
+                .podcasts
+                .add
+                .results
+                .get(i)
+                .and_then(|r| r.feed_url.clone())
+        }) else {
+            return;
+        };
+        let token = self.podcast_add_request();
+        let ui = self.ui();
+        ui.set_podcast_add_selected(index);
+        ui.set_podcast_add_can_follow(false);
+        ui.set_podcast_add_working(true);
+        self.podcast_add_message(&tr("Loading..."), false);
+        worker::check_feed(token, feed_url, false, sink());
+    }
+
+    pub(super) fn podcast_add_checked(&self, token: u32, result: Result<Box<Podcast>, String>) {
+        if token != self.state.borrow().podcasts.add.token {
+            return;
+        }
+        let ui = self.ui();
+        ui.set_podcast_add_working(false);
+        let p = match result {
+            Ok(p) => *p,
+            Err(e) => {
+                self.podcast_add_message(&format!("🛑 {e}"), true);
+                return;
+            }
+        };
+        let mut st = self.state.borrow_mut();
+        let followed = st
+            .podcasts
+            .followed
+            .iter()
+            .any(|f| f.feed_url == p.feed_url);
+        let add = &mut st.podcasts.add;
+        // an address: the podcast found is the only row
+        if add.results.is_empty() {
+            let info: Vec<String> = p
+                .author
+                .iter()
+                .cloned()
+                .chain([trf("{} episodes", &[&p.episodes.len().to_string()])])
+                .collect();
+            add.rows.set_vec(vec![PodcastResult {
+                title: p.title.as_str().into(),
+                info: info.join(" · ").into(),
+                image: Default::default(),
+                available: true,
+            }]);
+            ui.set_podcast_add_selected(0);
+        }
+        let (message, error) = if p.episodes.is_empty() {
+            (tr("This feed has no episode with audio"), true)
+        } else {
+            let mut m = trf(
+                "{} : {} episodes",
+                &[&p.title, &p.episodes.len().to_string()],
+            );
+            if followed {
+                m.push_str(" · ");
+                m.push_str(&tr("already followed"));
+            }
+            (m, false)
+        };
+        ui.set_podcast_add_can_follow(!error);
+        add.podcast = (!error).then_some(p);
+        drop(st);
+        self.podcast_add_message(&message, error);
+    }
+
+    pub(super) fn podcast_add_artwork(&self, token: u32, index: usize, data: &[u8]) {
+        let st = self.state.borrow();
+        let add = &st.podcasts.add;
+        if token != add.token && (add.results.is_empty() || token != add.search_token) {
+            return;
+        }
+        if let (Some(mut row), Some(image)) = (add.rows.row_data(index), decode_image(data)) {
+            row.image = image;
+            add.rows.set_row_data(index, row);
+        }
+    }
+
+    /// "Follow": the podcast checked is followed and selected.
+    pub(super) fn podcast_add_follow(&self) {
+        let Some(p) = self.state.borrow_mut().podcasts.add.podcast.take() else {
+            return;
+        };
+        let ui = self.ui();
+        ui.set_dialog(DialogKind::None);
+        if let Err(e) = podcast::follow(&p) {
+            self.status(&format!("🛑 {e:#}"));
+            return;
+        }
+        let feed_url = p.feed_url.clone();
+        self.state
+            .borrow_mut()
+            .podcasts
+            .feeds
+            .insert(feed_url.clone(), Some(Ok(p)));
+        self.podcasts_show();
+        let index = self
+            .state
+            .borrow()
+            .podcasts
+            .followed
+            .iter()
+            .position(|f| f.feed_url == feed_url);
+        self.podcast_select(index.map_or(-1, |i| i as i32));
     }
 
     pub(super) fn podcast_unfollow(&self) {
@@ -498,5 +682,20 @@ fn format_duration(secs: u32) -> String {
         format!("{m} min")
     } else {
         format!("{} h {:02}", m / 60, m % 60)
+    }
+}
+
+/// Apple Podcasts catalog searched: the region of the user locale (`fr_FR`,
+/// `fr-CA`), or `fr` / `us` from the language.
+fn store_country() -> String {
+    let locale = crate::i18n::system_language();
+    let mut parts = locale.split(['-', '_', '.', '@']);
+    let language = parts.next().unwrap_or("").to_ascii_lowercase();
+    match parts.next() {
+        Some(region) if region.len() == 2 && region.bytes().all(|b| b.is_ascii_alphabetic()) => {
+            region.to_ascii_lowercase()
+        }
+        _ if language == "fr" => "fr".into(),
+        _ => "us".into(),
     }
 }

@@ -77,7 +77,7 @@ impl App {
                 };
                 self.import(files);
             }
-            Action::ImportPodcast => self.podcasts_focus_address(),
+            Action::ImportPodcast => self.podcasts_add_from_menu(),
             Action::NormalizeVolume => {
                 let enabled = ui.get_normalize_volume();
                 if let Err(e) = lunii_core::settings::set_bool("normalize_volume", enabled) {

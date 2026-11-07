@@ -1,14 +1,14 @@
 // Main window.
 
 import { ComboBox, LineEdit, ProgressIndicator, Spinner, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
-import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow, ViewSwitch } from "common.slint";
+import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow, PodcastResult, ViewSwitch } from "common.slint";
 import { StoryTable } from "story_table.slint";
-import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, DeviceInfoDialog } from "dialogs.slint";
+import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, DeviceInfoDialog, AddPodcastDialog } from "dialogs.slint";
 import { PodcastsView } from "podcasts.slint";
 import { AlbumEditor } from "album_editor.slint";
 import { LogPanel } from "log_panel.slint";
 
-export { Action, Theme, StoryRow, LogLine, DialogKind, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow }
+export { Action, Theme, StoryRow, LogLine, DialogKind, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow, PodcastResult }
 
 component StatusText inherits Text {
     color: Theme.status-text;
@@ -148,15 +148,12 @@ export component MainWindow inherits Window {
     // Podcasts view
     in property <[FollowedRow]> podcast-followed;
     in-out property <int> podcast-current: -1;
-    in-out property <string> podcast-url;
-    in property <bool> podcast-adding;
     in property <bool> podcast-loading;
     in property <string> podcast-header;
     in property <[EpisodeRow]> podcast-rows;
     in property <int> podcast-selected-count;
     in-out property <string> podcast-filter;
     in-out property <int> podcast-mode;
-    in property <int> podcast-focus-token;
     callback podcast-add();
     callback podcast-select(index: int);
     callback podcast-refresh();
@@ -166,6 +163,17 @@ export component MainWindow inherits Window {
     callback podcast-select-all(all: bool);
     callback podcast-filter-edited();
     callback podcast-accepted();
+    // "Add a podcast" dialog
+    in-out property <string> podcast-add-query;
+    in property <[PodcastResult]> podcast-add-results;
+    in property <int> podcast-add-selected: -1;
+    in property <bool> podcast-add-working;
+    in property <string> podcast-add-message;
+    in property <bool> podcast-add-error;
+    in property <bool> podcast-add-can-follow;
+    callback podcast-add-submit();
+    callback podcast-add-choose(index: int);
+    callback podcast-add-follow();
 
     callback confirm-remove-accepted();
     callback login-accepted();
@@ -430,8 +438,6 @@ export component MainWindow inherits Window {
                 height: parent.height;
                 followed: root.podcast-followed;
                 current <=> root.podcast-current;
-                url <=> root.podcast-url;
-                adding: root.podcast-adding;
                 header: root.podcast-header;
                 loading: root.podcast-loading;
                 rows: root.podcast-rows;
@@ -440,7 +446,6 @@ export component MainWindow inherits Window {
                 mode <=> root.podcast-mode;
                 can-import: root.story-actions && root.can-import;
                 interactive: !root.busy;
-                focus-token: root.podcast-focus-token;
                 add => { root.podcast-add(); }
                 select(index) => { root.podcast-select(index); }
                 refresh => { root.podcast-refresh(); }
@@ -596,6 +601,21 @@ export component MainWindow inherits Window {
         message: root.confirm-message;
         close => { root.dialog = DialogKind.none; }
         accepted => { root.dialog = DialogKind.none; root.confirm-remove-accepted(); }
+    }
+    if root.dialog == DialogKind.add-podcast: AddPodcastDialog {
+        width: root.width;
+        height: root.height;
+        query <=> root.podcast-add-query;
+        results: root.podcast-add-results;
+        selected: root.podcast-add-selected;
+        working: root.podcast-add-working;
+        message: root.podcast-add-message;
+        message-error: root.podcast-add-error;
+        can-follow: root.podcast-add-can-follow;
+        close => { root.dialog = DialogKind.none; }
+        submit => { root.podcast-add-submit(); }
+        choose(index) => { root.podcast-add-choose(index); }
+        follow => { root.podcast-add-follow(); }
     }
     if root.dialog == DialogKind.login: LoginDialog {
         width: root.width;

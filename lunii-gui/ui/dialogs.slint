@@ -1,7 +1,7 @@
 // Modal dialogs, displayed as overlays inside the main window.
 
-import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette, SpinBox, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
-import { Link, Theme, InfoRow } from "common.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette, SpinBox, Spinner, VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { Link, Theme, InfoRow, PodcastResult } from "common.slint";
 
 /// Dimmed background + centered panel with a title band. Clicking outside
 /// does nothing (modal); Escape or the cross closes it. The main window
@@ -339,5 +339,125 @@ export component DeviceInfoDialog inherits Overlay {
         Button { text: @tr("Copy"); clicked => { root.copy(); } }
         Rectangle { horizontal-stretch: 1; }
         Button { text: "OK"; primary: true; clicked => { root.close(); } }
+    }
+}
+
+/// "+" of the Podcasts view: a podcast searched by its name (Apple Podcasts)
+/// or loaded from its address, checked before being followed.
+export component AddPodcastDialog inherits Overlay {
+    in-out property <string> query;
+    in property <[PodcastResult]> results;
+    in property <int> selected: -1;
+    // a search or a feed being loaded
+    in property <bool> working;
+    // result of the check of the feed, or the error
+    in property <string> message;
+    in property <bool> message-error;
+    // a feed was checked
+    in property <bool> can-follow;
+    callback submit();
+    callback choose(index: int);
+    callback follow();
+
+    title: @tr("Add a podcast");
+    panel-width: 560px;
+    init => { query-edit.focus(); }
+
+    HorizontalLayout {
+        spacing: 6px;
+        query-edit := LineEdit {
+            text <=> root.query;
+            placeholder-text: @tr("Podcast name or address");
+            accepted => { root.submit(); }
+        }
+        if !root.working: Button {
+            text: @tr("Search");
+            // as the spinner replacing it: the field does not move
+            width: 110px;
+            enabled: root.query != "";
+            clicked => { root.submit(); }
+        }
+        if root.working: Rectangle {
+            width: 110px;
+            Spinner {
+                indeterminate: true;
+                width: 22px;
+                height: 22px;
+            }
+        }
+    }
+    Text {
+        text: @tr("Search a podcast by its name, or paste the address of its RSS feed, of its page or its Apple Podcasts link.");
+        wrap: word-wrap;
+        font-size: 12px;
+        color: Theme.hidden-text;
+    }
+    if root.results.length > 0: Rectangle {
+        height: min(290px, root.results.length * 54px + 2px);
+        border-width: 1px;
+        border-color: Palette.border;
+        ListView {
+            for row[i] in root.results: Rectangle {
+                height: 54px;
+                background: i == root.selected ? Theme.selection : result-area.has-hover && row.available ? #8882 : transparent;
+                result-area := TouchArea {
+                    enabled: row.available;
+                    mouse-cursor: row.available ? pointer : default;
+                    clicked => { root.choose(i); }
+                }
+                HorizontalLayout {
+                    padding: 5px;
+                    padding-left: 6px;
+                    // the scrollbar
+                    padding-right: 14px;
+                    spacing: 8px;
+                    Rectangle {
+                        width: 44px;
+                        height: 44px;
+                        border-radius: 4px;
+                        background: #8883;
+                        clip: true;
+                        Image {
+                            source: row.image;
+                            width: 44px;
+                            height: 44px;
+                            image-fit: cover;
+                            opacity: row.available ? 1 : 0.4;
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: row.title;
+                            overflow: elide;
+                            font-weight: 600;
+                            color: i == root.selected ? #fff : row.available ? Palette.foreground : Theme.hidden-text;
+                        }
+                        Text {
+                            text: row.info;
+                            font-size: 11px;
+                            overflow: elide;
+                            color: i == root.selected ? #fff : Theme.hidden-text;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if root.message != "": Text {
+        text: root.message;
+        wrap: word-wrap;
+        color: root.message-error ? Theme.warning : Palette.foreground;
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: 8px;
+        Button { text: @tr("Cancel"); clicked => { root.close(); } }
+        Button {
+            text: @tr("Follow");
+            primary: true;
+            enabled: root.can-follow && !root.working;
+            clicked => { root.follow(); }
+        }
     }
 }

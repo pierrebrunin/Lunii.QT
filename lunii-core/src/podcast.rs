@@ -174,6 +174,81 @@ fn apple_feed_url(id: &str, country: Option<&str>) -> Result<String> {
     }
 }
 
+/// A podcast found by [`search`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchResult {
+    pub title: String,
+    pub author: Option<String>,
+    /// `None`: the publisher does not give its feed to Apple
+    pub feed_url: Option<String>,
+    /// small cover (100×100)
+    pub artwork_url: Option<String>,
+    pub episodes: Option<u32>,
+}
+
+/// `true` when `text` is an address (to load) rather than words (to search).
+pub fn is_address(text: &str) -> bool {
+    let text = text.trim();
+    text.starts_with("http://") || text.starts_with("https://")
+}
+
+/// Searches podcasts by name in the Apple Podcasts catalog of `country`
+/// (`fr`, `us`...): free API, no key, about 20 requests per minute.
+pub fn search(term: &str, country: &str) -> Result<Vec<SearchResult>> {
+    let url = format!(
+        "https://itunes.apple.com/search?media=podcast&entity=podcast&limit=30&country={}&term={}",
+        query_encode(country),
+        query_encode(term.trim())
+    );
+    parse_search(&get_text(&url)?)
+}
+
+/// Percent-encoding of a query value.
+fn query_encode(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for b in value.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            b' ' => out.push('+'),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
+fn parse_search(json: &str) -> Result<Vec<SearchResult>> {
+    let data: Value = serde_json::from_str(json).context("Invalid answer of Apple Podcasts")?;
+    let text = |r: &Value, name: &str| {
+        r[name]
+            .as_str()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    Ok(data["results"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|r| r["kind"] == "podcast")
+        .filter_map(|r| {
+            Some(SearchResult {
+                title: text(r, "collectionName").or_else(|| text(r, "trackName"))?,
+                author: text(r, "artistName"),
+                feed_url: text(r, "feedUrl").filter(|u| u.starts_with("http")),
+                artwork_url: text(r, "artworkUrl100").or_else(|| text(r, "artworkUrl60")),
+                episodes: r["trackCount"].as_u64().map(|n| n as u32),
+            })
+        })
+        .collect())
+}
+
+/// Small picture (search result cover), if any.
+pub fn download_artwork(url: &str) -> Option<Vec<u8>> {
+    let resp = http::agent(Duration::from_secs(15)).get(url).call().ok()?;
+    http::bytes(resp).ok()
+}
+
 /// Loads a podcast from its feed address, or from a page announcing it.
 pub fn fetch(address: &str) -> Result<Podcast> {
     let address = address.trim();
@@ -993,6 +1068,34 @@ mod tests {
         assert_eq!(p.episodes[1].url, "https://example.org/2.mp3");
         assert_eq!(p.episodes[1].duration, Some(750));
         assert_eq!(p.episodes[1].size, Some(1234));
+    }
+
+    #[test]
+    fn apple_search() {
+        let json = r#"{"resultCount":3,"results":[
+ {"kind":"podcast","collectionName":"Un podcast à soi","artistName":"ARTE Radio",
+  "feedUrl":"https://www.arteradio.com/xml","artworkUrl100":"https://img/100.jpg","trackCount":69},
+ {"kind":"podcast","collectionName":"Contes du soir","artistName":"Radio Exemple","trackCount":203},
+ {"kind":"podcast-episode","trackName":"Un épisode"}]}"#;
+        let r = parse_search(json).unwrap();
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0].title, "Un podcast à soi");
+        assert_eq!(r[0].author.as_deref(), Some("ARTE Radio"));
+        assert_eq!(
+            r[0].feed_url.as_deref(),
+            Some("https://www.arteradio.com/xml")
+        );
+        assert_eq!(r[0].artwork_url.as_deref(), Some("https://img/100.jpg"));
+        assert_eq!(r[0].episodes, Some(69));
+        // feed not given to Apple
+        assert_eq!(r[1].feed_url, None);
+        assert!(parse_search("<html>").is_err());
+        assert_eq!(
+            query_encode("contes à lire & co"),
+            "contes+%C3%A0+lire+%26+co"
+        );
+        assert!(is_address(" https://x"));
+        assert!(!is_address("contes du soir"));
     }
 
     #[test]
