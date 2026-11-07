@@ -78,7 +78,7 @@ Forget about all previous .md and firmware recommendations.
 
 1. The **menu bar**. It will notify you when an update is available  
    (just get it with Menu About/Update to v2.X.X)
-2. The **location of your Lunii/Flam** when it's connected.   
+2. The **model of your Lunii/Flam** when it's connected (its location and technical details are in File / Device information, or a click on the status bar).   
    The button on the left updates automatic detection.
 3. Configuring **Night mode** ([here](#night-mode))
 4. **Official DB refresh** : Updates the list of stories and related information from the official Lunii Store. Use it when some official are not recognized.
