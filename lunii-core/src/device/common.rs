@@ -539,8 +539,7 @@ pub(crate) fn edit_album<D: StoryWriter>(
     uuid: &uuid::Uuid,
     entries: &[crate::album::AlbumEntry],
 ) -> Result<()> {
-    use crate::album::{self, AlbumEntry, meta, track_asset};
-    use crate::{convert::image, story};
+    use crate::album::{self, AlbumEntry, meta};
 
     let story = dev
         .stories()
@@ -550,19 +549,7 @@ pub(crate) fn edit_album<D: StoryWriter>(
     let story_dir = dev.story_path(&story);
     let count = album::device_track_count(&story_dir)
         .context("This story is not an MP3 album created by Lunii")?;
-    if entries.is_empty() {
-        bail!("An album needs at least one track");
-    }
-    let mut used = vec![false; count];
-    for entry in entries {
-        if let AlbumEntry::Existing(j) = *entry {
-            anyhow::ensure!(
-                j < count && !std::mem::replace(&mut used[j], true),
-                "Invalid track number: {}",
-                j + 1
-            );
-        }
-    }
+    check_album_entries(entries, count)?;
     let new_tracks: Vec<album::Track> = entries
         .iter()
         .filter_map(|e| match e {
@@ -577,109 +564,29 @@ pub(crate) fn edit_album<D: StoryWriter>(
         );
     }
 
-    let old_titles = meta::on_device(&story_dir)
-        .map(|info| info.tracks)
-        .unwrap_or_default();
-    let font = album::font()?;
-    let header = story.name();
-    let short = story.short_uuid();
-    let img = |i: usize| track_asset("IMG", i, "png");
-    let trk = |i: usize| track_asset("TRK", i, "mp3");
-    let device_file = |name: &str, is_image: bool| {
-        story_dir.join(studio_asset_path(&story::normalized_name(name), is_image))
+    let files = AlbumFiles {
+        dir: story_dir.clone(),
+        tmp: story_dir.join("edit.tmp"),
     };
-    let tmp = story_dir.join("edit.tmp");
-    let tmp_file = |name: &str| tmp.join(story::normalized_name(name));
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(&tmp)?;
+    let _ = std::fs::remove_dir_all(&files.tmp);
+    std::fs::create_dir_all(&files.tmp)?;
 
-    // 1. new files in the temporary directory: added tracks, screens of the
-    // moved ones (their number changes)
-    let mut titles = Vec::with_capacity(entries.len());
-    let prepared = (|| -> Result<()> {
-        for (i, entry) in entries.iter().enumerate() {
-            ctx.story_progress(&short, i, entries.len());
-            check_abort(ctx)?;
-            match entry {
-                AlbumEntry::New(track) => {
-                    ctx.info(format!("🎵 Track {} : {}", i + 1, track.title));
-                    for asset in album::track_assets(&font, &header, track, i)? {
-                        let source_len = asset.data.len() as u64;
-                        let data = if asset.is_image() {
-                            image::image_to_bitmap_rle4(&asset.data)?
-                        } else {
-                            convert_studio_audio(
-                                ctx,
-                                &asset.name,
-                                &asset.name,
-                                asset.data,
-                                transcoding,
-                            )?
-                        };
-                        let ciphered = dev.cipher_story_file(&asset.name, &data)?;
-                        write_with_progress(ctx, &tmp_file(&asset.name), &ciphered)?;
-                        ctx.count_as_source(source_len, ciphered.len() as u64);
-                    }
-                    titles.push(track.title.clone());
-                }
-                &AlbumEntry::Existing(j) => {
-                    let title = old_titles.get(j).cloned().unwrap_or_default();
-                    // unknown title: the old screen is kept (with its old number)
-                    if j != i && !title.is_empty() {
-                        let asset = album::track_screen_asset(&font, &header, &title, i)?;
-                        let data = image::image_to_bitmap_rle4(&asset.data)?;
-                        let ciphered = dev.cipher_story_file(&asset.name, &data)?;
-                        write_file(&tmp_file(&asset.name), &ciphered)?;
-                    }
-                    titles.push(title);
-                }
-            }
+    // 1. new files in the temporary directory (the album stays as it was on
+    // abort or error)
+    let titles = match prepare_album_files(dev, ctx, &story, &files, entries, transcoding) {
+        Ok(titles) => titles,
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&files.tmp);
+            return Err(e);
         }
-        Ok(())
-    })();
-    if let Err(e) = prepared {
-        let _ = std::fs::remove_dir_all(&tmp);
-        return Err(e);
-    }
+    };
 
     // 2. tracks moved in place (no abort from here)
     let damaged = "The album may be damaged, remove it and import it again";
-    let rename = |from: &Path, to: &Path| {
-        std::fs::rename(from, to)
-            .with_context(|| format!("unable to rename {} to {}", from.display(), to.display()))
-    };
-    let moved = (|| -> Result<()> {
-        for (i, entry) in entries.iter().enumerate() {
-            if let &AlbumEntry::Existing(j) = entry
-                && j != i
-            {
-                rename(&device_file(&trk(j), false), &tmp_file(&trk(i)))?;
-                if !tmp_file(&img(i)).exists() {
-                    rename(&device_file(&img(j), true), &tmp_file(&img(i)))?;
-                }
-            }
-        }
-        // the files of the removed tracks, the old screens of the moved ones
-        for j in 0..count {
-            if !matches!(entries.get(j), Some(&AlbumEntry::Existing(k)) if k == j) {
-                let _ = std::fs::remove_file(device_file(&img(j), true));
-                let _ = std::fs::remove_file(device_file(&trk(j), false));
-            }
-        }
-        for i in 0..entries.len() {
-            for (name, is_image) in [(img(i), true), (trk(i), false)] {
-                let from = tmp_file(&name);
-                if from.exists() {
-                    rename(&from, &device_file(&name, is_image))?;
-                }
-            }
-        }
-        let _ = std::fs::remove_dir_all(&tmp);
-        Ok(())
-    })();
-    moved.context(damaged)?;
+    move_album_files(&files, entries, count).context(damaged)?;
 
     // 3. index files for the new track list
+    let header = story.name();
     let names: Vec<String> = titles
         .iter()
         .enumerate()
@@ -693,7 +600,7 @@ pub(crate) fn edit_album<D: StoryWriter>(
         .collect();
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
     let studio =
-        story::StudioStory::load(&album::story_json(story.uuid, &header, "", &names), true)?;
+        crate::story::StudioStory::load(&album::story_json(story.uuid, &header, "", &names), true)?;
     let index = write_index_files(dev, &story_dir, &studio)?;
     dev.seal_story(ctx, &story_dir, &story, &index[0].1, false)?;
     remove_album_excerpts(&story_dir, count.max(entries.len()));
@@ -706,6 +613,161 @@ pub(crate) fn edit_album<D: StoryWriter>(
     }
     update_album_description(uuid, &header, count, entries.len());
     verify_story_files(ctx, &story_dir, &studio, &index).context(damaged)
+}
+
+/// The new track list refers to existing tracks once at most.
+fn check_album_entries(entries: &[crate::album::AlbumEntry], count: usize) -> Result<()> {
+    if entries.is_empty() {
+        bail!("An album needs at least one track");
+    }
+    let mut used = vec![false; count];
+    for entry in entries {
+        if let crate::album::AlbumEntry::Existing(j) = *entry {
+            anyhow::ensure!(
+                j < count && !std::mem::replace(&mut used[j], true),
+                "Invalid track number: {}",
+                j + 1
+            );
+        }
+    }
+    Ok(())
+}
+
+/// The files of an album being edited: on the device, and prepared in a
+/// temporary directory of the story.
+struct AlbumFiles {
+    dir: PathBuf,
+    tmp: PathBuf,
+}
+
+impl AlbumFiles {
+    fn image(i: usize) -> String {
+        crate::album::track_asset("IMG", i, "png")
+    }
+
+    fn track(i: usize) -> String {
+        crate::album::track_asset("TRK", i, "mp3")
+    }
+
+    fn device(&self, name: &str, is_image: bool) -> PathBuf {
+        self.dir.join(studio_asset_path(
+            &crate::story::normalized_name(name),
+            is_image,
+        ))
+    }
+
+    fn temporary(&self, name: &str) -> PathBuf {
+        self.tmp.join(crate::story::normalized_name(name))
+    }
+}
+
+/// Step 1 of an album edit: the files of the added tracks and the screens of
+/// the moved ones (their number changes) written in the temporary directory.
+/// Returns the titles of the new track list (empty: unknown).
+fn prepare_album_files<D: StoryWriter>(
+    dev: &D,
+    ctx: &Context,
+    story: &crate::story::Story,
+    files: &AlbumFiles,
+    entries: &[crate::album::AlbumEntry],
+    transcoding: bool,
+) -> Result<Vec<String>> {
+    use crate::album::{self, AlbumEntry, meta};
+    use crate::convert::image;
+
+    let old_titles = meta::on_device(&files.dir)
+        .map(|info| info.tracks)
+        .unwrap_or_default();
+    let font = album::font()?;
+    let header = story.name();
+    let short = story.short_uuid();
+    let mut titles = Vec::with_capacity(entries.len());
+    for (i, entry) in entries.iter().enumerate() {
+        ctx.story_progress(&short, i, entries.len());
+        check_abort(ctx)?;
+        match entry {
+            AlbumEntry::New(track) => {
+                ctx.info(format!("🎵 Track {} : {}", i + 1, track.title));
+                for asset in album::track_assets(&font, &header, track, i)? {
+                    let source_len = asset.data.len() as u64;
+                    let data = if asset.is_image() {
+                        image::image_to_bitmap_rle4(&asset.data)?
+                    } else {
+                        convert_studio_audio(
+                            ctx,
+                            &asset.name,
+                            &asset.name,
+                            asset.data,
+                            transcoding,
+                        )?
+                    };
+                    let ciphered = dev.cipher_story_file(&asset.name, &data)?;
+                    write_with_progress(ctx, &files.temporary(&asset.name), &ciphered)?;
+                    ctx.count_as_source(source_len, ciphered.len() as u64);
+                }
+                titles.push(track.title.clone());
+            }
+            &AlbumEntry::Existing(j) => {
+                let title = old_titles.get(j).cloned().unwrap_or_default();
+                // unknown title: the old screen is kept (with its old number)
+                if j != i && !title.is_empty() {
+                    let asset = album::track_screen_asset(&font, &header, &title, i)?;
+                    let data = image::image_to_bitmap_rle4(&asset.data)?;
+                    let ciphered = dev.cipher_story_file(&asset.name, &data)?;
+                    write_file(&files.temporary(&asset.name), &ciphered)?;
+                }
+                titles.push(title);
+            }
+        }
+    }
+    Ok(titles)
+}
+
+/// Step 2 of an album edit: the moved tracks renamed, the removed ones (and
+/// the old screens of the moved ones) deleted, then the prepared files put in
+/// place.
+fn move_album_files(
+    files: &AlbumFiles,
+    entries: &[crate::album::AlbumEntry],
+    count: usize,
+) -> Result<()> {
+    use crate::album::AlbumEntry;
+    let rename = |from: &Path, to: &Path| {
+        std::fs::rename(from, to)
+            .with_context(|| format!("unable to rename {} to {}", from.display(), to.display()))
+    };
+    for (i, entry) in entries.iter().enumerate() {
+        if let &AlbumEntry::Existing(j) = entry
+            && j != i
+        {
+            rename(
+                &files.device(&AlbumFiles::track(j), false),
+                &files.temporary(&AlbumFiles::track(i)),
+            )?;
+            if !files.temporary(&AlbumFiles::image(i)).exists() {
+                rename(
+                    &files.device(&AlbumFiles::image(j), true),
+                    &files.temporary(&AlbumFiles::image(i)),
+                )?;
+            }
+        }
+    }
+    for j in 0..count {
+        if !matches!(entries.get(j), Some(&AlbumEntry::Existing(k)) if k == j) {
+            let _ = std::fs::remove_file(files.device(&AlbumFiles::image(j), true));
+            let _ = std::fs::remove_file(files.device(&AlbumFiles::track(j), false));
+        }
+    }
+    for i in 0..entries.len() {
+        for (name, is_image) in [(AlbumFiles::image(i), true), (AlbumFiles::track(i), false)] {
+            let from = files.temporary(&name);
+            if from.exists() {
+                rename(&from, &files.device(&name, is_image))?;
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&files.tmp);
+    Ok(())
 }
 
 /// The description of an album ends with its number of tracks (`Artist - 12
