@@ -749,7 +749,8 @@ pub fn spawn(
 /// Fetches the description and picture of a story (picture may need the network).
 pub fn fetch_details(uuid: Uuid, sink: Sink) {
     std::thread::spawn(move || {
-        let desc = db::story_description(&uuid);
+        // official descriptions are HTML
+        let desc = db::plain_text(&db::story_description(&uuid));
         let picture = db::story_picture(&uuid, false);
         sink(Event::Details(uuid, desc, picture));
     });

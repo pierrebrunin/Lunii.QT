@@ -222,6 +222,58 @@ fn strip_leading_html(mut desc: &str) -> &str {
     desc
 }
 
+/// Text of an HTML description, for display: line breaks and list items
+/// kept, the other tags removed, entities decoded.
+pub fn plain_text(html: &str) -> String {
+    let mut text = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(start) = rest.find('<') {
+        text.push_str(&rest[..start]);
+        let Some(end) = rest[start..].find('>') else {
+            text.push_str(&rest[start..]);
+            rest = "";
+            break;
+        };
+        let tag = rest[start + 1..start + end].trim().to_ascii_lowercase();
+        let name: String = tag
+            .trim_start_matches('/')
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric())
+            .collect();
+        let closing = tag.starts_with('/');
+        match name.as_str() {
+            "br" => text.push('\n'),
+            "p" | "div" | "ul" | "ol" if closing => text.push('\n'),
+            "li" if !closing => text.push_str("\n• "),
+            _ => {}
+        }
+        rest = &rest[start + end + 1..];
+    }
+    text.push_str(rest);
+    let text = text
+        .replace("&nbsp;", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&amp;", "&");
+    // trimmed lines, at most one empty line in a row
+    let mut out = String::new();
+    let mut empty = 0;
+    for line in text.lines().map(str::trim) {
+        if line.is_empty() {
+            empty += 1;
+            continue;
+        }
+        if !out.is_empty() {
+            out.push_str(if empty > 0 { "\n\n" } else { "\n" });
+        }
+        out.push_str(line);
+        empty = 0;
+    }
+    out
+}
+
 pub fn story_description(uuid: &Uuid) -> String {
     lookup(uuid, |entry| match localized_field(entry, "description") {
         Some(desc) => desc.map(|d| strip_leading_html(d).to_string()),
@@ -330,6 +382,24 @@ mod tests {
             "Hello</b> world"
         );
         assert_eq!(strip_leading_html("  plain"), "  plain");
+    }
+
+    #[test]
+    fn html_to_text() {
+        assert_eq!(
+            plain_text("Aider ?<br>Mais <b>en duo</b>&nbsp;!<br/><br/>Fin<br />"),
+            "Aider ?\nMais en duo !\n\nFin"
+        );
+        assert_eq!(
+            plain_text("<p>Un</p><p>Deux &amp; trois</p><ul><li>a</li><li>b</li></ul>"),
+            "Un\nDeux & trois\n\n• a\n• b"
+        );
+        assert_eq!(
+            plain_text(r#"Voir <a href="https://x/y.pdf">les cartes</a>"#),
+            "Voir les cartes"
+        );
+        assert_eq!(plain_text("pas de balise"), "pas de balise");
+        assert_eq!(plain_text("a < b"), "a < b");
     }
 
     #[test]
