@@ -859,6 +859,10 @@ impl App {
             if st.current.is_some_and(|c| c >= st.visible.len()) {
                 st.current = st.visible.len().checked_sub(1);
             }
+            // a shift selection starts again from the clicked row
+            if st.anchor.is_some_and(|a| a >= st.visible.len()) {
+                st.anchor = None;
+            }
             st.visible
                 .iter()
                 .map(|&i| {
@@ -908,7 +912,8 @@ impl App {
                     st.anchor = Some(row);
                 }
             } else if shift {
-                let anchor = st.anchor.unwrap_or(row);
+                // (kept in the list by rebuild_rows: checked anyway)
+                let anchor = st.anchor.filter(|&a| a < st.visible.len()).unwrap_or(row);
                 let (a, b) = (anchor.min(row), anchor.max(row));
                 let range: Vec<Uuid> = st.visible[a..=b]
                     .iter()
@@ -941,7 +946,8 @@ impl App {
                 None => 0,
             };
             if shift {
-                let anchor = st.anchor.unwrap_or(row);
+                // (kept in the list by rebuild_rows: checked anyway)
+                let anchor = st.anchor.filter(|&a| a < st.visible.len()).unwrap_or(row);
                 let (a, b) = (anchor.min(row), anchor.max(row));
                 let range: Vec<Uuid> = st.visible[a..=b]
                     .iter()
