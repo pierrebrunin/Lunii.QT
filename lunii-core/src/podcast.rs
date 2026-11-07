@@ -266,8 +266,12 @@ fn apple_feed_url(id: &str, country: Option<&str>) -> Result<String> {
     if let Some(country) = country {
         url.push_str(&format!("&country={country}"));
     }
-    let data: Value =
-        serde_json::from_str(&get_text(&url)?).context("Invalid answer of Apple Podcasts")?;
+    parse_lookup(&get_text(&url)?)
+}
+
+/// Feed address in an answer of the iTunes lookup API.
+fn parse_lookup(json: &str) -> Result<String> {
+    let data: Value = serde_json::from_str(json).context("Invalid answer of Apple Podcasts")?;
     let result = data["results"]
         .as_array()
         .and_then(|r| r.iter().find(|r| r["kind"] == "podcast"))
@@ -1181,6 +1185,44 @@ mod tests {
         assert_eq!(p.album_uuid(), album_uuid("https://example.org/feed.xml"));
     }
 
+    /// What real feeds often contain.
+    #[test]
+    fn feed_usual_content() {
+        let xml = "\u{feff}<?xml version=\"1.0\"?>
+<rss version=\"2.0\"><channel>
+  <title><![CDATA[Contes & comptines]]></title>
+  <image><url>https://example.org/logo.png</url></image>
+  <item>
+    <title>L&apos;ogre &amp; le chat</title>
+    <enclosure url=\"https://example.org/1.mp3?a=1&amp;b=2\" type=\"audio/mpeg\"/>
+  </item>
+</channel></rss>";
+        // byte order mark
+        assert!(looks_like_feed(xml));
+        let p = parse_feed("https://example.org/feed", xml).unwrap();
+        assert_eq!(p.title, "Contes & comptines");
+        assert_eq!(p.author, None);
+        assert_eq!(p.image_url.as_deref(), Some("https://example.org/logo.png"));
+        let e = &p.episodes[0];
+        assert_eq!(e.title, "L'ogre & le chat");
+        assert_eq!(e.url, "https://example.org/1.mp3?a=1&b=2");
+        // no date, duration nor size
+        assert_eq!((e.date.as_str(), e.duration, e.size), ("", None, None));
+    }
+
+    #[test]
+    fn invalid_sources() {
+        // not XML, XML but not a feed
+        assert!(parse_feed("https://ex/f", "<rss><channel>").is_err());
+        assert!(parse_feed("https://ex/f", "<html><body/></html>").is_err());
+        // a page without feed nor list of episodes: error without network
+        let e = page_podcast("https://ex/page", "<html><title>x</title></html>")
+            .unwrap_err()
+            .to_string();
+        assert_eq!(e, "No podcast feed found at this address");
+        assert!(!looks_like_feed("<!DOCTYPE html><html>"));
+    }
+
     #[test]
     fn feed_discovery() {
         let page = "https://example.org/podcasts/contes";
@@ -1312,6 +1354,22 @@ mod tests {
     }
 
     #[test]
+    fn apple_lookup() {
+        let found =
+            r#"{"resultCount":1,"results":[{"kind":"podcast","feedUrl":"https://ex/feed.xml"}]}"#;
+        assert_eq!(parse_lookup(found).unwrap(), "https://ex/feed.xml");
+        // publisher not giving its feed to Apple, unknown id, not JSON
+        let hidden = r#"{"resultCount":1,"results":[{"kind":"podcast","collectionName":"x"}]}"#;
+        let e = parse_lookup(hidden).unwrap_err().to_string();
+        assert!(e.contains("does not give the RSS feed"), "{e}");
+        let e = parse_lookup(r#"{"resultCount":0,"results":[]}"#)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(e, "Podcast not found on Apple Podcasts");
+        assert!(parse_lookup("<html>").is_err());
+    }
+
+    #[test]
     fn apple_podcasts_links() {
         assert_eq!(
             apple_podcast_id("https://podcasts.apple.com/fr/podcast/contes-du-soir/id1469858852"),
@@ -1379,6 +1437,12 @@ mod tests {
         assert_eq!(e.date, "2026-07-24");
         assert_eq!(e.duration, Some(720));
         assert_eq!(e.url, "https://media/b.mp3");
+        // an invalid JSON-LD block is skipped
+        let broken = format!(r#"<script type="application/ld+json">{{"@type":</script>{page}"#);
+        assert_eq!(
+            page_episode("https://ex/ep-2", &broken).unwrap().url,
+            "https://media/b.mp3"
+        );
         // a series page: no audio, but the list of its episodes
         let series = r#"<script type="application/ld+json">{"@type":"ItemList","itemListElement":[
  {"@type":"ListItem","position":1,"url":"https://ex/ep-1"},

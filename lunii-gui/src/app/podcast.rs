@@ -688,7 +688,10 @@ fn format_duration(secs: u32) -> String {
 /// Apple Podcasts catalog searched: the region of the user locale (`fr_FR`,
 /// `fr-CA`), or `fr` / `us` from the language.
 fn store_country() -> String {
-    let locale = crate::i18n::system_language();
+    country_of(&crate::i18n::system_language())
+}
+
+fn country_of(locale: &str) -> String {
     let mut parts = locale.split(['-', '_', '.', '@']);
     let language = parts.next().unwrap_or("").to_ascii_lowercase();
     match parts.next() {
@@ -697,5 +700,27 @@ fn store_country() -> String {
         }
         _ if language == "fr" => "fr".into(),
         _ => "us".into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apple_store_country() {
+        assert_eq!(country_of("fr_FR.UTF-8"), "fr");
+        assert_eq!(country_of("fr-CA"), "ca");
+        assert_eq!(country_of("fr"), "fr");
+        assert_eq!(country_of("en_GB"), "gb");
+        assert_eq!(country_of("en"), "us");
+        assert_eq!(country_of("C"), "us");
+    }
+
+    #[test]
+    fn durations() {
+        assert_eq!(format_duration(45), "1 min");
+        assert_eq!(format_duration(8 * 60), "8 min");
+        assert_eq!(format_duration(3723), "1 h 03");
     }
 }
