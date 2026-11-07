@@ -157,6 +157,9 @@ struct State {
     durations: HashMap<Uuid, Option<u32>>,
     /// a measure of durations is running
     measuring: bool,
+    /// incremented when the measures are forgotten: those still running
+    /// (stories maybe changed or moved meanwhile) are ignored
+    durations_generation: u32,
     /// podcast of the selection dialog, and its selected episodes
     podcast: Option<(Box<PodcastView>, HashSet<usize>)>,
     /// followed podcasts and their feeds (Podcasts view)
@@ -771,6 +774,7 @@ impl App {
             st.dev = Some(info);
             st.stories = stories;
         }
+        self.forget_durations();
 
         ui.set_device_icon(if is_flam { flam_icon() } else { lunii_icon() });
         ui.set_is_flam(is_flam);
@@ -832,8 +836,26 @@ impl App {
             .map(|s| (s.uuid, dev.story_path(s)))
             .collect();
         drop(dev);
-        self.state.borrow_mut().measuring = true;
-        worker::measure_durations(dirs, sink());
+        let generation = {
+            let mut st = self.state.borrow_mut();
+            st.measuring = true;
+            st.durations_generation
+        };
+        worker::measure_durations(generation, dirs, sink());
+    }
+
+    /// The stories may have changed (task, quick change, other device): their
+    /// durations are measured again.
+    fn forget_durations(&self) {
+        {
+            let mut st = self.state.borrow_mut();
+            if st.durations.is_empty() && !st.measuring {
+                return;
+            }
+            st.durations.clear();
+            st.durations_generation += 1;
+        }
+        self.rebuild_rows();
     }
 
     fn rebuild_rows(&self) {
@@ -1113,6 +1135,7 @@ impl App {
             (result, worker::snapshot(dev.as_ref()))
         };
         self.state.borrow_mut().stories = stories;
+        self.forget_durations();
         self.rebuild_rows();
         match result {
             Ok(()) => true,
@@ -1299,10 +1322,13 @@ impl App {
                     0.0
                 });
             }
-            Event::Duration(uuid, duration) => {
+            Event::Duration(generation, uuid, duration) => {
                 // only its row changes (the list keeps its scrolling)
                 let row = {
                     let mut st = self.state.borrow_mut();
+                    if generation != st.durations_generation {
+                        return;
+                    }
                     st.durations.insert(uuid, duration);
                     st.visible.iter().position(|&i| st.stories[i].uuid == uuid)
                 };
@@ -1368,6 +1394,9 @@ impl App {
                 self.selection_changed();
                 self.podcasts_refresh_device();
                 if !sized {
+                    // the stories may have changed (album edited, episodes
+                    // appended, story moved...)
+                    self.forget_durations();
                     self.ensure_sizes();
                 }
                 // firmware login done: choose where to save the files

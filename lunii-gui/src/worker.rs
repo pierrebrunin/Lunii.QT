@@ -159,8 +159,9 @@ pub enum Event {
     /// Background device opening done (search id, device or error)
     DeviceOpened(u32, Result<Box<OpenedDevice>, String>),
     Finished,
-    /// Duration measured on the device (seconds, `None`: not measurable)
-    Duration(Uuid, Option<u32>),
+    /// Duration measured on the device (generation of the measures, story,
+    /// seconds; `None`: not measurable)
+    Duration(u32, Uuid, Option<u32>),
     /// The durations asked are all measured
     DurationsDone,
 }
@@ -755,10 +756,11 @@ pub fn spawn(
 
 /// Measures the duration of stories from their audio files (not a task: only
 /// reads a little of each file).
-pub fn measure_durations(stories: Vec<(Uuid, PathBuf)>, sink: Sink) {
+pub fn measure_durations(generation: u32, stories: Vec<(Uuid, PathBuf)>, sink: Sink) {
     std::thread::spawn(move || {
         for (uuid, dir) in stories {
-            sink(Event::Duration(uuid, lunii_core::mp3::story_duration(&dir)));
+            let duration = lunii_core::mp3::story_duration(&dir);
+            sink(Event::Duration(generation, uuid, duration));
         }
         sink(Event::DurationsDone);
     });
