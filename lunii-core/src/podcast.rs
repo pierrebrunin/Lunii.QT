@@ -936,6 +936,12 @@ pub fn display_date(iso: &str) -> String {
 }
 
 /// A title usable as a file name (shown in the import messages).
+/// Archive of the episode `index` imported as a story: numbered, as titles
+/// may be the same, or start alike (cut to 60 characters).
+fn story_zip_name(index: usize, title: &str) -> String {
+    format!("{:04} {}.zip", index + 1, file_name(title))
+}
+
 fn file_name(title: &str) -> String {
     let name: String = title
         .chars()
@@ -1001,8 +1007,8 @@ pub fn prepare_import(
     if mode.as_stories {
         let cover = download_cover(podcast);
         let mut archives = Vec::with_capacity(tracks.len());
-        for (ep, track) in episodes.iter().zip(&tracks) {
-            let zip = dir.join(format!("{}.zip", file_name(&ep.title)));
+        for (i, (ep, track)) in episodes.iter().zip(&tracks).enumerate() {
+            let zip = dir.join(story_zip_name(i, &ep.title));
             album::SingleStory {
                 uuid: podcast.episode_uuid(ep),
                 title: &ep.title,
@@ -1464,6 +1470,9 @@ mod tests {
         assert_eq!(display_date(""), "");
         assert_eq!(file_name("L'Île / au trésor ?"), "L'Île _ au trésor _");
         assert_eq!(file_name("  "), "episode");
+        // same titles: different archives
+        assert_ne!(story_zip_name(0, "Bonus"), story_zip_name(1, "Bonus"));
+        assert_eq!(story_zip_name(9, "Bonus"), "0010 Bonus.zip");
     }
 
     #[test]
