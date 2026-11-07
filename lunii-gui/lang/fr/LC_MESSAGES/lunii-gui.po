@@ -861,6 +861,15 @@ msgstr "Ces épisodes doivent être convertis en MP3 : FFMPEG est nécessaire (m
 msgid "The podcast address must start with https://"
 msgstr "L'adresse du podcast doit commencer par https://"
 
+msgid "Invalid answer of Apple Podcasts"
+msgstr "Réponse d'Apple Podcasts invalide"
+
+msgid "Podcast not found on Apple Podcasts"
+msgstr "Podcast introuvable sur Apple Podcasts"
+
+msgid "Apple Podcasts does not give the RSS feed of this podcast: paste the address of its feed or of its page"
+msgstr "Apple Podcasts ne fournit pas le flux RSS de ce podcast : collez l'adresse de son flux ou de sa page"
+
 msgid "No podcast feed found at this address"
 msgstr "Aucun flux de podcast trouvé à cette adresse"
 
@@ -1074,8 +1083,8 @@ msgstr "Podcasts suivis"
 msgid "Podcast address or RSS feed"
 msgstr "Adresse d'un podcast ou flux RSS"
 
-msgid "Paste the address of a podcast page (radiofrance.fr...) or of its RSS feed above, then Enter."
-msgstr "Collez ci-dessus l'adresse de la page d'un podcast (radiofrance.fr...) ou de son flux RSS, puis Entrée."
+msgid "Paste above the address of a podcast: its RSS or Atom feed, its page (Radio France...) or its Apple Podcasts link, then Enter."
+msgstr "Collez ci-dessus l'adresse d'un podcast : son flux RSS ou Atom, sa page (Radio France…) ou son lien Apple Podcasts, puis Entrée."
 
 msgid "Choose a podcast on the left, or add one with its address."
 msgstr "Choisissez un podcast à gauche, ou ajoutez-en un avec son adresse."

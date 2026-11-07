@@ -231,8 +231,12 @@ par le chemin STUdio habituel.
 La vue **Podcasts** (ou Histoires / Importer un podcast, Ctrl+P, qui y place
 le curseur dans le champ d'adresse) :
 - **à gauche, les podcasts suivis**. On en ajoute un en collant l'adresse de sa
-  page (par exemple `https://www.radiofrance.fr/franceinter/podcasts/les-odyssees`)
-  ou de son flux RSS, puis Entrée. Les séries et sélections Radio France
+  flux RSS ou Atom (le format standard des podcasts, quelle que soit la source),
+  de sa page (par exemple
+  `https://www.radiofrance.fr/franceinter/podcasts/les-odyssees`, ou toute page
+  annonçant son flux par `<link rel="alternate">`) ou son lien Apple Podcasts
+  (le flux est demandé à l'API iTunes ; certains éditeurs, dont Radio France,
+  ne l'y publient pas), puis Entrée. Les séries et sélections Radio France
   n'ont pas de flux : leurs épisodes sont lus sur la page de chacun (ceux qui
   renvoient vers une autre série, sans audio dans la page, sont ignorés).
   Leurs flux sont chargés en arrière-plan,

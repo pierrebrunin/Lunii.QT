@@ -6,10 +6,11 @@
 //! album. The episodes already imported are remembered in
 //! `~/.lunii/podcasts.json`.
 //!
-//! The address can be the feed itself or a web page announcing it (Radio
-//! France podcast pages, `<link rel="alternate" type="application/rss+xml">`),
-//! or a Radio France series or selection page, without feed: its episodes are
-//! then read from their own pages.
+//! The address can be the feed itself (RSS 2.0 or Atom), a web page announcing
+//! it (Radio France podcast pages, `<link rel="alternate"
+//! type="application/rss+xml">`), an Apple Podcasts link (its feed is given by
+//! the iTunes lookup API), or a Radio France series or selection page, without
+//! feed: its episodes are then read from their own pages.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -103,9 +104,16 @@ fn feed_in_page(page: &str) -> Option<String> {
             }
         }
     }
-    // standard feed announcement
+    // standard feed announcement (RSS first, then Atom)
+    ["application/rss+xml", "application/atom+xml"]
+        .into_iter()
+        .find_map(|kind| announced_feed(page, kind))
+}
+
+/// `href` of the first `<link type="{kind}">` of `page`.
+fn announced_feed(page: &str, kind: &str) -> Option<String> {
     let mut rest = page;
-    while let Some(pos) = rest.find("application/rss+xml") {
+    while let Some(pos) = rest.find(kind) {
         let tag_start = rest[..pos].rfind('<').unwrap_or(0);
         let tag_end = rest[pos..].find('>').map_or(rest.len(), |e| pos + e);
         let tag = &rest[tag_start..tag_end];
@@ -125,11 +133,56 @@ fn feed_in_page(page: &str) -> Option<String> {
     None
 }
 
+/// `(id, store country)` of an Apple Podcasts link
+/// (`https://podcasts.apple.com/fr/podcast/les-odyssees/id1469858852`).
+fn apple_podcast_id(address: &str) -> Option<(String, Option<String>)> {
+    let rest = address.split_once("://")?.1;
+    let (host, path) = rest.split_once('/')?;
+    if host != "podcasts.apple.com" && host != "itunes.apple.com" {
+        return None;
+    }
+    let path = path.split(['?', '#']).next()?;
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let id = segments.iter().rev().find_map(|s| {
+        s.strip_prefix("id")
+            .filter(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+    })?;
+    let country = segments
+        .first()
+        .filter(|c| c.len() == 2 && c.bytes().all(|b| b.is_ascii_alphabetic()))
+        .map(|c| c.to_ascii_lowercase());
+    Some((id.to_string(), country))
+}
+
+/// Feed address of an Apple Podcasts podcast (iTunes lookup API).
+fn apple_feed_url(id: &str, country: Option<&str>) -> Result<String> {
+    let mut url = format!("https://itunes.apple.com/lookup?id={id}");
+    if let Some(country) = country {
+        url.push_str(&format!("&country={country}"));
+    }
+    let data: Value =
+        serde_json::from_str(&get_text(&url)?).context("Invalid answer of Apple Podcasts")?;
+    let result = data["results"]
+        .as_array()
+        .and_then(|r| r.iter().find(|r| r["kind"] == "podcast"))
+        .context("Podcast not found on Apple Podcasts")?;
+    match result["feedUrl"].as_str() {
+        Some(feed) if feed.starts_with("http") => Ok(feed.to_string()),
+        _ => bail!(
+            "Apple Podcasts does not give the RSS feed of this podcast: paste the address of its feed or of its page"
+        ),
+    }
+}
+
 /// Loads a podcast from its feed address, or from a page announcing it.
 pub fn fetch(address: &str) -> Result<Podcast> {
     let address = address.trim();
     if !address.starts_with("http://") && !address.starts_with("https://") {
         bail!("The podcast address must start with https://");
+    }
+    if let Some((id, country)) = apple_podcast_id(address) {
+        let feed_url = apple_feed_url(&id, country.as_deref())?;
+        return parse_feed(&feed_url, &get_text(&feed_url)?);
     }
     let body = get_text(address)?;
     if looks_like_feed(&body) {
@@ -320,6 +373,7 @@ fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
 }
 
 const ITUNES: &str = "http://www.itunes.com/dtds/podcast-1.0.dtd";
+const ATOM: &str = "http://www.w3.org/2005/Atom";
 
 fn month(name: &str) -> Option<u32> {
     let months = [
@@ -373,6 +427,9 @@ fn itunes<'a, 'i>(node: roxmltree::Node<'a, 'i>, name: &str) -> Option<roxmltree
 
 pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
     let doc = roxmltree::Document::parse(xml).context("Invalid podcast feed")?;
+    if doc.root_element().has_tag_name((ATOM, "feed")) {
+        return parse_atom(feed_url, doc.root_element());
+    }
     let channel = doc
         .descendants()
         .find(|n| n.has_tag_name("channel"))
@@ -431,6 +488,76 @@ pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
             .and_then(|a| a.text())
             .map(|t| t.trim().to_string())
             .filter(|t| !t.is_empty()),
+        image_url,
+        episodes: episodes.into_iter().map(|(_, e)| e).collect(),
+    })
+}
+
+/// Atom feed (RFC 4287): entries with a `<link rel="enclosure">`.
+fn parse_atom(feed_url: &str, feed: roxmltree::Node) -> Result<Podcast> {
+    let atom = |node: roxmltree::Node, name: &str| {
+        node.children()
+            .find(|c| c.has_tag_name((ATOM, name)))
+            .and_then(|c| c.text())
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+    };
+    let author = |node: roxmltree::Node| {
+        node.children()
+            .find(|c| c.has_tag_name((ATOM, "author")))
+            .and_then(|a| atom(a, "name"))
+    };
+
+    let mut episodes: Vec<(String, Episode)> = Vec::new();
+    for entry in feed.children().filter(|c| c.has_tag_name((ATOM, "entry"))) {
+        let Some(enclosure) = entry
+            .children()
+            .find(|c| c.has_tag_name((ATOM, "link")) && c.attribute("rel") == Some("enclosure"))
+        else {
+            continue;
+        };
+        let Some(url) = enclosure.attribute("href") else {
+            continue;
+        };
+        // RFC 3339 (`2026-07-24T04:42:00+02:00`)
+        let stamp = atom(entry, "published")
+            .or_else(|| atom(entry, "updated"))
+            .unwrap_or_default();
+        let date = stamp
+            .get(..10)
+            .filter(|d| d.as_bytes()[4] == b'-' && d.as_bytes()[7] == b'-')
+            .unwrap_or("")
+            .to_string();
+        episodes.push((
+            stamp.clone(),
+            Episode {
+                guid: atom(entry, "id").unwrap_or_else(|| url.to_string()),
+                title: atom(entry, "title").unwrap_or_else(|| "?".into()),
+                date,
+                duration: itunes(entry, "duration")
+                    .and_then(|d| d.text())
+                    .and_then(parse_duration),
+                url: url.to_string(),
+                size: enclosure.attribute("length").and_then(|l| l.parse().ok()),
+            },
+        ));
+    }
+    episodes.reverse();
+    episodes.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let image_url = itunes(feed, "image")
+        .and_then(|i| i.attribute("href"))
+        .map(str::to_string)
+        .or_else(|| atom(feed, "logo"))
+        .or_else(|| atom(feed, "icon"));
+    Ok(Podcast {
+        feed_url: feed_url.to_string(),
+        title: atom(feed, "title").unwrap_or_else(|| "Podcast".into()),
+        author: itunes(feed, "author")
+            .and_then(|a| a.text())
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .or_else(|| author(feed)),
         image_url,
         episodes: episodes.into_iter().map(|(_, e)| e).collect(),
     })
@@ -819,8 +946,76 @@ mod tests {
             feed_in_page(std).as_deref(),
             Some("https://example.org/feed")
         );
+        let atom = r#"<link rel="alternate" type="application/atom+xml" href='https://example.org/atom'/>"#;
+        assert_eq!(
+            feed_in_page(atom).as_deref(),
+            Some("https://example.org/atom")
+        );
         assert_eq!(feed_in_page("<html></html>"), None);
         assert!(looks_like_feed(FEED));
+    }
+
+    #[test]
+    fn atom_feed() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <title>Contes du soir</title>
+  <author><name>Radio Exemple</name></author>
+  <logo>https://example.org/logo.png</logo>
+  <entry>
+    <title>Le Petit Poucet</title>
+    <id>urn:uuid:2</id>
+    <published>2026-07-24T04:42:00+02:00</published>
+    <itunes:duration>12:30</itunes:duration>
+    <link rel="alternate" href="https://example.org/2.html"/>
+    <link rel="enclosure" type="audio/mpeg" length="1234" href="https://example.org/2.mp3"/>
+  </entry>
+  <entry>
+    <title>Sans audio</title>
+    <link href="https://example.org/x.html"/>
+  </entry>
+  <entry>
+    <title>Cendrillon</title>
+    <updated>2026-07-20T08:00:00Z</updated>
+    <link rel="enclosure" href="https://example.org/1.mp3"/>
+  </entry>
+</feed>"#;
+        assert!(looks_like_feed(xml));
+        let p = parse_feed("https://example.org/atom", xml).unwrap();
+        assert_eq!(p.title, "Contes du soir");
+        assert_eq!(p.author.as_deref(), Some("Radio Exemple"));
+        assert_eq!(p.image_url.as_deref(), Some("https://example.org/logo.png"));
+        assert_eq!(p.episodes.len(), 2);
+        assert_eq!(p.episodes[0].title, "Cendrillon");
+        assert_eq!(p.episodes[0].date, "2026-07-20");
+        assert_eq!(p.episodes[0].guid, "https://example.org/1.mp3");
+        assert_eq!(p.episodes[1].guid, "urn:uuid:2");
+        assert_eq!(p.episodes[1].url, "https://example.org/2.mp3");
+        assert_eq!(p.episodes[1].duration, Some(750));
+        assert_eq!(p.episodes[1].size, Some(1234));
+    }
+
+    #[test]
+    fn apple_podcasts_links() {
+        assert_eq!(
+            apple_podcast_id(
+                "https://podcasts.apple.com/fr/podcast/les-odyss%C3%A9es/id1469858852"
+            ),
+            Some(("1469858852".into(), Some("fr".into())))
+        );
+        assert_eq!(
+            apple_podcast_id("https://podcasts.apple.com/us/podcast/x/id123?i=1000700000000"),
+            Some(("123".into(), Some("us".into())))
+        );
+        assert_eq!(
+            apple_podcast_id("https://podcasts.apple.com/podcast/id42"),
+            Some(("42".into(), None))
+        );
+        assert_eq!(apple_podcast_id("https://example.org/id42"), None);
+        assert_eq!(
+            apple_podcast_id("https://podcasts.apple.com/fr/podcast/x"),
+            None
+        );
     }
 
     #[test]
