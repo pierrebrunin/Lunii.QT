@@ -102,6 +102,8 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     let app = App::new(&ui);
     ui.show()?;
     app.start();
+    // the usual path, not the one of the (temporary) configuration directory
+    ui.set_log_file_path("~/.lunii/logs/lunii.log".into());
     // search in progress: the waiting indicator
     pump(&queue, 0);
     render(0, &out.join(format!("{lang}-00-searching.png")));
@@ -163,6 +165,23 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     app.show_log();
     pump(&queue, 300);
     render(0, &shot("10-log"));
+
+    // lost stories search (Tools / Advanced / Lost stories / Find): its log,
+    // in a taller panel
+    let log_height = ui.get_log_height();
+    let details = ui.get_show_details();
+    ui.set_show_details(false);
+    ui.set_log_height(320.0);
+    app.action(crate::Action::FindLost);
+    let end = Instant::now() + Duration::from_secs(30);
+    pump(&queue, 100);
+    while ui.get_busy() && Instant::now() < end {
+        pump(&queue, 100);
+    }
+    pump(&queue, 200);
+    render(0, &shot("10-lost-stories"));
+    ui.set_log_height(log_height);
+    ui.set_show_details(details);
 
     // a long task: progress bars
     app.row_pointer(0, false, false, false);
