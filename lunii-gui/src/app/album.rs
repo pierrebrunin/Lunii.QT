@@ -243,6 +243,7 @@ mod tests {
         let info = AlbumInfo {
             tracks: vec!["Un".into(), String::new()],
             chapters: Vec::new(),
+            durations: Vec::new(),
         };
         let mut edit = AlbumEdit::new(Uuid::nil(), info, true);
         assert_eq!(titles(&edit), ["Un", "Track 2"]);
@@ -266,6 +267,7 @@ mod tests {
                     len: 2,
                 },
             ],
+            durations: Vec::new(),
         };
         let edit = AlbumEdit::new(Uuid::nil(), info, false);
         let rows = edit.rows();

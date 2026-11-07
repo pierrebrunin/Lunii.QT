@@ -1,6 +1,7 @@
 //! Track list of an album on the device (`album.json` in the story directory):
 //! the screens only hold the titles as pictures, this file keeps them as text
-//! to display and edit the album.
+//! to display and edit the album, with the duration of each track (measured
+//! when its audio is written).
 
 use std::path::Path;
 
@@ -21,11 +22,25 @@ pub struct AlbumInfo {
     pub tracks: Vec<String>,
     /// sub-folders (empty: a single menu with all the tracks, or unknown)
     pub chapters: Vec<Chapter>,
+    /// duration of each track in seconds, measured when its audio was written
+    /// (0, or missing: unknown)
+    pub durations: Vec<u32>,
 }
 
 impl AlbumInfo {
+    /// Duration of the whole album, if the one of every track is known.
+    pub fn total_duration(&self) -> Option<u32> {
+        (!self.tracks.is_empty()
+            && self.durations.len() == self.tracks.len()
+            && self.durations.iter().all(|&d| d > 0))
+        .then(|| self.durations.iter().sum())
+    }
+
     fn to_json(&self) -> Value {
         let mut v = json!({"version": 1, "tracks": self.tracks});
+        if self.durations.iter().any(|&d| d > 0) {
+            v["durations"] = json!(self.durations);
+        }
         if !self.chapters.is_empty() {
             v["chapters"] = self
                 .chapters
@@ -57,8 +72,26 @@ impl AlbumInfo {
                     .collect()
             })
             .unwrap_or_default();
-        Some(Self { tracks, chapters })
+        let durations = v
+            .get("durations")
+            .and_then(Value::as_array)
+            .map(|ds| ds.iter().map(|d| d.as_u64().unwrap_or(0) as u32).collect())
+            .unwrap_or_default();
+        Some(Self {
+            tracks,
+            chapters,
+            durations,
+        })
     }
+}
+
+/// Position of a track from the name of its audio (`TRK00001.mp3` → 0).
+pub fn track_number(audio: &str) -> Option<usize> {
+    let digits = audio.strip_prefix("TRK")?.strip_suffix(".mp3")?;
+    if digits.len() != 5 {
+        return None;
+    }
+    digits.parse::<usize>().ok()?.checked_sub(1)
 }
 
 /// The titles saved with the album, if any.
@@ -133,7 +166,11 @@ pub fn from_story_json(story: &Value) -> Option<AlbumInfo> {
             Chapter { title, len }
         })
         .collect();
-    Some(AlbumInfo { tracks, chapters })
+    Some(AlbumInfo {
+        tracks,
+        chapters,
+        durations: Vec::new(),
+    })
 }
 
 /// The tracks of an album story created by Lunii, from its files on the
@@ -158,12 +195,18 @@ pub fn on_device(story_dir: &Path) -> Option<AlbumInfo> {
     let saved = read(story_dir).unwrap_or_default();
     let mut tracks = saved.tracks;
     tracks.resize(count, String::new());
+    let mut durations = saved.durations;
+    durations.resize(count, 0);
     let chapters = if saved.chapters.iter().map(|c| c.len).sum::<usize>() == count {
         saved.chapters
     } else {
         Vec::new()
     };
-    Some(AlbumInfo { tracks, chapters })
+    Some(AlbumInfo {
+        tracks,
+        chapters,
+        durations,
+    })
 }
 
 #[cfg(test)]
@@ -217,8 +260,23 @@ mod tests {
                 title: "CD".into(),
                 len: 2,
             }],
+            durations: vec![65, 0],
         };
         write(dir.path(), &info).unwrap();
-        assert_eq!(read(dir.path()), Some(info));
+        assert_eq!(read(dir.path()).as_ref(), Some(&info));
+        // a duration unknown: no total
+        assert_eq!(info.total_duration(), None);
+        let known = AlbumInfo {
+            durations: vec![65, 120],
+            ..info
+        };
+        assert_eq!(known.total_duration(), Some(185));
+        // files written before the durations: read without them
+        std::fs::write(
+            dir.path().join(FILE_ALBUM),
+            r#"{"version":1,"tracks":["Un"]}"#,
+        )
+        .unwrap();
+        assert_eq!(read(dir.path()).unwrap().durations, Vec::<u32>::new());
     }
 }

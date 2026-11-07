@@ -300,6 +300,14 @@ fn mp3_album_edit() {
         let story_dir = dev.story_path(&story);
         let info = dev.album_info(&story).unwrap();
         assert_eq!(info.tracks, ["Un", "Deux", "Trois"]);
+        // durations measured at the import (short tracks: 1 s)
+        let before = info.durations.clone();
+        assert_eq!(before.len(), 3);
+        assert!(before.iter().all(|&d| d > 0), "{before:?}");
+        assert_eq!(
+            lunii_core::mp3::story_duration(&story_dir),
+            Some(before.iter().sum())
+        );
         let trois = std::fs::read(story_dir.join("sf/000/TRK00003")).unwrap();
         let screen_un = std::fs::read(story_dir.join("rf/000/IMG00001")).unwrap();
 
@@ -308,6 +316,10 @@ fn mp3_album_edit() {
             .unwrap();
         let info = dev.album_info(&story).unwrap();
         assert_eq!(info.tracks, ["Trois", "Quatre", "Un"]);
+        // moved tracks keep their duration, the added one gets its own
+        assert_eq!(info.durations[0], before[2]);
+        assert_eq!(info.durations[2], before[0]);
+        assert!(info.durations[1] > 0);
         assert_eq!(dev.album_track_count(&story), Some(3));
         assert_eq!(
             std::fs::read(story_dir.join("sf/000/TRK00001")).unwrap(),

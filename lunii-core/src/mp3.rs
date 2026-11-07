@@ -6,6 +6,9 @@
 //! gives a bitrate (bytes of its frames for their duration); the duration of
 //! the file is its size at the median of these bitrates, so that a quiet
 //! intro or a different ending of a variable bitrate file does not count.
+//!
+//! The albums created by Lunii know the duration of their tracks, measured
+//! when their audio was written (`album.json`, see [`audio_duration`]).
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -77,9 +80,43 @@ fn file_duration(path: &Path) -> Option<f64> {
     Some(size as f64 / rates[rates.len() / 2])
 }
 
+/// Exact duration in seconds of MP3 data (not ciphered): all its frames are
+/// read. `None` if it does not hold MPEG audio.
+pub fn audio_duration(data: &[u8]) -> Option<u32> {
+    // first run of frames (after the tags)
+    let start = (0..data.len().saturating_sub(4)).find(|&i| {
+        let Some(first) = parse_frame_header(&data[i..]) else {
+            return false;
+        };
+        (1..3)
+            .try_fold(i + first.frame_len, |pos, _| {
+                let f = data.get(pos..).and_then(parse_frame_header)?;
+                (f.frame_len > 0).then_some(pos + f.frame_len)
+            })
+            .is_some()
+    })?;
+    let (mut pos, mut seconds) = (start, 0f64);
+    while let Some(f) = data.get(pos..).and_then(parse_frame_header) {
+        if f.frame_len == 0 {
+            break;
+        }
+        seconds += f.samples as f64 / f.sample_rate as f64;
+        pos += f.frame_len;
+    }
+    // not read to the end (damaged): the rest at the same bitrate
+    if pos < data.len().saturating_sub(128) && pos > start {
+        seconds *= (data.len() - start) as f64 / (pos - start) as f64;
+    }
+    Some(seconds.round().max(1.0) as u32)
+}
+
 /// Duration in seconds of the audio of a story (its `sf/` directory), if its
-/// files could be measured.
+/// files could be measured. An album created by Lunii gives it with its
+/// tracks.
 pub fn story_duration(story_dir: &Path) -> Option<u32> {
+    if let Some(total) = crate::album::meta::read(story_dir).and_then(|i| i.total_duration()) {
+        return Some(total);
+    }
     let mut total = 0f64;
     let mut found = false;
     let mut dirs = vec![story_dir.join("sf")];
@@ -147,6 +184,25 @@ mod tests {
         // no audio at all
         let empty = tempfile::tempdir().unwrap();
         assert_eq!(story_duration(empty.path()), None);
+    }
+
+    #[test]
+    fn exact_duration() {
+        // tags, then 30 s at 128 kbps and 30 s at 64 kbps (variable bitrate)
+        let mut data = b"ID3\x03\x00\x00\x00\x00\x00\x0a0123456789".to_vec();
+        data.extend(frames(30.0, 128));
+        data.extend(frames(30.0, 64));
+        assert_eq!(audio_duration(&data), Some(60));
+        assert_eq!(audio_duration(&[0u8; 4096]), None);
+        // an album gives the durations of its tracks
+        let dir = tempfile::tempdir().unwrap();
+        let info = crate::album::meta::AlbumInfo {
+            tracks: vec!["Un".into(), "Deux".into()],
+            chapters: Vec::new(),
+            durations: vec![100, 200],
+        };
+        crate::album::meta::write(dir.path(), &info).unwrap();
+        assert_eq!(story_duration(dir.path()), Some(300));
     }
 
     /// Variable bitrate: a quiet intro and ending do not count.

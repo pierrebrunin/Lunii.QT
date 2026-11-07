@@ -466,6 +466,8 @@ pub(crate) fn import_studio<D: StoryWriter>(dev: &mut D, ctx: &Context, path: &P
     std::fs::create_dir_all(&story_dir)?;
 
     let files = archive.file_names();
+    // albums created by Lunii: duration of their tracks (`TRK00001.mp3`...)
+    let mut durations = std::collections::HashMap::new();
     for (index, entry) in files.iter().enumerate() {
         ctx.story_progress(&short, index, files.len());
         if ctx.is_aborted() {
@@ -493,6 +495,11 @@ pub(crate) fn import_studio<D: StoryWriter>(dev: &mut D, ctx: &Context, path: &P
         } else if let Some((name, _)) = studio.si.get(&file) {
             let new_name = studio_asset_path(name, false);
             let data = convert_studio_audio(ctx, &file, &new_name, data, transcoding)?;
+            if let Some(track) = crate::album::meta::track_number(&file)
+                && let Some(seconds) = crate::mp3::audio_duration(&data)
+            {
+                durations.insert(track, seconds);
+            }
             (new_name, data)
         } else {
             continue;
@@ -516,10 +523,13 @@ pub(crate) fn import_studio<D: StoryWriter>(dev: &mut D, ctx: &Context, path: &P
         let _ = dev.clean_up_story_dir(&studio.uuid);
         return Err(e);
     }
-    if let Some(info) = crate::album::meta::from_story_json(&story_json)
-        && let Err(e) = crate::album::meta::write(&story_dir, &info)
-    {
-        ctx.warn(format!("{e:#}"));
+    if let Some(mut info) = crate::album::meta::from_story_json(&story_json) {
+        info.durations = (0..info.tracks.len())
+            .map(|i| durations.get(&i).copied().unwrap_or(0))
+            .collect();
+        if let Err(e) = crate::album::meta::write(&story_dir, &info) {
+            ctx.warn(format!("{e:#}"));
+        }
     }
     dev.stories_mut().push(story);
     dev.update_pack_index()
@@ -573,13 +583,14 @@ pub(crate) fn edit_album<D: StoryWriter>(
 
     // 1. new files in the temporary directory (the album stays as it was on
     // abort or error)
-    let titles = match prepare_album_files(dev, ctx, &story, &files, entries, transcoding) {
-        Ok(titles) => titles,
-        Err(e) => {
-            let _ = std::fs::remove_dir_all(&files.tmp);
-            return Err(e);
-        }
-    };
+    let (titles, durations) =
+        match prepare_album_files(dev, ctx, &story, &files, entries, transcoding) {
+            Ok(prepared) => prepared,
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&files.tmp);
+                return Err(e);
+            }
+        };
 
     // 2. tracks moved in place (no abort from here)
     let damaged = "The album may be damaged, remove it and import it again";
@@ -607,6 +618,7 @@ pub(crate) fn edit_album<D: StoryWriter>(
     let info = meta::AlbumInfo {
         tracks: titles,
         chapters: Vec::new(),
+        durations,
     };
     if let Err(e) = meta::write(&story_dir, &info) {
         ctx.warn(format!("{e:#}"));
@@ -663,7 +675,8 @@ impl AlbumFiles {
 
 /// Step 1 of an album edit: the files of the added tracks and the screens of
 /// the moved ones (their number changes) written in the temporary directory.
-/// Returns the titles of the new track list (empty: unknown).
+/// Returns the titles (empty: unknown) and durations (0: unknown) of the new
+/// track list.
 fn prepare_album_files<D: StoryWriter>(
     dev: &D,
     ctx: &Context,
@@ -671,44 +684,47 @@ fn prepare_album_files<D: StoryWriter>(
     files: &AlbumFiles,
     entries: &[crate::album::AlbumEntry],
     transcoding: bool,
-) -> Result<Vec<String>> {
+) -> Result<(Vec<String>, Vec<u32>)> {
     use crate::album::{self, AlbumEntry, meta};
     use crate::convert::image;
 
-    let old_titles = meta::on_device(&files.dir)
-        .map(|info| info.tracks)
-        .unwrap_or_default();
+    let old = meta::on_device(&files.dir).unwrap_or_default();
     let font = album::font()?;
     let header = story.name();
     let short = story.short_uuid();
     let mut titles = Vec::with_capacity(entries.len());
+    let mut durations = Vec::with_capacity(entries.len());
     for (i, entry) in entries.iter().enumerate() {
         ctx.story_progress(&short, i, entries.len());
         check_abort(ctx)?;
         match entry {
             AlbumEntry::New(track) => {
                 ctx.info(format!("🎵 Track {} : {}", i + 1, track.title));
+                let mut duration = 0;
                 for asset in album::track_assets(&font, &header, track, i)? {
                     let source_len = asset.data.len() as u64;
                     let data = if asset.is_image() {
                         image::image_to_bitmap_rle4(&asset.data)?
                     } else {
-                        convert_studio_audio(
+                        let data = convert_studio_audio(
                             ctx,
                             &asset.name,
                             &asset.name,
                             asset.data,
                             transcoding,
-                        )?
+                        )?;
+                        duration = crate::mp3::audio_duration(&data).unwrap_or(0);
+                        data
                     };
                     let ciphered = dev.cipher_story_file(&asset.name, &data)?;
                     write_with_progress(ctx, &files.temporary(&asset.name), &ciphered)?;
                     ctx.count_as_source(source_len, ciphered.len() as u64);
                 }
                 titles.push(track.title.clone());
+                durations.push(duration);
             }
             &AlbumEntry::Existing(j) => {
-                let title = old_titles.get(j).cloned().unwrap_or_default();
+                let title = old.tracks.get(j).cloned().unwrap_or_default();
                 // unknown title: the old screen is kept (with its old number)
                 if j != i && !title.is_empty() {
                     let asset = album::track_screen_asset(&font, &header, &title, i)?;
@@ -717,10 +733,11 @@ fn prepare_album_files<D: StoryWriter>(
                     write_file(&files.temporary(&asset.name), &ciphered)?;
                 }
                 titles.push(title);
+                durations.push(old.durations.get(j).copied().unwrap_or(0));
             }
         }
     }
-    Ok(titles)
+    Ok((titles, durations))
 }
 
 /// Step 2 of an album edit: the moved tracks renamed, the removed ones (and

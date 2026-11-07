@@ -19,7 +19,7 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   │                        STUdio et modification d'album partagés (trait StoryWriter)
 │   ├── src/album/           dossier de MP3 → histoire : scan.rs (tags, sous-dossiers,
 │   │                        pochette), layout.rs (story.json), screens.rs (écrans),
-│   │                        meta.rs (titres des pistes sur l'appareil, album.json)
+│   │                        meta.rs (titres et durées des pistes, album.json)
 │   ├── src/podcast/         podcasts : mod.rs (types, chargement d'une adresse),
 │   │                        feed.rs (RSS, Atom), page.rs (pages sans flux,
 │   │                        schema.org), html.rs, apple.rs (liens, recherche),
@@ -185,7 +185,8 @@ Elle propose : sélection de l'appareil, filtre, liste des
 histoires (sélection multiple Ctrl/Maj, flèches, Ctrl+A, menu contextuel ;
 colonnes durée, taille, base O/T et UUID au choix dans Outils, enregistrées dans
 `~/.lunii/settings.json`, base et UUID masqués par défaut ; la durée vient de la
-base officielle, ou est estimée en arrière-plan d'après les trames MP3 des
+base officielle, de `album.json` pour les albums et podcasts importés par
+l'application, ou est estimée en arrière-plan d'après les trames MP3 des
 fichiers `sf/`, voir `lunii-core/src/mp3.rs`),
 vignette et description, barres de progression avec bouton d'arrêt, barre
 d'état (un clic sur le SNU ouvre les informations de l'appareil : modèle, firmware,
@@ -297,8 +298,10 @@ sous-dossier s'il y en a, et permet de les modifier. Un album créé par Lunii s
 fichiers sur l'appareil (`sf/000/SNDCOVER`, `TRK00001`…). Les titres, qui ne
 sont sinon que dessinés dans les écrans, sont gardés en texte dans
 `album.json`, dans le dossier de l'histoire (JSON non chiffré, ignoré par les
-conteuses et exclu des exports « plain »). Pour les albums importés avant ce
-fichier, les titres sont inconnus : « Piste 1 », « Piste 2 »…
+conteuses et exclu des exports « plain »), avec la durée de chaque piste,
+mesurée sur l'audio au moment où il est écrit (colonne Durée exacte, sans
+relire l'audio). Pour les albums importés avant ce fichier, les titres sont
+inconnus : « Piste 1 », « Piste 2 »… ; avant les durées, la durée est estimée.
 
 **Modifier un album** : dans le panneau de détails de l'album, choisir une
 piste puis ▲ / ▼ / Supprimer, ou Ajouter des MP3… ; Appliquer écrit tout en une
