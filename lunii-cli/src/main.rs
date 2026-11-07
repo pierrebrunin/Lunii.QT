@@ -302,6 +302,262 @@ fn batch<T>(ctx: &Context, items: &[T], mut f: impl FnMut(&T) -> Result<()>) -> 
 // Commands
 // ---------------------------------------------------------------------------
 
+/// `devices`: the storytellers found.
+fn list_devices(device: Option<&Path>) -> Result<()> {
+    let devices = device::find_devices(device);
+    if devices.is_empty() {
+        println!("No storyteller found.");
+    }
+    for d in devices {
+        let kind = if device::is_lunii(&d) {
+            "Lunii"
+        } else {
+            "Flam"
+        };
+        println!("{kind}\t{}", d.display());
+    }
+
+    Ok(())
+}
+
+/// `info`: the opened storyteller.
+fn show_info(ctx: &Context, device: Option<&Path>) -> Result<()> {
+    let dev = open(ctx, device)?;
+    println!("{}", dev.info());
+    println!("- type     : {}", dev.version());
+    if !dev.can_import() {
+        println!("⚠️ No story keys for this Lunii v3, import is not possible (see README).");
+    }
+    if let Some(lunii) = dev.as_lunii() {
+        println!(
+            "- night mode : {}",
+            if lunii.night_mode_enabled() {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
+    }
+
+    Ok(())
+}
+
+/// `list`: its stories.
+fn list_stories(ctx: &Context, device: Option<&Path>, sizes: bool) -> Result<()> {
+    let mut dev = open(ctx, device)?;
+    if sizes {
+        dev.compute_sizes(ctx)?;
+    }
+    for (i, s) in dev.stories().iter().enumerate() {
+        let flags = format!(
+            "{}{}{}",
+            if s.is_official() { "O" } else { "-" },
+            if s.hidden { "H" } else { "-" },
+            if s.nm { "N" } else { "-" }
+        );
+        let size = s.size.map(human_size).unwrap_or_default();
+        println!(
+            "{:>3}  {}  {flags}  {:<50} {size}",
+            i + 1,
+            s.str_uuid(),
+            s.name()
+        );
+    }
+    eprintln!(
+        "{} stories (O: official, H: hidden, N: night mode)",
+        dev.stories().len()
+    );
+
+    Ok(())
+}
+
+/// `nm-config`: shows or changes the night mode settings.
+fn night_mode_config(ctx: &Context, device: Option<&Path>, args: NmConfigArgs) -> Result<()> {
+    let mut dev = open(ctx, device)?;
+    let lunii = dev
+        .as_lunii_mut()
+        .context("Night mode settings are only available on Lunii")?;
+    let mut changed = false;
+    let mut set = |pos: usize, v: Option<u16>| {
+        if let Some(v) = v {
+            lunii.config[pos] = v;
+            changed = true;
+        }
+    };
+    set(LUNII_CFGPOS_NM_ENABLED, args.enable.map(u16::from));
+    set(
+        LUNII_CFGPOS_NM_VOL_LIMIT,
+        args.volume_limit.map(|b| if b { 30 } else { 0 }),
+    );
+    set(LUNII_CFGPOS_NM_STORYCOUNT, args.stories);
+    set(LUNII_CFGPOS_NM_AUTOPLAY, args.autoplay.map(u16::from));
+    set(LUNII_CFGPOS_NM_TURNOFF_NM, args.turnoff.map(u16::from));
+    if changed {
+        lunii.update_config()?;
+        ctx.info("✅ Night mode settings saved");
+    }
+    let c = &lunii.config;
+    println!("enabled      : {}", c[LUNII_CFGPOS_NM_ENABLED] != 0);
+    println!("volume limit : {}", c[LUNII_CFGPOS_NM_VOL_LIMIT] != 0);
+    println!("stories      : {}", c[LUNII_CFGPOS_NM_STORYCOUNT]);
+    println!("autoplay     : {}", c[LUNII_CFGPOS_NM_AUTOPLAY] != 0);
+    println!("turn off     : {}", c[LUNII_CFGPOS_NM_TURNOFF_NM] != 0);
+
+    Ok(())
+}
+
+/// `import`: archives (and directories of archives).
+fn import(ctx: &Context, device: Option<&Path>, paths: &[PathBuf]) -> Result<()> {
+    let mut dev = open(ctx, device)?;
+    if !dev.can_import() {
+        bail!("No story keys for this Lunii v3, import is not possible (see README).");
+    }
+    let archives = collect_archives(paths, dev.supported_extensions());
+    if dev.version() == DeviceVersion::FlamV1 && !archives.is_empty() {
+        ctx.info("😮‍💨 This process is veeeeeeeeery long due to Flam firmware. 😴 Be patient ...");
+    }
+    ctx.info(format!("Importing {} archives...", archives.len()));
+    let total = archives.len();
+    let success = batch(ctx, &archives, |file| {
+        let start = Instant::now();
+        match dev.import_story(ctx, file) {
+            Ok(()) => {
+                ctx.info(format!("Time to import : {}", duration(start)));
+                ctx.info(format!("👍 New story imported : '{}'", file.display()));
+                Ok(())
+            }
+            Err(e) => Err(e.context(format!("🛑 Failed to import : '{}'", file.display()))),
+        }
+    })?;
+    ctx.info(format!("✅ Import done : {success}/{total}"));
+
+    Ok(())
+}
+
+/// `export`: stories (or all of them) into a directory.
+fn export(
+    ctx: &Context,
+    device: Option<&Path>,
+    uuids: Vec<String>,
+    all: bool,
+    out: &Path,
+) -> Result<()> {
+    let mut dev = open(ctx, device)?;
+    std::fs::create_dir_all(out)?;
+    let targets: Vec<String> = if all {
+        dev.stories().iter().map(|s| s.str_uuid()).collect()
+    } else if uuids.is_empty() {
+        bail!("Give story UUIDs or --all");
+    } else {
+        uuids
+    };
+    let total = targets.len();
+    let success = batch(ctx, &targets, |uuid| {
+        let story = dev.find_story(uuid)?;
+        match dev.export_story(ctx, uuid, out) {
+            Ok(path) => {
+                ctx.info(format!("👍 Story exported to '{}'", path.display()));
+                Ok(())
+            }
+            Err(e) => Err(e.context(format!("🛑 Failed to export : '{}'", story.name()))),
+        }
+    })?;
+    ctx.info(format!("✅ Export done : {success}/{total}"));
+
+    Ok(())
+}
+
+/// `remove`: stories, after confirmation.
+fn remove(ctx: &Context, device: Option<&Path>, uuids: &[String], yes: bool) -> Result<()> {
+    let mut dev = open(ctx, device)?;
+    let stories: Vec<_> = uuids
+        .iter()
+        .map(|u| dev.find_story(u))
+        .collect::<Result<_>>()?;
+    eprintln!("You are requesting to delete :");
+    for s in &stories {
+        eprintln!("- {}", s.name());
+    }
+    if !yes && !confirm("Do you want to proceed ?")? {
+        return Ok(());
+    }
+    let success = batch(ctx, &stories, |s| {
+        dev.remove_story(ctx, &s.str_uuid())?;
+        ctx.info(format!("👍 Story removed: '{}'", s.name()));
+        Ok(())
+    })?;
+    ctx.info(format!("✅ {success} stories removed"));
+
+    Ok(())
+}
+
+/// `firmware`: downloads the firmware of the device from the Luniistore.
+fn download_firmware(ctx: &Context, device: Option<&Path>, email: &str, out: &Path) -> Result<()> {
+    let dev = open(ctx, device)?;
+    let password = match std::env::var("LUNII_PASSWORD") {
+        Ok(p) => p,
+        Err(_) => rpassword::prompt_password("Luniistore password: ")?,
+    };
+    let auth = firmware::luniistore_get_authtoken(email, &password)?
+        .context("⚠️ Login failed, please check your credentials")?;
+    ctx.info("Login success...");
+    std::fs::create_dir_all(out)?;
+    let list = firmware::device_fw_getlist(dev.version(), &dev.snu_str(), &auth)?;
+    for (index, name) in list.iter().enumerate() {
+        let target = out.join(name);
+        let size = firmware::device_fw_download(
+            dev.version(),
+            &dev.snu_str(),
+            &auth,
+            &target,
+            index != 0,
+        )?;
+        ctx.info(format!(
+            "✅ Firmware downloaded to {} ({size} bytes)",
+            target.display()
+        ));
+    }
+
+    Ok(())
+}
+
+/// `db`: the story databases.
+fn db_command(ctx: &Context, cmd: DbCommand) -> Result<()> {
+    match cmd {
+        DbCommand::Refresh => {
+            if db::load_db(true) {
+                ctx.info("✅ Official database updated");
+            } else {
+                bail!("🛑 Failed to update the official database");
+            }
+        }
+        DbCommand::ImportStudio { file } => {
+            db::load_db(false);
+            let (count, total) = tools::import_studio_db(ctx, &file)?;
+            ctx.info(format!("✅ STUdio DB imported ({count}/{total})."));
+        }
+        DbCommand::Info => {
+            db::load_db(false);
+            let (official, third) = db::db_sizes();
+            println!(
+                "official    : {official} stories ({})",
+                file_official_db().display()
+            );
+            println!(
+                "third-party : {third} stories ({})",
+                file_third_party_db().display()
+            );
+            println!(
+                "ffmpeg      : {}",
+                which_ffmpeg()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or("not found".into())
+            );
+        }
+    }
+    Ok(())
+}
+
 fn run(cli: Cli, ctx: &Context) -> Result<()> {
     let needs_db = !matches!(
         cli.command,
@@ -319,159 +575,32 @@ fn run(cli: Cli, ctx: &Context) -> Result<()> {
         }
     }
 
+    let device = cli.device.as_deref();
     match cli.command {
-        Command::Devices => {
-            let devices = device::find_devices(cli.device.as_deref());
-            if devices.is_empty() {
-                println!("No storyteller found.");
-            }
-            for d in devices {
-                let kind = if device::is_lunii(&d) {
-                    "Lunii"
-                } else {
-                    "Flam"
-                };
-                println!("{kind}\t{}", d.display());
-            }
-        }
-
-        Command::Info => {
-            let dev = open(ctx, cli.device.as_deref())?;
-            println!("{}", dev.info());
-            println!("- type     : {}", dev.version());
-            if !dev.can_import() {
-                println!(
-                    "⚠️ No story keys for this Lunii v3, import is not possible (see README)."
-                );
-            }
-            if let Some(lunii) = dev.as_lunii() {
-                println!(
-                    "- night mode : {}",
-                    if lunii.night_mode_enabled() {
-                        "enabled"
-                    } else {
-                        "disabled"
-                    }
-                );
-            }
-        }
-
-        Command::List { sizes } => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
-            if sizes {
-                dev.compute_sizes(ctx)?;
-            }
-            for (i, s) in dev.stories().iter().enumerate() {
-                let flags = format!(
-                    "{}{}{}",
-                    if s.is_official() { "O" } else { "-" },
-                    if s.hidden { "H" } else { "-" },
-                    if s.nm { "N" } else { "-" }
-                );
-                let size = s.size.map(human_size).unwrap_or_default();
-                println!(
-                    "{:>3}  {}  {flags}  {:<50} {size}",
-                    i + 1,
-                    s.str_uuid(),
-                    s.name()
-                );
-            }
-            eprintln!(
-                "{} stories (O: official, H: hidden, N: night mode)",
-                dev.stories().len()
-            );
-        }
-
-        Command::Import { paths } => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
-            if !dev.can_import() {
-                bail!("No story keys for this Lunii v3, import is not possible (see README).");
-            }
-            let archives = collect_archives(&paths, dev.supported_extensions());
-            if dev.version() == DeviceVersion::FlamV1 && !archives.is_empty() {
-                ctx.info(
-                    "😮‍💨 This process is veeeeeeeeery long due to Flam firmware. 😴 Be patient ...",
-                );
-            }
-            ctx.info(format!("Importing {} archives...", archives.len()));
-            let total = archives.len();
-            let success = batch(ctx, &archives, |file| {
-                let start = Instant::now();
-                match dev.import_story(ctx, file) {
-                    Ok(()) => {
-                        ctx.info(format!("Time to import : {}", duration(start)));
-                        ctx.info(format!("👍 New story imported : '{}'", file.display()));
-                        Ok(())
-                    }
-                    Err(e) => Err(e.context(format!("🛑 Failed to import : '{}'", file.display()))),
-                }
-            })?;
-            ctx.info(format!("✅ Import done : {success}/{total}"));
-        }
-
-        Command::Export { uuids, all, out } => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
-            std::fs::create_dir_all(&out)?;
-            let targets: Vec<String> = if all {
-                dev.stories().iter().map(|s| s.str_uuid()).collect()
-            } else if uuids.is_empty() {
-                bail!("Give story UUIDs or --all");
-            } else {
-                uuids
-            };
-            let total = targets.len();
-            let success = batch(ctx, &targets, |uuid| {
-                let story = dev.find_story(uuid)?;
-                match dev.export_story(ctx, uuid, &out) {
-                    Ok(path) => {
-                        ctx.info(format!("👍 Story exported to '{}'", path.display()));
-                        Ok(())
-                    }
-                    Err(e) => Err(e.context(format!("🛑 Failed to export : '{}'", story.name()))),
-                }
-            })?;
-            ctx.info(format!("✅ Export done : {success}/{total}"));
-        }
-
-        Command::Remove { uuids, yes } => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
-            let stories: Vec<_> = uuids
-                .iter()
-                .map(|u| dev.find_story(u))
-                .collect::<Result<_>>()?;
-            eprintln!("You are requesting to delete :");
-            for s in &stories {
-                eprintln!("- {}", s.name());
-            }
-            if !yes && !confirm("Do you want to proceed ?")? {
-                return Ok(());
-            }
-            let success = batch(ctx, &stories, |s| {
-                dev.remove_story(ctx, &s.str_uuid())?;
-                ctx.info(format!("👍 Story removed: '{}'", s.name()));
-                Ok(())
-            })?;
-            ctx.info(format!("✅ {success} stories removed"));
-        }
-
+        Command::Devices => list_devices(device),
+        Command::Info => show_info(ctx, device),
+        Command::List { sizes } => list_stories(ctx, device, sizes),
+        Command::Import { paths } => import(ctx, device, &paths),
+        Command::Export { uuids, all, out } => export(ctx, device, uuids, all, &out),
+        Command::Remove { uuids, yes } => remove(ctx, device, &uuids, yes),
         Command::Hide { uuids } => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
+            let mut dev = open(ctx, device)?;
             let ids = resolve(dev.as_ref(), &uuids)?;
             dev.toggle_hidden(ctx, &ids)?;
             ctx.info("✅ Stories updated...");
+            Ok(())
         }
-
         Command::NightMode { uuids } => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
+            let mut dev = open(ctx, device)?;
             let ids = resolve(dev.as_ref(), &uuids)?;
             dev.as_lunii_mut()
                 .context("Night mode is only available on Lunii")?
                 .toggle_night_mode(&ids)?;
             ctx.info("✅ Stories updated...");
+            Ok(())
         }
-
         Command::Move(args) => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
+            let mut dev = open(ctx, device)?;
             let ids = resolve(dev.as_ref(), &args.uuids)?;
             let d = args.direction;
             let offset = if d.up {
@@ -485,10 +614,10 @@ fn run(cli: Cli, ctx: &Context) -> Result<()> {
             };
             dev.move_stories(&ids, offset)?;
             ctx.info("✅ Stories updated...");
+            Ok(())
         }
-
         Command::Recover { dry_run } => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
+            let mut dev = open(ctx, device)?;
             ctx.info("🚧 Analyzing storage ...");
             let count = dev.recover_stories(ctx, dry_run)?;
             let what = if dry_run {
@@ -497,10 +626,10 @@ fn run(cli: Cli, ctx: &Context) -> Result<()> {
                 "recovered"
             };
             ctx.info(format!("✅ Storage parsed, {count} lost stories {what}"));
+            Ok(())
         }
-
         Command::Cleanup { yes } => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
+            let mut dev = open(ctx, device)?;
             if !yes && !confirm("Delete every story directory missing from the index ?")? {
                 return Ok(());
             }
@@ -509,111 +638,24 @@ fn run(cli: Cli, ctx: &Context) -> Result<()> {
             ctx.info(format!(
                 "✅ Storage parsed, {count} lost stories removed, {size} MB recovered"
             ));
+            Ok(())
         }
-
-        Command::NmConfig(args) => {
-            let mut dev = open(ctx, cli.device.as_deref())?;
-            let lunii = dev
-                .as_lunii_mut()
-                .context("Night mode settings are only available on Lunii")?;
-            let mut changed = false;
-            let mut set = |pos: usize, v: Option<u16>| {
-                if let Some(v) = v {
-                    lunii.config[pos] = v;
-                    changed = true;
-                }
-            };
-            set(LUNII_CFGPOS_NM_ENABLED, args.enable.map(u16::from));
-            set(
-                LUNII_CFGPOS_NM_VOL_LIMIT,
-                args.volume_limit.map(|b| if b { 30 } else { 0 }),
-            );
-            set(LUNII_CFGPOS_NM_STORYCOUNT, args.stories);
-            set(LUNII_CFGPOS_NM_AUTOPLAY, args.autoplay.map(u16::from));
-            set(LUNII_CFGPOS_NM_TURNOFF_NM, args.turnoff.map(u16::from));
-            if changed {
-                lunii.update_config()?;
-                ctx.info("✅ Night mode settings saved");
-            }
-            let c = &lunii.config;
-            println!("enabled      : {}", c[LUNII_CFGPOS_NM_ENABLED] != 0);
-            println!("volume limit : {}", c[LUNII_CFGPOS_NM_VOL_LIMIT] != 0);
-            println!("stories      : {}", c[LUNII_CFGPOS_NM_STORYCOUNT]);
-            println!("autoplay     : {}", c[LUNII_CFGPOS_NM_AUTOPLAY] != 0);
-            println!("turn off     : {}", c[LUNII_CFGPOS_NM_TURNOFF_NM] != 0);
-        }
-
-        Command::Db(cmd) => match cmd {
-            DbCommand::Refresh => {
-                if db::load_db(true) {
-                    ctx.info("✅ Official database updated");
-                } else {
-                    bail!("🛑 Failed to update the official database");
-                }
-            }
-            DbCommand::ImportStudio { file } => {
-                db::load_db(false);
-                let (count, total) = tools::import_studio_db(ctx, &file)?;
-                ctx.info(format!("✅ STUdio DB imported ({count}/{total})."));
-            }
-            DbCommand::Info => {
-                db::load_db(false);
-                let (official, third) = db::db_sizes();
-                println!(
-                    "official    : {official} stories ({})",
-                    file_official_db().display()
-                );
-                println!(
-                    "third-party : {third} stories ({})",
-                    file_third_party_db().display()
-                );
-                println!(
-                    "ffmpeg      : {}",
-                    which_ffmpeg()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or("not found".into())
-                );
-            }
-        },
-
-        Command::Firmware { email, out } => {
-            let dev = open(ctx, cli.device.as_deref())?;
-            let password = match std::env::var("LUNII_PASSWORD") {
-                Ok(p) => p,
-                Err(_) => rpassword::prompt_password("Luniistore password: ")?,
-            };
-            let auth = firmware::luniistore_get_authtoken(&email, &password)?
-                .context("⚠️ Login failed, please check your credentials")?;
-            ctx.info("Login success...");
-            std::fs::create_dir_all(&out)?;
-            let list = firmware::device_fw_getlist(dev.version(), &dev.snu_str(), &auth)?;
-            for (index, name) in list.iter().enumerate() {
-                let target = out.join(name);
-                let size = firmware::device_fw_download(
-                    dev.version(),
-                    &dev.snu_str(),
-                    &auth,
-                    &target,
-                    index != 0,
-                )?;
-                ctx.info(format!(
-                    "✅ Firmware downloaded to {} ({size} bytes)",
-                    target.display()
-                ));
-            }
-        }
-
+        Command::NmConfig(args) => night_mode_config(ctx, device, args),
+        Command::Db(cmd) => db_command(ctx, cmd),
+        Command::Firmware { email, out } => download_firmware(ctx, device, &email, &out),
         Command::CheckUpdate => match tools::latest_version() {
-            Some(v) => println!("Latest version: {v} (this one: v{})", lunii_core::VERSION),
+            Some(v) => {
+                println!("Latest version: {v} (this one: v{})", lunii_core::VERSION);
+                Ok(())
+            }
             None => bail!("Unable to check for updates"),
         },
-
         Command::InstallFfmpeg => {
             let path = tools::install_ffmpeg(ctx)?;
             ctx.info(format!("✅ FFMPEG installed ({}).", path.display()));
+            Ok(())
         }
     }
-    Ok(())
 }
 
 fn main() {
