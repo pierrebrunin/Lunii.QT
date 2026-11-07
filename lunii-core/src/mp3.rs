@@ -2,9 +2,10 @@
 //! (`sf/` directory) without reading them whole.
 //!
 //! The first 512 bytes of each file are ciphered on the device: the frames
-//! are looked for after them. The duration of a file is its size divided by
-//! the mean size of a frame (several consecutive frames are read, so variable
-//! bitrate files are estimated too), times the duration of a frame.
+//! are looked for after them, in windows spread over the file. Each window
+//! gives a bitrate (bytes of its frames for their duration); the duration of
+//! the file is its size at the median of these bitrates, so that a quiet
+//! intro or a different ending of a variable bitrate file does not count.
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -13,8 +14,10 @@ use crate::convert::audio::parse_frame_header;
 
 /// Ciphered head of the files on the device.
 const CIPHERED: u64 = 512;
-/// Bytes read from each file to measure its frames.
-const SAMPLE: u64 = 32 * 1024;
+/// Bytes of each window.
+const WINDOW: u64 = 8 * 1024;
+/// Most windows read in a file.
+const WINDOWS: u64 = 16;
 
 /// Bitrate (bytes per second) of the first run of at least 3 consecutive
 /// frames of the same kind found in `data`.
@@ -47,11 +50,31 @@ fn bitrate(data: &[u8]) -> Option<f64> {
 fn file_duration(path: &Path) -> Option<f64> {
     let mut file = std::fs::File::open(path).ok()?;
     let size = file.metadata().ok()?.len();
-    let skip = if size > CIPHERED + 1024 { CIPHERED } else { 0 };
-    file.seek(SeekFrom::Start(skip)).ok()?;
-    let mut data = Vec::with_capacity(SAMPLE as usize);
-    file.take(SAMPLE).read_to_end(&mut data).ok()?;
-    Some(size as f64 / bitrate(&data)?)
+    let head = if size > CIPHERED + 2 * WINDOW {
+        CIPHERED
+    } else {
+        0
+    };
+    let audio = size - head;
+    // small file: one window over all of it
+    let (count, window) = if audio <= WINDOWS * WINDOW {
+        (1, audio)
+    } else {
+        (WINDOWS, WINDOW)
+    };
+    let mut rates = Vec::new();
+    for i in 0..count {
+        let offset = head + i * (audio - window) / (count - 1).max(1);
+        file.seek(SeekFrom::Start(offset)).ok()?;
+        let mut data = Vec::with_capacity(window as usize);
+        (&mut file).take(window).read_to_end(&mut data).ok()?;
+        rates.extend(bitrate(&data));
+    }
+    if rates.is_empty() {
+        return None;
+    }
+    rates.sort_by(f64::total_cmp);
+    Some(size as f64 / rates[rates.len() / 2])
 }
 
 /// Duration in seconds of the audio of a story (its `sf/` directory), if its
@@ -124,5 +147,20 @@ mod tests {
         // no audio at all
         let empty = tempfile::tempdir().unwrap();
         assert_eq!(story_duration(empty.path()), None);
+    }
+
+    /// Variable bitrate: a quiet intro and ending do not count.
+    #[test]
+    fn variable_bitrate() {
+        let dir = tempfile::tempdir().unwrap();
+        let sf = dir.path().join("sf/000");
+        std::fs::create_dir_all(&sf).unwrap();
+        let mut audio = frames(5.0, 32);
+        audio.extend(frames(1200.0, 128));
+        audio.extend(frames(5.0, 32));
+        device_file(&sf.join("00000001"), &audio);
+        let d = story_duration(dir.path()).unwrap();
+        // 1210 s; at the mean bitrate of the start it would be about 4 times longer
+        assert!((1180..=1240).contains(&d), "{d}");
     }
 }
