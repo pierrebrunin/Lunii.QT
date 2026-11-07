@@ -294,6 +294,18 @@ msgstr "Supprimer"
 msgid "Show size"
 msgstr "Afficher les tailles"
 
+msgid "Show duration"
+msgstr "Afficher les durées"
+
+msgid "Show database (O / T)"
+msgstr "Afficher la base (O / T)"
+
+msgid "Show UUID"
+msgstr "Afficher les UUID"
+
+msgid "Duration"
+msgstr "Durée"
+
 msgid "Show size for each stories"
 msgstr "Afficher les tailles pour chaques histoires"
 

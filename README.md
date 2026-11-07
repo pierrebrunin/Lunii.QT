@@ -82,7 +82,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
    Le bouton à gauche relance la détection automatique.
 3. Gestion du **Mode nuit** ([ici](#mode-nuit))
 4. Actualisation de la **base de données Officielle** : Met à jour la liste des histoires et leurs descriptions depuis le Luniistore. Utilisez ce bouton lorsque certaines histoires officielles ne sont pas reconnues.
-5. La **liste de vos histoires** avec l'UUID et le type d'histoire (DB).  
+5. La **liste de vos histoires** avec leur durée. Le menu **Outils** permet d'afficher aussi leur taille, leur base de données (DB) et leur UUID, masqués par défaut.  
    L'UUID : Un identifiant unique permettant de lier les histoires à leur dossier sur la Lunii/Flam. Les huit derniers caractères de l'UUID composent le nom du dossier de l'histoire.
 
    **DB** signifie **Base de données**. Cette application prend en charge deux bases de données différentes

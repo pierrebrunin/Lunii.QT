@@ -97,6 +97,8 @@ pub struct StoryInfo {
     pub hidden: bool,
     pub exportable: bool,
     pub size: Option<u64>,
+    /// seconds, from the database (the others are measured on the device)
+    pub duration: Option<u32>,
     /// MP3 album created by Lunii, tracks can be appended
     pub album: bool,
 }
@@ -120,6 +122,7 @@ pub fn snapshot(dev: &dyn Device) -> Vec<StoryInfo> {
             hidden: s.hidden,
             exportable: dev.story_exportable(s),
             size: s.size,
+            duration: db::story_duration(&s.uuid),
             album: dev.album_track_count(s).is_some(),
         })
         .collect()
@@ -156,6 +159,10 @@ pub enum Event {
     /// Background device opening done (search id, device or error)
     DeviceOpened(u32, Result<Box<OpenedDevice>, String>),
     Finished,
+    /// Duration measured on the device (seconds, `None`: not measurable)
+    Duration(Uuid, Option<u32>),
+    /// The durations asked are all measured
+    DurationsDone,
 }
 
 pub type Sink = Arc<dyn Fn(Event) + Send + Sync>;
@@ -744,6 +751,17 @@ pub fn spawn(
         }
         runner.emit(Event::Finished);
     })
+}
+
+/// Measures the duration of stories from their audio files (not a task: only
+/// reads a little of each file).
+pub fn measure_durations(stories: Vec<(Uuid, PathBuf)>, sink: Sink) {
+    std::thread::spawn(move || {
+        for (uuid, dir) in stories {
+            sink(Event::Duration(uuid, lunii_core::mp3::story_duration(&dir)));
+        }
+        sink(Event::DurationsDone);
+    });
 }
 
 /// Fetches the description and picture of a story (picture may need the network).

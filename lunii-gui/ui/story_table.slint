@@ -13,6 +13,9 @@ export component StoryTable inherits Rectangle {
     in property <[StoryRow]> rows;
     in property <bool> show-nm: true;
     in property <bool> show-size: false;
+    in property <bool> show-duration: true;
+    in property <bool> show-db: false;
+    in property <bool> show-uuid: false;
     in property <bool> interactive: true;
     in property <int> current-row: -1;
     in property <bool> drop-hover: false;
@@ -29,6 +32,7 @@ export component StoryTable inherits Rectangle {
     property <length> col-flag: 30px;
     property <length> col-uuid: 300px;
     property <length> col-size: 80px;
+    property <length> col-duration: 70px;
 
     border-width: 1px;
     border-color: root.drop-hover ? Theme.selection : Palette.border;
@@ -91,12 +95,14 @@ export component StoryTable inherits Rectangle {
                 background: Palette.control-background;
                 HorizontalLayout {
                     padding-left: 6px;
-                    padding-right: 6px;
+                    // the scrollbar
+                    padding-right: 14px;
                     spacing: 4px;
                     HeaderCell { text: @tr("Story Name"); horizontal-stretch: 1; }
                     if root.show-nm: HeaderCell { text: @tr("NM"); width: root.col-flag; horizontal-alignment: center; }
-                    HeaderCell { text: @tr("DB"); width: root.col-flag; horizontal-alignment: center; }
-                    HeaderCell { text: "UUID"; width: root.col-uuid; }
+                    if root.show-db: HeaderCell { text: @tr("DB"); width: root.col-flag; horizontal-alignment: center; }
+                    if root.show-uuid: HeaderCell { text: "UUID"; width: root.col-uuid; }
+                    if root.show-duration: HeaderCell { text: @tr("Duration"); width: root.col-duration; horizontal-alignment: right; }
                     if root.show-size: HeaderCell { text: @tr("Size"); width: root.col-size; horizontal-alignment: right; }
                 }
                 Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
@@ -110,7 +116,8 @@ export component StoryTable inherits Rectangle {
 
                     HorizontalLayout {
                         padding-left: 6px;
-                        padding-right: 6px;
+                        // the scrollbar
+                        padding-right: 14px;
                         spacing: 4px;
                         Text {
                             text: row.name;
@@ -130,14 +137,14 @@ export component StoryTable inherits Rectangle {
                                 vertical-alignment: center;
                             }
                         }
-                        Text {
+                        if root.show-db: Text {
                             text: row.official ? "O" : "T";
                             color: fg;
                             width: root.col-flag;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
-                        Text {
+                        if root.show-uuid: Text {
                             text: row.uuid;
                             color: fg;
                             width: root.col-uuid;
@@ -145,6 +152,13 @@ export component StoryTable inherits Rectangle {
                             font-size: 12px;
                             vertical-alignment: center;
                             overflow: elide;
+                        }
+                        if root.show-duration: Text {
+                            text: row.duration;
+                            color: fg;
+                            width: root.col-duration;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
                         }
                         if root.show-size: Text {
                             text: row.size;

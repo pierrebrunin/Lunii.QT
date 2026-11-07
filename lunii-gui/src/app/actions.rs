@@ -169,6 +169,18 @@ impl App {
                 ui.set_dialog(DialogKind::ConfirmRemove);
             }
             Action::ShowSize => self.ensure_sizes(),
+            Action::Columns => {
+                for (name, value) in [
+                    ("hide_duration", !ui.get_show_duration()),
+                    ("show_db", ui.get_show_db()),
+                    ("show_uuid", ui.get_show_uuid()),
+                ] {
+                    if let Err(e) = lunii_core::settings::set_bool(name, value) {
+                        self.log(Level::Warn, &format!("{e:#}"));
+                    }
+                }
+                self.ensure_durations();
+            }
             Action::ShowDetails => {
                 self.state.borrow_mut().details_uuid = None;
                 self.update_details();

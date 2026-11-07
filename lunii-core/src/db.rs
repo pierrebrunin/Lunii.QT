@@ -286,6 +286,18 @@ pub fn story_description(uuid: &Uuid) -> String {
     .unwrap_or_else(|| DESC_NOT_FOUND.to_string())
 }
 
+/// Duration of a story in seconds, as given by the database (official
+/// stories: `duration` in milliseconds).
+pub fn story_duration(uuid: &Uuid) -> Option<u32> {
+    lookup(uuid, |entry| {
+        entry
+            .get("duration")
+            .and_then(Value::as_u64)
+            .filter(|&ms| ms > 0)
+            .map(|ms| ms.div_ceil(1000) as u32)
+    })
+}
+
 pub fn story_author(uuid: &Uuid) -> String {
     lookup(uuid, |entry| {
         if is_truthy(entry.get("authors")) {

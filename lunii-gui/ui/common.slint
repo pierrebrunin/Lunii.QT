@@ -7,6 +7,8 @@ export struct StoryRow {
     uuid: string,
     size: string,
     night-mode: bool,
+    // `45 min`, `1 h 05` (empty: unknown, or being measured)
+    duration: string,
     official: bool,
     hidden: bool,
     selected: bool,
@@ -33,6 +35,7 @@ export enum Action {
     hide,
     import,
     import-album,
+    columns,
     import-db,
     import-podcast,
     move-bottom,

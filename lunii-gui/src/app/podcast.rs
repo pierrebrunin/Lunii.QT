@@ -9,7 +9,7 @@ use lunii_core::podcast::{self, Podcast, SavedPodcast, SearchResult};
 use slint::{Model as _, ModelRc, VecModel};
 use uuid::Uuid;
 
-use super::{App, decode_image, sink};
+use super::{App, decode_image, format_duration, sink};
 use crate::i18n::{tr, trf};
 use crate::worker::{self, Task};
 use crate::{DialogKind, EpisodeRow, FollowedRow, PodcastResult};
@@ -675,16 +675,6 @@ impl App {
     }
 }
 
-/// Episode duration: `8 min`, `1 h 02`.
-fn format_duration(secs: u32) -> String {
-    let m = secs.div_ceil(60);
-    if m < 60 {
-        format!("{m} min")
-    } else {
-        format!("{} h {:02}", m / 60, m % 60)
-    }
-}
-
 /// Apple Podcasts catalog searched: the region of the user locale (`fr_FR`,
 /// `fr-CA`), or `fr` / `us` from the language.
 fn store_country() -> String {
@@ -719,8 +709,10 @@ mod tests {
 
     #[test]
     fn durations() {
-        assert_eq!(format_duration(45), "1 min");
+        assert_eq!(format_duration(10), "1 min");
+        assert_eq!(format_duration(200), "3 min");
         assert_eq!(format_duration(8 * 60), "8 min");
-        assert_eq!(format_duration(3723), "1 h 03");
+        assert_eq!(format_duration(3723), "1 h 02");
+        assert_eq!(format_duration(3600 + 30 * 60), "1 h 30");
     }
 }

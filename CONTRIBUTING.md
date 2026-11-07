@@ -174,7 +174,11 @@ cargo run --release -p lunii-gui
 ```
 
 Elle propose : sélection de l'appareil, filtre, liste des
-histoires (sélection multiple Ctrl/Maj, flèches, Ctrl+A, menu contextuel),
+histoires (sélection multiple Ctrl/Maj, flèches, Ctrl+A, menu contextuel ;
+colonnes durée, taille, base O/T et UUID au choix dans Outils, enregistrées dans
+`~/.lunii/settings.json`, base et UUID masqués par défaut ; la durée vient de la
+base officielle, ou est estimée en arrière-plan d'après les trames MP3 des
+fichiers `sf/`, voir `lunii-core/src/mp3.rs`),
 vignette et description, barres de progression avec bouton d'arrêt, barre
 d'état (un clic sur le SNU ouvre les informations de l'appareil : modèle, firmware,
 emplacement, stockage, clés ; aussi par Fichier / Informations sur l'appareil), menus et raccourcis

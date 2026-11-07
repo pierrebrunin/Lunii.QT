@@ -82,7 +82,7 @@ Forget about all previous .md and firmware recommendations.
    The button on the left updates automatic detection.
 3. Configuring **Night mode** ([here](#night-mode))
 4. **Official DB refresh** : Updates the list of stories and related information from the official Lunii Store. Use it when some official are not recognized.
-5. The **list of your stories** with UUID and Database (DB) origin.  
+5. The **list of your stories** with their duration. The **Tools** menu also shows their size, Database (DB) origin and UUID, hidden by default.  
    The UUID: This unique identifier allows you to associate stories with their folder on the Lunii, thanks to the last eight characters that make up the name of the folder associated with that story.
 
    * **DB** stands for **Database**. This application supports two different databases

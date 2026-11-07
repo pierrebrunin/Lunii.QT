@@ -45,6 +45,10 @@ export component MainWindow inherits Window {
     in property <int> current-row: -1;
     in property <bool> show-nm: true;
     in-out property <bool> show-size: false;
+    // optional columns of the story list (saved in the settings)
+    in-out property <bool> show-duration: true;
+    in-out property <bool> show-db: false;
+    in-out property <bool> show-uuid: false;
     in-out property <bool> normalize-volume: false;
     in-out property <bool> show-details: true;
     in property <string> list-placeholder;
@@ -216,6 +220,9 @@ export component MainWindow inherits Window {
     property <bool> story-actions: root.device-ready && root.idle;
     // after the change, whatever toggled it (menu, settings)
     changed show-size => { root.action(Action.show-size); }
+    changed show-duration => { root.action(Action.columns); }
+    changed show-db => { root.action(Action.columns); }
+    changed show-uuid => { root.action(Action.columns); }
     // the selection is only acted on in the stories view
     property <bool> selection-actions: root.story-actions && root.has-selection && root.view == 0;
 
@@ -253,6 +260,9 @@ export component MainWindow inherits Window {
         Menu {
             title: @tr("Tools");
             MenuItem { enabled: !root.modal; title: @tr("Show size"); checkable: true; checked <=> root.show-size; }
+            MenuItem { enabled: !root.modal; title: @tr("Show duration"); checkable: true; checked <=> root.show-duration; }
+            MenuItem { enabled: !root.modal; title: @tr("Show database (O / T)"); checkable: true; checked <=> root.show-db; }
+            MenuItem { enabled: !root.modal; title: @tr("Show UUID"); checkable: true; checked <=> root.show-uuid; }
             MenuItem { enabled: !root.modal; title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action(Action.show-details); } }
             MenuSeparator { }
             MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: root.ffmpeg-present && !root.modal; activated => { root.action(Action.normalize-volume); } }
@@ -398,6 +408,9 @@ export component MainWindow inherits Window {
                         current-row: root.current-row;
                         show-nm: root.show-nm;
                         show-size: root.show-size;
+                        show-duration: root.show-duration;
+                        show-db: root.show-db;
+                        show-uuid: root.show-uuid;
                         interactive: !root.busy;
                         drop-hover: root.drop-hover;
                         placeholder: root.list-placeholder;

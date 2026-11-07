@@ -1,7 +1,7 @@
 //! Main window controller (with the night mode and log panels).
 
 use std::cell::RefCell;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -153,6 +153,10 @@ struct State {
     eta: Option<Eta>,
     /// the running task computes the sizes
     sizing: bool,
+    /// durations measured on the device (stories without one in the database)
+    durations: HashMap<Uuid, Option<u32>>,
+    /// a measure of durations is running
+    measuring: bool,
     /// podcast of the selection dialog, and its selected episodes
     podcast: Option<(Box<PodcastView>, HashSet<usize>)>,
     /// followed podcasts and their feeds (Podcasts view)
@@ -170,6 +174,17 @@ pub struct App {
     state: RefCell<State>,
     drop_timer: slint::Timer,
     eta_timer: slint::Timer,
+}
+
+/// Duration of a story or an episode: `8 min`, `1 h 02` (nearest minute, at
+/// least 1).
+pub(super) fn format_duration(secs: u32) -> String {
+    let m = ((secs + 30) / 60).max(1);
+    if m < 60 {
+        format!("{m} min")
+    } else {
+        format!("{} h {:02}", m / 60, m % 60)
+    }
 }
 
 fn level_value(level: Level) -> i32 {
@@ -252,6 +267,9 @@ impl App {
         ui.set_ffmpeg_present(which_ffmpeg().is_some());
         let normalize = lunii_core::settings::get_bool("normalize_volume");
         ui.set_normalize_volume(normalize);
+        ui.set_show_duration(!lunii_core::settings::get_bool("hide_duration"));
+        ui.set_show_db(lunii_core::settings::get_bool("show_db"));
+        ui.set_show_uuid(lunii_core::settings::get_bool("show_uuid"));
         ui.global::<Theme>().set_mono_font(
             if cfg!(windows) {
                 "Consolas"
@@ -781,6 +799,43 @@ impl App {
     // Story list
     // -----------------------------------------------------------------------
 
+    /// Measures in the background the duration of the stories that have none
+    /// in the database (once per story: kept for the session).
+    pub(super) fn ensure_durations(&self) {
+        if !self.ui().get_show_duration() {
+            return;
+        }
+        let (device, missing) = {
+            let st = self.state.borrow();
+            if st.measuring {
+                return;
+            }
+            let missing: HashSet<Uuid> = st
+                .stories
+                .iter()
+                .filter(|s| s.duration.is_none() && !st.durations.contains_key(&s.uuid))
+                .map(|s| s.uuid)
+                .collect();
+            (st.device.clone(), missing)
+        };
+        let Some(device) = device.filter(|_| !missing.is_empty()) else {
+            return;
+        };
+        // a task is running: measured once it is done (its end lists the stories)
+        let Ok(dev) = Self::lock_device(&device) else {
+            return;
+        };
+        let dirs: Vec<(Uuid, PathBuf)> = dev
+            .stories()
+            .iter()
+            .filter(|s| missing.contains(&s.uuid))
+            .map(|s| (s.uuid, dev.story_path(s)))
+            .collect();
+        drop(dev);
+        self.state.borrow_mut().measuring = true;
+        worker::measure_durations(dirs, sink());
+    }
+
     fn rebuild_rows(&self) {
         let ui = self.ui();
         let filter = ui.get_filter().to_lowercase();
@@ -822,6 +877,12 @@ impl App {
                             .unwrap_or_default()
                             .into(),
                         night_mode: s.night_mode,
+                        duration: s
+                            .duration
+                            .or_else(|| st.durations.get(&s.uuid).copied().flatten())
+                            .map(format_duration)
+                            .unwrap_or_default()
+                            .into(),
                         official: s.official,
                         hidden: s.hidden,
                         selected: st.selected.contains(&s.uuid),
@@ -831,6 +892,7 @@ impl App {
         };
         self.rows.set_vec(rows);
         self.selection_changed();
+        self.ensure_durations();
     }
 
     pub(crate) fn row_pointer(&self, row: usize, ctrl: bool, shift: bool, right: bool) {
@@ -1230,6 +1292,25 @@ impl App {
                 } else {
                     0.0
                 });
+            }
+            Event::Duration(uuid, duration) => {
+                // only its row changes (the list keeps its scrolling)
+                let row = {
+                    let mut st = self.state.borrow_mut();
+                    st.durations.insert(uuid, duration);
+                    st.visible.iter().position(|&i| st.stories[i].uuid == uuid)
+                };
+                if let (Some(row), Some(secs)) = (row, duration)
+                    && let Some(mut data) = self.rows.row_data(row)
+                    && data.duration.is_empty()
+                {
+                    data.duration = format_duration(secs).into();
+                    self.rows.set_row_data(row, data);
+                }
+            }
+            Event::DurationsDone => {
+                self.state.borrow_mut().measuring = false;
+                self.ensure_durations();
             }
             Event::Stories(stories) => {
                 self.state.borrow_mut().stories = stories;
