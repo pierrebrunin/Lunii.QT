@@ -105,7 +105,26 @@ export component MainWindow inherits Window {
     // log panel
     in property <[LogLine]> log-lines;
     in-out property <bool> log-visible;
+    // height chosen by dragging the panel edge
     in-out property <length> log-height: 170px;
+    // what the rest of the window needs (bars, list, story details, progress):
+    // the panel is shown lower when there is not enough room, and gets back to
+    // its height once there is
+    property <length> details-height: root.view == 0 && root.details-visible ? (root.album-visible ? 260px : 192px) + 6px : 0px;
+    // progress bars of a running task
+    property <length> progress-height: root.total-visible || root.story-visible ? 40px : 0px;
+    // smallest panel: its toolbar, two lines and the log file path
+    property <length> log-min-height: 110px;
+    property <length> log-max-height: max(root.log-min-height, root.height - 290px - root.details-height - root.progress-height);
+    // height shown: updated by these handlers (a binding to the window height
+    // would be a layout binding loop)
+    property <length> log-shown-height: 170px;
+    changed log-max-height => {
+        root.log-shown-height = clamp(root.log-height, root.log-min-height, root.log-max-height);
+    }
+    changed log-height => {
+        root.log-shown-height = clamp(root.log-height, root.log-min-height, root.log-max-height);
+    }
     in-out property <int> log-level-index: 2;
     in-out property <string> log-filter;
     in property <string> log-file-path;
@@ -389,7 +408,9 @@ export component MainWindow inherits Window {
                 }
 
                 // ---------------------------------------------------------------- details
-                if root.details-visible: HorizontalLayout {
+                // only in the stories view: hidden, this view still sets the
+                // minimum height of the window content
+                if root.details-visible && root.view == 0: HorizontalLayout {
                     spacing: 6px;
                     height: root.album-visible ? 260px : 192px;
                     opacity: root.details-dimmed ? 0.5 : 1;
@@ -514,12 +535,12 @@ export component MainWindow inherits Window {
                 handle := TouchArea {
                     mouse-cursor: ns-resize;
                     moved => {
-                        root.log-height = clamp(root.log-height - (self.mouse-y - self.pressed-y), 80px, max(80px, root.height - 320px));
+                        root.log-height = clamp(root.log-shown-height - (self.mouse-y - self.pressed-y), root.log-min-height, root.log-max-height);
                     }
                 }
             }
             panel := LogPanel {
-                height: root.log-height;
+                height: root.log-shown-height;
                 lines: root.log-lines;
                 level-index <=> root.log-level-index;
                 filter <=> root.log-filter;
