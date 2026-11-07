@@ -20,7 +20,11 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   ├── src/album/           dossier de MP3 → histoire : scan.rs (tags, sous-dossiers,
 │   │                        pochette), layout.rs (story.json), screens.rs (écrans),
 │   │                        meta.rs (titres des pistes sur l'appareil, album.json)
-│   ├── src/podcast.rs       flux RSS, téléchargement, préparation de l'import
+│   ├── src/podcast/         podcasts : mod.rs (types, chargement d'une adresse),
+│   │                        feed.rs (RSS, Atom), page.rs (pages sans flux,
+│   │                        schema.org), html.rs, apple.rs (liens, recherche),
+│   │                        import.rs (téléchargement, préparation de l'import),
+│   │                        state.rs (podcasts suivis)
 │   ├── src/settings.rs      réglages (~/.lunii/settings.json)
 │   ├── src/firmware.rs      téléchargement des firmwares
 │   ├── src/tools.rs         import base STUdio, ffmpeg, mise à jour
