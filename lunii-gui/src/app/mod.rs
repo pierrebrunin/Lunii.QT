@@ -1132,10 +1132,34 @@ impl App {
                 return false;
             };
             let result = op(dev.as_mut(), &ctx);
-            (result, worker::snapshot(dev.as_ref()))
+            // order and hidden state from the device; the rest is unchanged
+            // (no disk read on the UI thread: albums, names...)
+            let mut known: HashMap<Uuid, StoryInfo> = self
+                .state
+                .borrow_mut()
+                .stories
+                .drain(..)
+                .map(|s| (s.uuid, s))
+                .collect();
+            let reordered: Option<Vec<StoryInfo>> = dev
+                .stories()
+                .iter()
+                .map(|s| {
+                    known.remove(&s.uuid).map(|info| StoryInfo {
+                        hidden: s.hidden,
+                        ..info
+                    })
+                })
+                .collect();
+            // a story not listed yet: read again
+            let stories = reordered.unwrap_or_else(|| worker::snapshot(dev.as_ref()));
+            (result, stories)
         };
         self.state.borrow_mut().stories = stories;
-        self.forget_durations();
+        // a measure may have failed on a story moved meanwhile (hide)
+        if self.state.borrow().measuring {
+            self.forget_durations();
+        }
         self.rebuild_rows();
         match result {
             Ok(()) => true,
