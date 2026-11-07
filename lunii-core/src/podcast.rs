@@ -525,26 +525,39 @@ fn shortest_name(names: impl IntoIterator<Item = String>) -> Option<String> {
         .min_by_key(|n| n.chars().count())
 }
 
-/// ISO 8601 duration (`P0Y0M0DT0H22M50S`) in seconds.
+/// ISO 8601 duration (`P0Y0M0DT0H22M50S`, `PT22M50.5S`, `P1DT2H`) in seconds.
 fn parse_iso_duration(value: &str) -> Option<u32> {
-    let time = value.split_once('T')?.1;
-    let mut total = 0;
-    let mut number = String::new();
-    for c in time.chars() {
-        if c.is_ascii_digit() {
-            number.push(c);
-            continue;
+    let rest = value.trim().strip_prefix('P')?;
+    let (date, time) = rest.split_once('T').unwrap_or((rest, ""));
+    let mut total = 0f64;
+    let mut parts = 0;
+    for (text, in_time) in [(date, false), (time, true)] {
+        let mut number = String::new();
+        for c in text.chars() {
+            if c.is_ascii_digit() || c == '.' || c == ',' {
+                number.push(if c == ',' { '.' } else { c });
+                continue;
+            }
+            let n: f64 = number.parse().ok()?;
+            number.clear();
+            total += n * match (c, in_time) {
+                ('Y', false) => 365.0 * 86400.0,
+                ('M', false) => 30.0 * 86400.0,
+                ('W', false) => 7.0 * 86400.0,
+                ('D', false) => 86400.0,
+                ('H', true) => 3600.0,
+                ('M', true) => 60.0,
+                ('S', true) => 1.0,
+                _ => return None,
+            };
+            parts += 1;
         }
-        let n: u32 = number.parse().ok()?;
-        number.clear();
-        total += n * match c {
-            'H' => 3600,
-            'M' => 60,
-            'S' => 1,
-            _ => return None,
-        };
+        // a number without its unit
+        if !number.is_empty() {
+            return None;
+        }
     }
-    Some(total)
+    (parts > 0).then(|| total.round() as u32)
 }
 
 /// The audio of an episode (`AudioObject` with a `contentUrl`).
@@ -1548,5 +1561,11 @@ mod tests {
             ["https://ex/ep-1", "https://ex/ep-2"]
         );
         assert_eq!(parse_iso_duration("PT1H2M3S"), Some(3723));
+        assert_eq!(parse_iso_duration("PT22M50.5S"), Some(1371));
+        assert_eq!(parse_iso_duration("P1DT2H"), Some(93_600));
+        assert_eq!(parse_iso_duration("P0Y0M0DT0H22M50S"), Some(1370));
+        assert_eq!(parse_iso_duration("PT"), None);
+        assert_eq!(parse_iso_duration("PT12"), None);
+        assert_eq!(parse_iso_duration("22:50"), None);
     }
 }
