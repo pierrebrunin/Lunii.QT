@@ -608,6 +608,9 @@ fn listed_pages(page_url: &str, page: &str) -> Vec<String> {
         .collect()
 }
 
+/// Episode pages loaded at the same time.
+const PAGES_AT_ONCE: usize = 6;
+
 /// A podcast made from a page without feed that lists episode pages (and its
 /// next pages): each episode is read from its page. The listed pages that are
 /// not episodes (other series...) are skipped.
@@ -639,16 +642,19 @@ fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
         bail!("No podcast feed found at this address");
     }
 
-    let episodes: Vec<Option<Episode>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = urls
-            .iter()
-            .map(|url| scope.spawn(move || get_text(url).ok().and_then(|p| page_episode(url, &p))))
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().ok().flatten())
-            .collect()
-    });
+    // a few pages at a time: a site may refuse too many requests at once
+    let mut episodes: Vec<Option<Episode>> = Vec::with_capacity(urls.len());
+    for chunk in urls.chunks(PAGES_AT_ONCE) {
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|url| {
+                    scope.spawn(move || get_text(url).ok().and_then(|p| page_episode(url, &p)))
+                })
+                .collect();
+            episodes.extend(handles.into_iter().map(|h| h.join().ok().flatten()));
+        });
+    }
     let skipped = episodes.iter().filter(|e| e.is_none()).count();
     let episodes: Vec<Episode> = episodes.into_iter().flatten().collect();
     if episodes.is_empty() {
