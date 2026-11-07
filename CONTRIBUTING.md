@@ -235,18 +235,22 @@ directement la fenêtre d'ajout) :
   - des **mots** : recherche dans le catalogue Apple Podcasts (API publique
     `itunes.apple.com/search`, sans clé, environ 20 requêtes par minute, d'où
     une recherche sur Entrée seulement ; catalogue du pays de la langue du
-    système). Les podcasts dont l'éditeur ne donne pas le flux à Apple (Radio
-    France par exemple) sont grisés (« flux non public ») ;
+    système). Les podcasts dont l'éditeur ne donne pas le flux à Apple sont
+    grisés (« flux non public ») : on colle alors l'adresse de leur page ;
   - une **adresse** `http(s)://` : son flux RSS ou Atom (le format standard des
-    podcasts, quelle que soit la source), sa page (par exemple
-    `https://www.radiofrance.fr/franceinter/podcasts/les-odyssees`, ou toute
-    page annonçant son flux par `<link rel="alternate">`) ou son lien Apple
-    Podcasts (le flux est demandé à l'API iTunes).
+    podcasts), sa page web si elle annonce son flux (`<link rel="alternate"
+    type="application/rss+xml">`), ou son lien Apple Podcasts (le flux est
+    demandé à l'API iTunes).
 
   Le podcast choisi est chargé et vérifié (titre, nombre d'épisodes) avant que
-  **Suivre** ne soit possible. Les séries et sélections Radio France
-  n'ont pas de flux : leurs épisodes sont lus sur la page de chacun (ceux qui
-  renvoient vers une autre série, sans audio dans la page, sont ignorés).
+  **Suivre** ne soit possible. Une page **sans flux** est lue avec les
+  standards du web : la liste de ses épisodes (schema.org `ItemList`, pages
+  suivantes par `<link rel="next">`), puis la page de chaque épisode (schema.org
+  `RadioEpisode`, `PodcastEpisode`… avec son `AudioObject`) ; les pages listées
+  sans audio sont ignorées. Titre, éditeur et couverture viennent du
+  schema.org et des balises Open Graph (`og:title`, `og:site_name`,
+  `og:image`). Aucun site n'est traité à part : c'est ainsi que fonctionnent,
+  par exemple, les séries et sélections de radiofrance.fr.
   Les flux des podcasts suivis sont chargés en arrière-plan,
   sans bloquer l'application. Sous chaque podcast : ses nouveaux épisodes si
   son album est sur l'appareil, son nombre d'épisodes sinon. Ils sont
@@ -269,15 +273,10 @@ directement la fenêtre d'ajout) :
 - L'UUID de l'album est dérivé de l'adresse du flux. Si l'album est déjà sur
   l'appareil, les épisodes choisis y sont **ajoutés**. Les épisodes déjà importés
   sont retenus dans `~/.lunii/podcasts.json` et grisés dans la liste.
-- **Tout mettre à jour** (ou Histoires / Mettre à jour les podcasts) : pour
-  chaque podcast suivi dont l'album est sur l'appareil, relit son flux et ajoute
-  les épisodes publiés après le plus récent déjà importé (les plus anciens
-  laissés de côté ne sont pas ajoutés), sans rien demander. L'opération peut
-  être interrompue.
-- Les épisodes de Radio France sont en M4A : ffmpeg est nécessaire pour les
-  convertir. Il lit depuis un fichier temporaire et non depuis un pipe, car
-  l'index de ces fichiers est à la fin.
-- Les podcasts de Radio France sont destinés à l'écoute privée : ne pas
+- Les épisodes qui ne sont pas en MP3 (souvent en M4A/AAC) doivent être
+  convertis : ffmpeg est alors nécessaire. Il lit depuis un fichier temporaire
+  et non depuis un pipe, car l'index des M4A est souvent à la fin.
+- Les podcasts sont en général destinés à l'écoute privée : ne pas
   redistribuer les fichiers.
 
 **Pistes d'un album** (Lunii et Flam, albums MP3 et podcasts importés en

@@ -816,9 +816,6 @@ msgstr "🎵 Piste {} : {}"
 msgid "Import a podcast"
 msgstr "Importer un podcast"
 
-msgid "Address of the podcast page (radiofrance.fr...) or of its RSS feed:"
-msgstr "Adresse de la page du podcast (radiofrance.fr…) ou de son flux RSS :"
-
 msgid "Loading..."
 msgstr "Chargement..."
 

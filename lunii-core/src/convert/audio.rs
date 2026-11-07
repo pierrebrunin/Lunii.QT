@@ -367,7 +367,7 @@ fn transcode(data: &[u8], filter: Option<&str>) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
 
-    /// M4A with its index (moov) at the end, as the Radio France podcasts: it
+    /// M4A with its index (moov) at the end, as many podcast episodes: it
     /// can't be read from a pipe.
     #[test]
     fn m4a_to_mp3() {

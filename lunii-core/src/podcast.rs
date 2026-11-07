@@ -6,13 +6,15 @@
 //! album. The episodes already imported are remembered in
 //! `~/.lunii/podcasts.json`.
 //!
-//! The address can be the feed itself (RSS 2.0 or Atom), a web page announcing
-//! it (Radio France podcast pages, `<link rel="alternate"
-//! type="application/rss+xml">`), an Apple Podcasts link (its feed is given by
-//! the iTunes lookup API), or a Radio France series or selection page, without
-//! feed: its episodes are then read from their own pages.
+//! Only standards are used, no site in particular. The address can be:
+//! - the feed itself (RSS 2.0 with the iTunes tags, or Atom);
+//! - a web page announcing it (`<link rel="alternate" type="application/rss+xml">`);
+//! - an Apple Podcasts link (its feed is given by the iTunes lookup API);
+//! - a web page without feed listing episode pages (schema.org `ItemList`,
+//!   following `<link rel="next">`), each episode page describing its audio
+//!   (schema.org `…Episode` with an `AudioObject`).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -92,49 +94,153 @@ fn looks_like_feed(body: &str) -> bool {
     head.contains("<rss") || head.contains("<feed")
 }
 
-/// Feed address announced by a web page.
-fn feed_in_page(page: &str) -> Option<String> {
-    // Radio France pages embed the feed address
-    if let Some(start) = page.find("https://radiofrance-podcast.net/") {
-        let rest = &page[start..];
-        if let Some(end) = rest.find(".xml") {
-            let url = &rest[..end + 4];
-            if !url.contains(['"', '\'', '<', '>', ' ', '\\']) {
-                return Some(url.to_string());
-            }
+// ---------------------------------------------------------------------------
+// HTML
+// ---------------------------------------------------------------------------
+
+/// Attributes of the `<{name} ...>` tags of `page` (names in lower case,
+/// entities decoded), in order.
+fn html_tags(page: &str, name: &str) -> Vec<HashMap<String, String>> {
+    // same byte positions: ASCII only changes
+    let lower = page.to_ascii_lowercase();
+    let open = format!("<{name}");
+    let mut tags = Vec::new();
+    let mut from = 0;
+    while let Some(pos) = lower[from..].find(&open) {
+        let start = from + pos + open.len();
+        from = start;
+        if !page[start..].starts_with(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>') {
+            continue;
         }
+        let Some(end) = page[start..].find('>') else {
+            break;
+        };
+        tags.push(html_attributes(&page[start..start + end]));
+        from = start + end;
     }
-    // standard feed announcement (RSS first, then Atom)
-    ["application/rss+xml", "application/atom+xml"]
-        .into_iter()
-        .find_map(|kind| announced_feed(page, kind))
+    tags
 }
 
-/// `href` of the first `<link type="{kind}">` of `page`.
-fn announced_feed(page: &str, kind: &str) -> Option<String> {
-    let mut rest = page;
-    while let Some(pos) = rest.find(kind) {
-        let tag_start = rest[..pos].rfind('<').unwrap_or(0);
-        let tag_end = rest[pos..].find('>').map_or(rest.len(), |e| pos + e);
-        let tag = &rest[tag_start..tag_end];
-        if let Some(h) = tag.find("href=") {
-            let value = &tag[h + 5..];
-            let quote = value.chars().next().filter(|c| *c == '"' || *c == '\'');
-            let href = match quote {
-                Some(q) => value[1..].split(q).next(),
-                None => value.split([' ', '>']).next(),
-            };
-            if let Some(href) = href.filter(|h| h.starts_with("http")) {
-                return Some(href.to_string());
-            }
+fn html_attributes(mut rest: &str) -> HashMap<String, String> {
+    let mut attributes = HashMap::new();
+    loop {
+        rest = rest.trim_start_matches(|c: char| c.is_ascii_whitespace() || c == '/');
+        if rest.is_empty() {
+            break;
         }
-        rest = &rest[pos + 1..];
+        let name_end = rest
+            .find(|c: char| c.is_ascii_whitespace() || c == '=' || c == '/')
+            .unwrap_or(rest.len());
+        let name = rest[..name_end].to_ascii_lowercase();
+        rest = rest[name_end..].trim_start();
+        let mut value = String::new();
+        if let Some(after) = rest.strip_prefix('=') {
+            let after = after.trim_start();
+            let (raw, remaining) = match after.chars().next() {
+                Some(q @ ('"' | '\'')) => {
+                    let body = &after[1..];
+                    let end = body.find(q).unwrap_or(body.len());
+                    (&body[..end], &body[(end + 1).min(body.len())..])
+                }
+                _ => {
+                    let end = after
+                        .find(|c: char| c.is_ascii_whitespace())
+                        .unwrap_or(after.len());
+                    (&after[..end], &after[end..])
+                }
+            };
+            value = html_unescape(raw);
+            rest = remaining;
+        }
+        if !name.is_empty() {
+            attributes.entry(name).or_insert(value);
+        }
     }
-    None
+    attributes
+}
+
+fn html_unescape(text: &str) -> String {
+    text.replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
+
+/// `href` made absolute against the address of its page.
+fn absolute(base: &str, href: &str) -> Option<String> {
+    let href = href.trim();
+    if href.starts_with("http://") || href.starts_with("https://") {
+        return Some(href.to_string());
+    }
+    let (scheme, rest) = base.split_once("://")?;
+    if let Some(net) = href.strip_prefix("//") {
+        return Some(format!("{scheme}://{net}"));
+    }
+    let host = rest.split(['/', '?', '#']).next()?;
+    if href.starts_with('/') {
+        return Some(format!("{scheme}://{host}{href}"));
+    }
+    if href.is_empty() || href.starts_with('#') || href.contains(':') {
+        return None;
+    }
+    // relative to the directory of the page
+    let path = rest[host.len()..].split(['?', '#']).next().unwrap_or("");
+    let dir = &path[..path.rfind('/').map_or(0, |i| i + 1)];
+    let dir = if dir.is_empty() { "/" } else { dir };
+    Some(format!("{scheme}://{host}{dir}{href}"))
+}
+
+/// `href` of the `<link>` tags of `page` whose `rel` contains `rel` (and of
+/// type `kind`, if given).
+fn links<'a>(
+    page_url: &'a str,
+    tags: &'a [HashMap<String, String>],
+    rel: &'a str,
+    kind: Option<&'a str>,
+) -> impl Iterator<Item = String> + 'a {
+    tags.iter()
+        .filter(move |l| {
+            l.get("rel").is_some_and(|r| {
+                r.split_ascii_whitespace()
+                    .any(|r| r.eq_ignore_ascii_case(rel))
+            }) && kind.is_none_or(|k| l.get("type").is_some_and(|t| t.eq_ignore_ascii_case(k)))
+        })
+        .filter_map(move |l| absolute(page_url, l.get("href")?))
+}
+
+/// Feed address announced by a web page (RSS first, then Atom).
+fn feed_in_page(page_url: &str, page: &str) -> Option<String> {
+    let tags = html_tags(page, "link");
+    ["application/rss+xml", "application/atom+xml"]
+        .into_iter()
+        .find_map(|kind| links(page_url, &tags, "alternate", Some(kind)).next())
+}
+
+/// Next page of a paginated list (`<link rel="next">`).
+fn next_page(page_url: &str, page: &str) -> Option<String> {
+    links(page_url, &html_tags(page, "link"), "next", None).next()
+}
+
+/// `content` of `<meta property="og:{name}">` (Open Graph).
+fn og_meta(page: &str, name: &str) -> Option<String> {
+    let property = format!("og:{name}");
+    html_tags(page, "meta")
+        .into_iter()
+        .find(|m| {
+            m.get("property")
+                .or_else(|| m.get("name"))
+                .map(String::as_str)
+                == Some(property.as_str())
+        })
+        .and_then(|m| m.get("content").cloned())
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
 }
 
 /// `(id, store country)` of an Apple Podcasts link
-/// (`https://podcasts.apple.com/fr/podcast/les-odyssees/id1469858852`).
+/// (`https://podcasts.apple.com/fr/podcast/contes-du-soir/id1469858852`).
 fn apple_podcast_id(address: &str) -> Option<(String, Option<String>)> {
     let rest = address.split_once("://")?.1;
     let (host, path) = rest.split_once('/')?;
@@ -263,7 +369,7 @@ pub fn fetch(address: &str) -> Result<Podcast> {
     if looks_like_feed(&body) {
         return parse_feed(address, &body);
     }
-    match feed_in_page(&body) {
+    match feed_in_page(address, &body) {
         Some(feed_url) => parse_feed(&feed_url, &get_text(&feed_url)?),
         None => page_podcast(address, &body),
     }
@@ -281,54 +387,87 @@ pub fn parse_feed_url(feed_url: &str) -> Result<Podcast> {
 }
 
 // ---------------------------------------------------------------------------
-// Pages without feed (Radio France series and selections)
+// Pages without feed (schema.org)
 // ---------------------------------------------------------------------------
 
 /// The schema.org objects of a page (`<script type="application/ld+json">`,
-/// `@graph` flattened).
+/// `@graph` and arrays flattened).
 fn json_ld(page: &str) -> Vec<Value> {
-    const START: &str = "<script type=\"application/ld+json\"";
+    let lower = page.to_ascii_lowercase();
     let mut objects = Vec::new();
-    let mut rest = page;
-    while let Some(pos) = rest.find(START) {
-        rest = &rest[pos + START.len()..];
-        let Some(open) = rest.find('>') else { break };
-        let Some(close) = rest.find("</script>") else {
+    let mut from = 0;
+    while let Some(pos) = lower[from..].find("<script") {
+        let start = from + pos + "<script".len();
+        let Some(open) = page[start..].find('>') else {
             break;
         };
-        if open < close
-            && let Ok(value) = serde_json::from_str::<Value>(&rest[open + 1..close])
+        let Some(close) = lower[start..].find("</script>") else {
+            break;
+        };
+        from = start + close + "</script>".len();
+        if open > close {
+            continue;
+        }
+        let attributes = html_attributes(&page[start..start + open]);
+        if !attributes
+            .get("type")
+            .is_some_and(|t| t.eq_ignore_ascii_case("application/ld+json"))
         {
-            match value.get("@graph").and_then(Value::as_array) {
-                Some(graph) => objects.extend(graph.iter().cloned()),
-                None => objects.push(value),
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<Value>(&page[start + open + 1..start + close])
+        else {
+            continue;
+        };
+        let mut stack = vec![value];
+        while let Some(value) = stack.pop() {
+            match value {
+                Value::Array(items) => stack.extend(items.into_iter().rev()),
+                Value::Object(ref o) if o.get("@graph").is_some_and(Value::is_array) => {
+                    stack.push(o["@graph"].clone())
+                }
+                value => objects.push(value),
             }
         }
-        rest = &rest[close..];
     }
     objects
 }
 
-fn of_type<'a>(objects: &'a [Value], kind: &str) -> impl Iterator<Item = &'a Value> {
+/// `@type` of a schema.org object (a name or a list of names).
+fn types(object: &Value) -> Vec<&str> {
+    match object.get("@type") {
+        Some(Value::String(t)) => vec![t.as_str()],
+        Some(Value::Array(ts)) => ts.iter().filter_map(Value::as_str).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The objects of a type matching `kind`.
+fn of_type<'a>(
+    objects: &'a [Value],
+    kind: impl Fn(&str) -> bool + 'a,
+) -> impl Iterator<Item = &'a Value> + 'a {
     objects
         .iter()
-        .filter(move |o| o.get("@type").and_then(Value::as_str) == Some(kind))
+        .filter(move |o| types(o).into_iter().any(&kind))
 }
 
 fn str_field(object: &Value, name: &str) -> Option<String> {
     object
         .get(name)
         .and_then(Value::as_str)
-        .map(|s| s.trim().to_string())
+        .map(|s| s.replace('\u{a0}', " ").trim().to_string())
         .filter(|s| !s.is_empty())
 }
 
-/// `content` of `<meta property="og:{name}">`.
-fn og_meta(page: &str, name: &str) -> Option<String> {
-    let tag = format!("<meta property=\"og:{name}\" content=\"");
-    let start = page.find(&tag)? + tag.len();
-    let value = &page[start..start + page[start..].find('"')?];
-    Some(value.trim().to_string()).filter(|v| !v.is_empty())
+/// The shortest of the names a page gives to a thing: pages often add the name
+/// of the site (`Title | Site`) or words for search engines to one of them.
+fn shortest_name(names: impl IntoIterator<Item = String>) -> Option<String> {
+    names
+        .into_iter()
+        .map(|n| n.split(" | ").next().unwrap_or(&n).trim().to_string())
+        .filter(|n| n.chars().count() >= 2)
+        .min_by_key(|n| n.chars().count())
 }
 
 /// ISO 8601 duration (`P0Y0M0DT0H22M50S`) in seconds.
@@ -353,59 +492,91 @@ fn parse_iso_duration(value: &str) -> Option<u32> {
     Some(total)
 }
 
-/// The episode described by an episode page (`RadioEpisode` and its audio).
+/// The audio of an episode (`AudioObject` with a `contentUrl`).
+fn episode_audio(episode: &Value) -> Option<&Value> {
+    ["associatedMedia", "audio", "mainEntity", "encoding"]
+        .iter()
+        .filter_map(|field| episode.get(*field))
+        .flat_map(|v| match v {
+            Value::Array(items) => items.iter().collect(),
+            v => vec![v],
+        })
+        .find(|media| str_field(media, "contentUrl").is_some())
+}
+
+/// The episode described by an episode page (schema.org `RadioEpisode`,
+/// `PodcastEpisode`... and its audio).
 fn page_episode(url: &str, page: &str) -> Option<Episode> {
     let objects = json_ld(page);
-    let episode = of_type(&objects, "RadioEpisode").find(|e| {
-        e.pointer("/mainEntity/contentUrl")
-            .and_then(Value::as_str)
-            .is_some()
-    })?;
-    let audio = episode.get("mainEntity")?;
-    // "Title : épisode 1/4 du podcast ... | France Culture": the article headline
-    let title = of_type(&objects, "NewsArticle")
-        .find_map(|a| str_field(a, "headline"))
-        .or_else(|| {
-            str_field(episode, "name").map(|n| n.split(" | ").next().unwrap_or(&n).to_string())
-        })
-        .unwrap_or_else(|| "?".into());
+    let (episode, audio) =
+        of_type(&objects, |t| t.ends_with("Episode")).find_map(|e| Some((e, episode_audio(e)?)))?;
+    // "Title : episode 1/4 of ... | Site": the shortest name
+    let title = shortest_name(
+        of_type(&objects, |t| t.ends_with("Article") || t == "BlogPosting")
+            .filter_map(|a| str_field(a, "headline"))
+            .chain(str_field(episode, "name"))
+            .chain(of_type(&objects, |t| t == "WebPage").filter_map(|p| str_field(p, "name")))
+            .chain(og_meta(page, "title")),
+    )
+    .unwrap_or_else(|| "?".into());
+    let date = ["datePublished", "dateCreated", "uploadDate"]
+        .iter()
+        .find_map(|f| str_field(episode, f).or_else(|| str_field(audio, f)))
+        .map(|d| d.chars().take(10).collect())
+        .unwrap_or_default();
     Some(Episode {
         guid: url.to_string(),
         title,
-        date: str_field(episode, "dateCreated")
-            .map(|d| d.chars().take(10).collect())
-            .unwrap_or_default(),
-        duration: str_field(audio, "duration").and_then(|d| parse_iso_duration(&d)),
+        date,
+        duration: str_field(audio, "duration")
+            .or_else(|| str_field(episode, "duration"))
+            .and_then(|d| parse_iso_duration(&d)),
         url: str_field(audio, "contentUrl")?,
         size: None,
     })
 }
 
 /// The pages listed by a page (`ItemList`), in order.
-fn listed_pages(page: &str) -> Vec<String> {
-    of_type(&json_ld(page), "ItemList")
+fn listed_pages(page_url: &str, page: &str) -> Vec<String> {
+    of_type(&json_ld(page), |t| t == "ItemList")
         .filter_map(|l| l.get("itemListElement").and_then(Value::as_array))
         .flatten()
-        .filter_map(|item| str_field(item, "url"))
+        .filter_map(|item| {
+            str_field(item, "url")
+                .or_else(|| {
+                    item.get("item")
+                        .and_then(|i| str_field(i, "url").or_else(|| str_field(i, "@id")))
+                })
+                .or_else(|| str_field(item, "@id"))
+        })
+        .filter_map(|u| absolute(page_url, &u))
         .collect()
 }
 
-/// A podcast made from a page without feed that lists episode pages
-/// (Radio France series and selections): each episode is read from its page.
-/// The listed pages that are not episodes (other series) are skipped.
+/// A podcast made from a page without feed that lists episode pages (and its
+/// next pages): each episode is read from its page. The listed pages that are
+/// not episodes (other series...) are skipped.
 fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
-    let mut urls = listed_pages(page);
-    // next pages of the list: `?p=2`...
-    let base = page_url.split(['?', '#']).next().unwrap_or(page_url);
-    let path = base
-        .split_once("://")
-        .map_or(base, |(_, p)| &p[p.find('/').unwrap_or(p.len())..]);
-    let mut next = 2;
-    let mut current = page.to_string();
-    while next <= 20 && current.contains(&format!("{path}?p={next}\"")) {
-        current = get_text(&format!("{base}?p={next}"))?;
-        urls.extend(listed_pages(&current));
-        next += 1;
+    let mut urls = listed_pages(page_url, page);
+    let mut visited = HashSet::from([page_url.to_string()]);
+    let mut current = (page_url.to_string(), page.to_string());
+    for _ in 0..20 {
+        let Some(next) = next_page(&current.0, &current.1) else {
+            break;
+        };
+        if !visited.insert(next.clone()) {
+            break;
+        }
+        match get_text(&next) {
+            Ok(body) => {
+                urls.extend(listed_pages(&next, &body));
+                current = (next, body);
+            }
+            Err(e) => {
+                log::warn!("{e:#}");
+                break;
+            }
+        }
     }
     let mut seen = HashSet::new();
     urls.retain(|u| seen.insert(u.clone()));
@@ -433,16 +604,17 @@ fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
     }
 
     let objects = json_ld(page);
-    let title = of_type(&objects, "WebPage")
-        .filter_map(|p| str_field(p, "name"))
-        .find(|n| !n.starts_with("Écouter"))
-        .or_else(|| og_meta(page, "title"))
-        .unwrap_or_else(|| "Podcast".into());
+    let title = shortest_name(
+        of_type(&objects, |t| t == "WebPage" || t.ends_with("Series"))
+            .filter_map(|p| str_field(p, "name"))
+            .chain(og_meta(page, "title")),
+    )
+    .unwrap_or_else(|| "Podcast".into());
     Ok(Podcast {
         feed_url: page_url.to_string(),
         title,
-        author: None,
-        image_url: og_meta(page, "image"),
+        author: og_meta(page, "site_name"),
+        image_url: og_meta(page, "image").and_then(|i| absolute(page_url, &i)),
         episodes,
     })
 }
@@ -965,8 +1137,8 @@ mod tests {
     const FEED: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
 <channel>
-  <title>Les Odyssées</title>
-  <itunes:author>France Inter</itunes:author>
+  <title>Contes du monde</title>
+  <itunes:author>Radio Exemple</itunes:author>
   <itunes:image href="https://example.org/cover.jpg"/>
   <item>
     <title>Alice au pays des merveilles</title>
@@ -990,8 +1162,8 @@ mod tests {
     #[test]
     fn feed_parsing() {
         let p = parse_feed("https://example.org/feed.xml", FEED).unwrap();
-        assert_eq!(p.title, "Les Odyssées");
-        assert_eq!(p.author.as_deref(), Some("France Inter"));
+        assert_eq!(p.title, "Contes du monde");
+        assert_eq!(p.author.as_deref(), Some("Radio Exemple"));
         assert_eq!(
             p.image_url.as_deref(),
             Some("https://example.org/cover.jpg")
@@ -1011,23 +1183,64 @@ mod tests {
 
     #[test]
     fn feed_discovery() {
-        let rf = r#"<script>{"url":"https://radiofrance-podcast.net/podcast09/podcast_c361798b.xml"}</script>"#;
+        let page = "https://example.org/podcasts/contes";
+        let rss = r#"<head><link rel="alternate" type="application/rss+xml" title="x" href="https://example.org/feed?a=1&amp;b=2"></head>"#;
         assert_eq!(
-            feed_in_page(rf).as_deref(),
-            Some("https://radiofrance-podcast.net/podcast09/podcast_c361798b.xml")
+            feed_in_page(page, rss).as_deref(),
+            Some("https://example.org/feed?a=1&b=2")
         );
-        let std = r#"<head><link rel="alternate" type="application/rss+xml" title="x" href="https://example.org/feed"></head>"#;
+        // any attribute order, relative address, Atom
+        let atom = r#"<LINK href='/atom.xml' type="application/atom+xml" rel="alternate"/>"#;
         assert_eq!(
-            feed_in_page(std).as_deref(),
-            Some("https://example.org/feed")
+            feed_in_page(page, atom).as_deref(),
+            Some("https://example.org/atom.xml")
         );
-        let atom = r#"<link rel="alternate" type="application/atom+xml" href='https://example.org/atom'/>"#;
+        // RSS first
+        let both = format!("{atom}{rss}");
         assert_eq!(
-            feed_in_page(atom).as_deref(),
-            Some("https://example.org/atom")
+            feed_in_page(page, &both).as_deref(),
+            Some("https://example.org/feed?a=1&b=2")
         );
-        assert_eq!(feed_in_page("<html></html>"), None);
+        assert_eq!(
+            feed_in_page(page, r#"<link rel="stylesheet" href="/a.css">"#),
+            None
+        );
+        assert_eq!(feed_in_page(page, "<html></html>"), None);
         assert!(looks_like_feed(FEED));
+    }
+
+    #[test]
+    fn html() {
+        let base = "https://example.org/a/b/page?p=1";
+        assert_eq!(
+            absolute(base, "c.html").as_deref(),
+            Some("https://example.org/a/b/c.html")
+        );
+        assert_eq!(
+            absolute(base, "/c").as_deref(),
+            Some("https://example.org/c")
+        );
+        assert_eq!(
+            absolute(base, "//cdn.org/c").as_deref(),
+            Some("https://cdn.org/c")
+        );
+        assert_eq!(
+            absolute(base, "?p=2").as_deref(),
+            Some("https://example.org/a/b/?p=2")
+        );
+        assert_eq!(absolute(base, "mailto:x@y"), None);
+        let page = r#"<meta content="Contes &amp; légendes" property="og:title">
+<meta name="og:image" content="/cover.jpg"><link rel="next" href="?p=2">"#;
+        assert_eq!(og_meta(page, "title").as_deref(), Some("Contes & légendes"));
+        assert_eq!(og_meta(page, "image").as_deref(), Some("/cover.jpg"));
+        assert_eq!(
+            next_page(base, page).as_deref(),
+            Some("https://example.org/a/b/?p=2")
+        );
+        assert_eq!(
+            shortest_name(["Écouter Contes – Podcast".into(), "Contes | Site".into()]).as_deref(),
+            Some("Contes")
+        );
     }
 
     #[test]
@@ -1101,9 +1314,7 @@ mod tests {
     #[test]
     fn apple_podcasts_links() {
         assert_eq!(
-            apple_podcast_id(
-                "https://podcasts.apple.com/fr/podcast/les-odyss%C3%A9es/id1469858852"
-            ),
+            apple_podcast_id("https://podcasts.apple.com/fr/podcast/contes-du-soir/id1469858852"),
             Some(("1469858852".into(), Some("fr".into())))
         );
         assert_eq!(
@@ -1142,26 +1353,41 @@ mod tests {
     }
 
     #[test]
-    fn radio_france_episode_page() {
+    fn schema_org_pages() {
+        // a radio episode page: the audio in `mainEntity`, the short title in
+        // the article headline
         let page = r#"<head><meta property="og:image" content="https://img/x.jpg">
 <script type="application/ld+json" data-x="1">{"@context":"https://schema.org","@graph":[
  {"@type":"NewsArticle","headline":"Une étrange coïncidence"},
- {"@type":"RadioEpisode","name":"Une étrange coïncidence : épisode 1/4 | France Culture",
+ {"@type":"RadioEpisode","name":"Une étrange coïncidence : épisode 1/4 du feuilleton | Radio Exemple",
   "dateCreated":"2023-06-24T08:06:00.000Z",
   "mainEntity":{"@type":"AudioObject","contentUrl":"https://media/a.m4a","duration":"P0Y0M0DT0H22M50S"}}
 ]}</script></head>"#;
-        let e = page_episode("https://rf/ep-1", page).unwrap();
+        let e = page_episode("https://ex/ep-1", page).unwrap();
         assert_eq!(e.title, "Une étrange coïncidence");
         assert_eq!(e.date, "2023-06-24");
         assert_eq!(e.duration, Some(22 * 60 + 50));
         assert_eq!(e.url, "https://media/a.m4a");
-        assert_eq!(e.guid, "https://rf/ep-1");
+        assert_eq!(e.guid, "https://ex/ep-1");
         assert_eq!(og_meta(page, "image").as_deref(), Some("https://img/x.jpg"));
+        // a podcast episode page: `associatedMedia`, a list of types
+        let page = r#"<script type="application/ld+json">[{"@type":["PodcastEpisode","CreativeWork"],
+ "name":"Le Petit Poucet","datePublished":"2026-07-24",
+ "associatedMedia":{"@type":"MediaObject","contentUrl":"https://media/b.mp3","duration":"PT12M"}}]</script>"#;
+        let e = page_episode("https://ex/ep-2", page).unwrap();
+        assert_eq!(e.title, "Le Petit Poucet");
+        assert_eq!(e.date, "2026-07-24");
+        assert_eq!(e.duration, Some(720));
+        assert_eq!(e.url, "https://media/b.mp3");
         // a series page: no audio, but the list of its episodes
         let series = r#"<script type="application/ld+json">{"@type":"ItemList","itemListElement":[
- {"@type":"ListItem","position":1,"url":"https://rf/ep-1"},{"@type":"ListItem","position":2,"url":"https://rf/ep-2"}]}</script>"#;
-        assert!(page_episode("https://rf/serie", series).is_none());
-        assert_eq!(listed_pages(series), ["https://rf/ep-1", "https://rf/ep-2"]);
+ {"@type":"ListItem","position":1,"url":"https://ex/ep-1"},
+ {"@type":"ListItem","position":2,"item":{"@id":"/ep-2"}}]}</script>"#;
+        assert!(page_episode("https://ex/serie", series).is_none());
+        assert_eq!(
+            listed_pages("https://ex/serie", series),
+            ["https://ex/ep-1", "https://ex/ep-2"]
+        );
         assert_eq!(parse_iso_duration("PT1H2M3S"), Some(3723));
     }
 }
