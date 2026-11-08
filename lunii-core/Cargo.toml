@@ -19,6 +19,7 @@ id3 = { version = "1", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
 indexmap = "2"
 roxmltree = "0.21"
+opus-pure = "0.2"
 rubato = "5"
 rusty_mp3 = "1"
 log = "0.4"

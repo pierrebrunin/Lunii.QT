@@ -373,8 +373,10 @@ retirés.
 La conversion est faite dans l'application, en Rust, sans programme externe
 (`lunii-core/src/convert/transcode.rs`) :
 - **décodage** avec Symphonia : MP3, AAC/M4A, Vorbis, FLAC, WAV, ALAC, AIFF…
-  Le format est reconnu d'après le contenu, pas l'extension. L'Opus n'est pas
-  pris en charge ;
+  Le format est reconnu d'après le contenu, pas l'extension. L'**Opus** (Ogg,
+  WebM/Matroska, MP4) : Symphonia lit ses paquets, la crate `opus-pure` les
+  décode (mono ou stéréo ; le début ajouté par l'encodeur, `pre-skip`, et le
+  remplissage de fin sont retirés, le gain de l'en-tête appliqué) ;
 - **mono** : les canaux sont additionnés à -3 dB chacun, comme le faisait
   ffmpeg (même niveau pour une voix enregistrée en stéréo), puis baissés si
   la somme dépasse la pleine échelle ;

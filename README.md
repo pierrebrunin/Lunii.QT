@@ -150,7 +150,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 ## Transcodage audio
 Certaines histoires tierces utilisent des fichiers non MP3 (OGG, WAV, M4A…) ou des MP3 en stéréo. Lunii ne peut pas les lire tels quels : l'application les convertit en MP3 mono 44,1 kHz pendant l'import.
 
-Cette conversion est intégrée à l'application : **aucun logiciel à installer** (FFMPEG n'est plus nécessaire). Elle reconnaît le MP3, l'AAC/M4A, l'OGG Vorbis, le FLAC et le WAV. Le format Opus, très rare dans les histoires, n'est pas pris en charge.
+Cette conversion est intégrée à l'application : **aucun logiciel à installer** (FFMPEG n'est plus nécessaire). Elle reconnaît le MP3, l'AAC/M4A, l'OGG Vorbis, l'Opus, le FLAC et le WAV.
 
 ## Mise à jour du firmware
 

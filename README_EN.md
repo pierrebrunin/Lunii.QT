@@ -149,7 +149,7 @@ Forget about all previous .md and firmware recommendations.
 ## Audio Transcoding
 Some third-party stories use non MP3 files (OGG, WAV, M4A…) or stereo MP3 files. Lunii can't play them as they are: the application converts them to mono 44.1 kHz MP3 during the import.
 
-This conversion is built into the application: **nothing to install** (FFMPEG is no longer needed). It reads MP3, AAC/M4A, OGG Vorbis, FLAC and WAV. The Opus format, very rare in stories, is not supported.
+This conversion is built into the application: **nothing to install** (FFMPEG is no longer needed). It reads MP3, AAC/M4A, OGG Vorbis, Opus, FLAC and WAV.
 
 ## Firmware upgrade
 
