@@ -393,6 +393,7 @@ pub fn open_device(ctx: &Context, path: &Path) -> Result<Box<dyn Device>> {
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn is_fat(fstype: &str) -> bool {
     fstype.starts_with("msdos") || fstype == "vfat"
 }
@@ -439,9 +440,10 @@ fn candidate_mount_points() -> Vec<PathBuf> {
 
 #[cfg(target_os = "macos")]
 fn candidate_mount_points() -> Vec<PathBuf> {
-    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let Ok(disks) = sysinfo::Disks::new_with_refreshed_list() else {
+        return Vec::new();
+    };
     disks
-        .list()
         .iter()
         .filter(|d| {
             let mount = d.mount_point().to_string_lossy().to_lowercase();
