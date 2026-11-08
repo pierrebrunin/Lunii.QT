@@ -6,7 +6,6 @@ use crate::worker::Task;
 use crate::{Action, DialogKind};
 use lunii_core::Level;
 use lunii_core::constants::*;
-use lunii_core::device::{self};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -15,7 +14,6 @@ impl App {
         let ui = self.ui();
         match action {
             Action::RefreshDevices => self.refresh_devices(),
-            Action::OpenDevice => self.open_device_dialog(),
             Action::ImportDb => {
                 let studio_dir = dirs_home().join(".studio").join("db");
                 if let Some(file) = rfd::FileDialog::new()
@@ -212,34 +210,6 @@ impl App {
             Action::DeviceInfo => self.show_device_info(),
             Action::NightModeSettings => self.open_night_mode(),
         }
-    }
-
-    pub(super) fn open_device_dialog(&self) {
-        let Some(dir) = rfd::FileDialog::new()
-            .set_title(tr("Open Lunii device"))
-            .pick_folder()
-        else {
-            return;
-        };
-        if !device::is_lunii(&dir) && !device::is_flam(&dir) {
-            self.status(&tr("Not a Lunii, nor Flam or unsupported one 😥"));
-            return;
-        }
-        let index = {
-            let st = self.state.borrow();
-            st.devices.iter().position(|d| d == &dir)
-        };
-        let index = match index {
-            Some(i) => i,
-            None => {
-                let mut devices = self.state.borrow().devices.clone();
-                devices.push(dir);
-                self.set_devices(devices);
-                self.state.borrow().devices.len() - 1
-            }
-        };
-        self.set_device_index(index as i32);
-        self.select_device(index as i32);
     }
 
     pub(crate) fn import(&self, files: Vec<PathBuf>) {

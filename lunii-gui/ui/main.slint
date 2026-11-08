@@ -289,7 +289,6 @@ export component MainWindow inherits Window {
             }
             MenuSeparator { }
             MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: root.idle && !root.scanning; activated => { root.action(Action.refresh-devices); } }
-            MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: root.idle; activated => { root.action(Action.open-device); } }
             MenuItem { title: @tr("Device information"); enabled: root.device-ready && !root.modal; activated => { root.action(Action.device-info); } }
             MenuSeparator { }
             Menu {

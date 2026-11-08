@@ -121,7 +121,6 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 | `Ctrl+N`       | Forcer le mode nuit d'une histoire                  |
 | `Delete`       | Supprime les histoires sélectionnées                |
 |                |                                                     |
-| `Ctrl+O`       | Ouvre le dossier d'une Lunii/Flamm                  |
 | `Ctrl+L`       | Ouvre la fenêtre de debug                           |
 | `Ctrl+Q`       | Fermer l'application                                |
 | `F1`           | À propos de l'application                           |

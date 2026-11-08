@@ -123,7 +123,6 @@ Forget about all previous .md and firmware recommendations.
 | `Ctrl+N`       | Force NightMode on stories       |
 | `Delete`       | Remove the selected item(s)      |
 |                |                                  |
-| `Ctrl+O`       | Open a Lunii/Flam device         |
 | `Ctrl+L`       | Open debug log window            |
 | `Ctrl+Q`       | Exit the application             |
 | `F1`           | About the app                    |

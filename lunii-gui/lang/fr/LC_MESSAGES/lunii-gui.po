@@ -351,9 +351,6 @@ msgstr "Déplacer en haut"
 msgid "Move Bottom"
 msgstr "Déplacer en bas"
 
-msgid "Open device"
-msgstr "Ouvrir"
-
 msgid "Open Lunii or Flam device"
 msgstr "Ouvre une Lunii ou une Flam"
 
@@ -490,12 +487,6 @@ msgstr "🛑 Erreur Lunii DB."
 
 msgid "Device info sent to clipboard."
 msgstr "Information copiées dans le presse papier."
-
-msgid "Open Lunii device"
-msgstr "Ouvrir un appareil"
-
-msgid "Not a Lunii, nor Flam or unsupported one 😥"
-msgstr "Ni une Lunii, ni une Flam, ou alors non reconnue 😥"
 
 msgid "Open STUdio DB"
 msgstr "Ouvrir une base STUdio"
