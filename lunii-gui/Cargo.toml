@@ -18,7 +18,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 log = "0.4"
 lunii-core = { path = "../lunii-core" }
 open = "5"
-rfd = "0.17"
+rfd = "0.18"
 slint = { version = "~1.18", default-features = false, features = ["std", "compat-1-2", "accessibility", "backend-winit", "renderer-femtovg", "renderer-software", "unstable-winit-030"] }
 sys-locale = "0.3"
 uuid = "1"
