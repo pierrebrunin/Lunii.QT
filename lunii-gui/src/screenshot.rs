@@ -88,6 +88,37 @@ fn render(window: usize, path: &Path) {
     });
 }
 
+/// Vertical center of a row of the story list (main window, 1000x650).
+fn row_center(row: usize) -> f32 {
+    124.0 + 26.0 * row as f32
+}
+
+/// Mouse press at `from`, moved to `to` (in steps), kept pressed.
+fn press_move(ui: &MainWindow, from: (f32, f32), to: (f32, f32)) {
+    use slint::LogicalPosition;
+    use slint::platform::{PointerEventButton, WindowEvent};
+    let window = ui.window();
+    let at = |(x, y)| LogicalPosition::new(x, y);
+    window.dispatch_event(WindowEvent::PointerMoved { position: at(from) });
+    window.dispatch_event(WindowEvent::PointerPressed {
+        position: at(from),
+        button: PointerEventButton::Left,
+    });
+    for step in 1..=5 {
+        let t = step as f32 / 5.0;
+        let p = (from.0 + (to.0 - from.0) * t, from.1 + (to.1 - from.1) * t);
+        window.dispatch_event(WindowEvent::PointerMoved { position: at(p) });
+    }
+}
+
+fn release(ui: &MainWindow, at: (f32, f32)) {
+    use slint::platform::{PointerEventButton, WindowEvent};
+    ui.window().dispatch_event(WindowEvent::PointerReleased {
+        position: slint::LogicalPosition::new(at.0, at.1),
+        button: PointerEventButton::Left,
+    });
+}
+
 /// Mouse press at `from`, moved to `to`, released there.
 fn drag(ui: &MainWindow, from: (f32, f32), to: (f32, f32)) {
     use slint::LogicalPosition;
@@ -160,6 +191,18 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     app.row_pointer(2, true, false, false);
     pump(&queue, 200);
     render(0, &shot("03-multi-selection"));
+
+    // the 2 selected stories dragged after the 4th one: drop point shown,
+    // then dropped
+    if ui.get_rows().row_count() >= 4 {
+        let (from, to) = (row_center(0), row_center(3) + 8.0);
+        press_move(&ui, (200.0, from), (200.0, to));
+        pump(&queue, 100);
+        render(0, &shot("03-drag"));
+        release(&ui, (200.0, to));
+        pump(&queue, 300);
+        render(0, &shot("03-dropped"));
+    }
 
     ui.set_filter("studio".into());
     ui.invoke_filter_edited();

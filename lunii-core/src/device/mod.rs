@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::constants::DeviceVersion;
 use crate::db;
 use crate::report::{Context, check_abort};
-use crate::story::{Story, StoryList, move_stories};
+use crate::story::{Story, StoryList, move_stories, move_stories_before};
 
 pub use flam::FlamDevice;
 pub use lunii::LuniiDevice;
@@ -356,6 +356,12 @@ pub trait Device: Send {
     /// Moves stories in the list (`offset` ±1: one step, ±2: top/bottom) and saves the index.
     fn move_stories(&mut self, uuids: &[Uuid], offset: i32) -> Result<()> {
         move_stories(self.stories_mut(), uuids, offset);
+        self.update_pack_index()
+    }
+
+    /// Moves stories just before `before` (at the end: `None`) and saves the index.
+    fn move_stories_before(&mut self, uuids: &[Uuid], before: Option<Uuid>) -> Result<()> {
+        move_stories_before(self.stories_mut(), uuids, before);
         self.update_pack_index()
     }
 }

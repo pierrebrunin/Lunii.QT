@@ -200,6 +200,13 @@ fn hide_move_nm_remove_recover_cleanup() {
     assert_eq!(order(dev.as_ref()), vec![ids[2], ids[0], ids[1]]);
     let pi = std::fs::read(root.join(".pi")).unwrap();
     assert_eq!(&pi[..16], ids[2].as_bytes());
+    // dragged: the first one before the last one, then back to the top
+    dev.move_stories_before(&[ids[2]], Some(ids[1])).unwrap();
+    assert_eq!(order(dev.as_ref()), vec![ids[0], ids[2], ids[1]]);
+    dev.move_stories_before(&[ids[2]], Some(ids[0])).unwrap();
+    assert_eq!(order(dev.as_ref()), vec![ids[2], ids[0], ids[1]]);
+    let pi = std::fs::read(root.join(".pi")).unwrap();
+    assert_eq!(&pi[..16], ids[2].as_bytes());
 
     // hide the first imported one
     dev.toggle_hidden(&ctx(), &[ids[0]]).unwrap();

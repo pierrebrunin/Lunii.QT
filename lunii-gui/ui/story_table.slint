@@ -21,12 +21,19 @@ export component StoryTable inherits Rectangle {
     in property <bool> drop-hover: false;
     // text shown when there is no story
     in property <string> placeholder;
+    // the selected stories can be dragged to another place of the list
+    in property <bool> can-move: false;
 
     // left click (ctrl, shift) or right click on a row
     callback row-pointer(row: int, ctrl: bool, shift: bool, right: bool);
     // arrow keys / page keys
     callback key-nav(delta: int, shift: bool);
     callback select-all();
+    // selected stories dropped before the row `gap` (rows.length: after the last)
+    callback rows-dropped(gap: int);
+
+    // stories being dragged: their drop point (a row, or rows.length), -1 otherwise
+    property <int> drag-gap: -1;
 
     property <length> row-height: 26px;
     property <length> col-flag: 30px;
@@ -171,20 +178,67 @@ export component StoryTable inherits Rectangle {
 
                     TouchArea {
                         enabled: root.interactive;
+                        // pressed on a selected row: the selection may be
+                        // dragged; only this row selected on release otherwise
+                        property <bool> pending: false;
                         pointer-event(event) => {
                             if (event.kind == PointerEventKind.down) {
                                 focus-scope.focus();
+                                root.drag-gap = -1;
                                 if (event.button == PointerEventButton.left) {
-                                    root.row-pointer(index, event.modifiers.control || event.modifiers.meta, event.modifiers.shift, false);
+                                    self.pending = row.selected && !event.modifiers.control && !event.modifiers.meta && !event.modifiers.shift;
+                                    if (!self.pending) {
+                                        root.row-pointer(index, event.modifiers.control || event.modifiers.meta, event.modifiers.shift, false);
+                                    }
                                 } else if (event.button == PointerEventButton.right) {
                                     root.row-pointer(index, false, false, true);
                                 }
+                            }
+                            if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
+                                if (root.drag-gap >= 0) {
+                                    let gap = root.drag-gap;
+                                    root.drag-gap = -1;
+                                    root.rows-dropped(gap);
+                                } else if (self.pending) {
+                                    root.row-pointer(index, false, false, false);
+                                }
+                                self.pending = false;
+                            }
+                            if (event.kind == PointerEventKind.cancel) {
+                                root.drag-gap = -1;
+                                self.pending = false;
+                            }
+                        }
+                        moved => {
+                            if (!self.pressed || !root.can-move || !row.selected) {
+                                return;
+                            }
+                            if (root.drag-gap < 0 && abs(self.mouse-y - self.pressed-y) < 6px) {
+                                return;
+                            }
+                            // between the rows, nearest the pointer
+                            root.drag-gap = max(0, min(root.rows.length, index + round(self.mouse-y / root.row-height)));
+                            // near an edge: the list scrolls
+                            let y = index * root.row-height + list.content-y + self.mouse-y;
+                            if (y < root.row-height) {
+                                list.content-y = min(0px, list.content-y + root.row-height / 2);
+                            } else if (y > list.visible-height - root.row-height) {
+                                list.content-y = max(min(0px, list.visible-height - list.content-height), list.content-y - root.row-height / 2);
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    // drop point of the stories dragged
+    if root.drag-gap >= 0: Rectangle {
+        x: 4px;
+        width: parent.width - 22px;
+        height: 2px;
+        y: max(root.row-height, min(parent.height - 2px, root.row-height + root.drag-gap * root.row-height + list.content-y - 1px));
+        background: Theme.selection;
     }
 
     if root.rows.length == 0: Text {

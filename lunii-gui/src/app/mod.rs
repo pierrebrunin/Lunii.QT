@@ -269,6 +269,12 @@ impl App {
                 app.key_nav(delta, shift);
             }
         });
+        let w = Rc::downgrade(self);
+        ui.on_rows_dropped(move |gap| {
+            if let Some(app) = w.upgrade() {
+                app.drop_selection(gap.max(0) as usize);
+            }
+        });
         ui.on_select_all(with(|app| {
             {
                 let mut st = app.state.borrow_mut();

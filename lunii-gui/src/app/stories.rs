@@ -335,6 +335,42 @@ impl App {
         }
     }
 
+    /// Selected stories dragged with the mouse, dropped before the row `gap`
+    /// of the list displayed (after the last one: `gap` = number of rows).
+    pub(super) fn drop_selection(&self, gap: usize) {
+        let ids = self.selected_ids();
+        let before = {
+            let st = self.state.borrow();
+            match st.visible.get(gap) {
+                Some(&i) => Some(st.stories[i].uuid),
+                // after the last row shown: before the story that follows it
+                // (the list may be filtered)
+                None => st
+                    .visible
+                    .last()
+                    .and_then(|&i| st.stories.get(i + 1))
+                    .map(|s| s.uuid),
+            }
+        };
+        if ids.is_empty() {
+            return;
+        }
+        self.device_op(|d, _| d.move_stories_before(&ids, before));
+        let row = {
+            let st = self.state.borrow();
+            st.visible
+                .iter()
+                .position(|&i| ids.contains(&st.stories[i].uuid))
+        };
+        if let Some(row) = row {
+            let mut st = self.state.borrow_mut();
+            st.current = Some(row);
+            st.anchor = Some(row);
+            drop(st);
+            self.selection_changed();
+        }
+    }
+
     /// Computes the missing story sizes when they are displayed. A task
     /// running: done when it ends (see `Event::Finished`).
     pub(super) fn ensure_sizes(&self) {

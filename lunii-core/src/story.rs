@@ -190,6 +190,20 @@ pub fn move_stories(list: &mut Vec<Story>, selected: &[Uuid], offset: i32) {
     }
 }
 
+/// Moves the selected stories, in their order, just before the story
+/// `before` (at the end: `None`). Dragged with the mouse.
+pub fn move_stories_before(list: &mut Vec<Story>, selected: &[Uuid], before: Option<Uuid>) {
+    let is_selected = |s: &Story| selected.contains(&s.uuid);
+    // stories left before the drop point, once the selected ones are taken
+    let position = before
+        .and_then(|b| list.iter().position(|s| s.uuid == b))
+        .unwrap_or(list.len());
+    let at = list[..position].iter().filter(|s| !is_selected(s)).count();
+    let (moved, mut others): (Vec<Story>, Vec<Story>) = list.drain(..).partition(is_selected);
+    others.splice(at..at, moved);
+    *list = others;
+}
+
 // ---------------------------------------------------------------------------
 // STUdio stories
 // ---------------------------------------------------------------------------
@@ -683,5 +697,28 @@ mod tests {
         assert_eq!(order(&list), vec![1, 2, 4, 3]);
         move_stories(&mut list, &[ids[0], ids[1]], 1);
         assert_eq!(order(&list), vec![4, 1, 2, 3]);
+    }
+
+    #[test]
+    fn move_before() {
+        let ids: Vec<Uuid> = (1..=5u128).map(Uuid::from_u128).collect();
+        let mut list: Vec<Story> = ids.iter().map(|u| Story::new(*u)).collect();
+        let order = |l: &Vec<Story>| l.iter().map(|s| s.uuid.as_u128()).collect::<Vec<_>>();
+
+        // 4 and 2 (in the list order) before 1
+        move_stories_before(&mut list, &[ids[3], ids[1]], Some(ids[0]));
+        assert_eq!(order(&list), vec![2, 4, 1, 3, 5]);
+        // at the end
+        move_stories_before(&mut list, &[ids[1]], None);
+        assert_eq!(order(&list), vec![4, 1, 3, 5, 2]);
+        // down, before 5
+        move_stories_before(&mut list, &[ids[3], ids[0]], Some(ids[4]));
+        assert_eq!(order(&list), vec![3, 4, 1, 5, 2]);
+        // dropped on one of the moved stories: they are grouped there
+        move_stories_before(&mut list, &[ids[2], ids[4]], Some(ids[4]));
+        assert_eq!(order(&list), vec![4, 1, 3, 5, 2]);
+        // unknown story: at the end
+        move_stories_before(&mut list, &[ids[3]], Some(Uuid::from_u128(99)));
+        assert_eq!(order(&list), vec![1, 3, 5, 2, 4]);
     }
 }
