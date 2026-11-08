@@ -246,7 +246,7 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     pump(&queue, 300);
     render(0, &shot("10-log"));
 
-    // lost stories search (Tools / Advanced / Lost stories / Find): its log,
+    // lost stories search (Device / Lost stories / Find): its log,
     // in a taller panel
     let log_height = ui.get_log_height();
     let details = ui.get_show_details();

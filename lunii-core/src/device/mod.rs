@@ -335,7 +335,7 @@ pub trait Device: Send {
                 self.hidden_content_dir()
             };
             if !src.is_dir() {
-                ctx.info("💡 Try to use menu 'Tools/Advanced/Lost stories' (Recover or Remove) to fix it");
+                ctx.info("💡 Try to use menu 'Device/Lost stories' (Recover or Remove) to fix it");
                 bail!(
                     "Story dir {} does not exist or already {}",
                     src.display(),
@@ -343,7 +343,7 @@ pub trait Device: Send {
                 );
             }
             if let Err(e) = common::move_dir_into(&src, &dst_parent) {
-                ctx.info("💡 Try to use menu 'Tools/Advanced/Lost stories' (Recover or Remove) to fix it");
+                ctx.info("💡 Try to use menu 'Device/Lost stories' (Recover or Remove) to fix it");
                 bail!("Error occurred while moving story directories: {e}");
             }
             if let Some(s) = self.stories_mut().iter_mut().find(|s| s.uuid == *uuid) {

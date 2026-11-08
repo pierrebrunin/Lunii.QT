@@ -285,6 +285,14 @@ export component MainWindow inherits Window {
             MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: root.idle && !root.scanning; activated => { root.action(Action.refresh-devices); } }
             MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: root.idle; activated => { root.action(Action.open-device); } }
             MenuItem { title: @tr("Device information"); enabled: root.device-ready && !root.modal; activated => { root.action(Action.device-info); } }
+            MenuSeparator { }
+            Menu {
+                title: @tr("Lost stories");
+                enabled: root.story-actions;
+                MenuItem { enabled: !root.modal; title: @tr("Find"); activated => { root.action(Action.find-lost); } }
+                MenuItem { enabled: !root.modal; title: @tr("Recover"); activated => { root.action(Action.recover-lost); } }
+                MenuItem { enabled: !root.modal; title: @tr("Remove"); activated => { root.action(Action.remove-lost); } }
+            }
         }
         Menu {
             title: @tr("Stories");
@@ -319,14 +327,6 @@ export component MainWindow inherits Window {
                 title: @tr("Advanced");
                 MenuItem { enabled: !root.modal; title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action(Action.show-log); } }
                 MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action(Action.get-firmware); } }
-                MenuSeparator { }
-                Menu {
-                    title: @tr("Lost stories");
-                    enabled: root.story-actions;
-                    MenuItem { enabled: !root.modal; title: @tr("Find"); activated => { root.action(Action.find-lost); } }
-                    MenuItem { enabled: !root.modal; title: @tr("Recover"); activated => { root.action(Action.recover-lost); } }
-                    MenuItem { enabled: !root.modal; title: @tr("Remove"); activated => { root.action(Action.remove-lost); } }
-                }
             }
         }
         Menu {
