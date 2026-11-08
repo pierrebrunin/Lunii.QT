@@ -1,6 +1,6 @@
 // Main window.
 
-import { ComboBox, LineEdit, ProgressIndicator, Spinner, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
+import { LineEdit, ProgressIndicator, Spinner, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
 import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow, PodcastResult, ViewSwitch } from "common.slint";
 import { StoryTable } from "story_table.slint";
 import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, DeviceInfoDialog, AddPodcastDialog } from "dialogs.slint";
@@ -256,14 +256,33 @@ export component MainWindow inherits Window {
     MenuBar {
         Menu {
             title: @tr("File");
-            MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: root.idle; activated => { root.action(Action.open-device); } }
-            MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: root.idle; activated => { root.action(Action.refresh-devices); } }
-            MenuItem { title: @tr("Device information"); enabled: root.device-ready && !root.modal; activated => { root.action(Action.device-info); } }
-            MenuSeparator { }
             MenuItem { title: @tr("Import STUdio DB"); enabled: root.idle; activated => { root.action(Action.import-db); } }
             MenuItem { title: @tr("Refresh official DB"); enabled: root.idle; activated => { root.action(Action.refresh-db); } }
             MenuSeparator { }
             MenuItem { enabled: !root.modal; title: @tr("Exit"); shortcut: @keys(Control + Q); activated => { root.action(Action.exit); } }
+        }
+        Menu {
+            title: @tr("Device");
+            // the devices found: the one opened checked
+            for label[i] in root.devices: MenuItem {
+                title: label;
+                checkable: true;
+                checked: i == root.device-index;
+                enabled: !root.busy && !root.scanning && !root.modal;
+                activated => {
+                    root.device-index = i;
+                    root.device-value = label;
+                    root.device-selected(i);
+                }
+            }
+            if root.devices.length == 0: MenuItem {
+                title: root.device-placeholder;
+                enabled: false;
+            }
+            MenuSeparator { }
+            MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: root.idle && !root.scanning; activated => { root.action(Action.refresh-devices); } }
+            MenuItem { title: @tr("Open device"); shortcut: @keys(Control + O); enabled: root.idle; activated => { root.action(Action.open-device); } }
+            MenuItem { title: @tr("Device information"); enabled: root.device-ready && !root.modal; activated => { root.action(Action.device-info); } }
         }
         Menu {
             title: @tr("Stories");
@@ -326,11 +345,6 @@ export component MainWindow inherits Window {
         // ---------------------------------------------------------------- top bar
         HorizontalLayout {
             spacing: 4px;
-            if !root.scanning: IconButton {
-                icon: @image-url("../../res/refresh.png");
-                enabled: !root.busy;
-                clicked => { root.action(Action.refresh-devices); }
-            }
             // devices being searched / opened: wait
             if root.scanning: Rectangle {
                 width: 30px;
@@ -338,26 +352,6 @@ export component MainWindow inherits Window {
                     indeterminate: true;
                     width: 22px;
                     height: 22px;
-                }
-            }
-            Rectangle {
-                max-width: 220px;
-                min-width: 150px;
-                combo := ComboBox {
-                    width: parent.width;
-                    model: root.devices;
-                    current-index <=> root.device-index;
-                    current-value <=> root.device-value;
-                    enabled: !root.busy && !root.scanning && root.devices.length > 0;
-                    selected => { root.device-selected(self.current-index); }
-                }
-                if root.device-index < 0: Text {
-                    x: 10px;
-                    width: parent.width - 36px;
-                    text: root.device-placeholder;
-                    color: Theme.hidden-text;
-                    vertical-alignment: center;
-                    overflow: elide;
                 }
             }
             IconButton {

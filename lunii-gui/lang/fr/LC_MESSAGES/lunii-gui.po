@@ -386,6 +386,8 @@ msgstr "Force le mode nuit"
 
 msgid "Night Mode"
 msgstr "Mode nuit"
+msgid "Device"
+msgstr "Appareil"
 
 msgid "Refresh connected devices"
 msgstr "Rafraichir les appareils"
