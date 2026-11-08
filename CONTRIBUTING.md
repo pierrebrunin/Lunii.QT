@@ -281,6 +281,14 @@ directement la fenêtre d'ajout) :
 - L'UUID de l'album est dérivé de l'adresse du flux. Si l'album est déjà sur
   l'appareil, les épisodes choisis y sont **ajoutés**. Les épisodes déjà importés
   sont retenus dans `~/.lunii/podcasts.json` et grisés dans la liste.
+- Un même podcast a souvent plusieurs adresses de flux (celle d'une page,
+  celle d'Apple Podcasts, une ancienne adresse redirigée). Ajouté une deuxième
+  fois sous une autre adresse, il est reconnu comme déjà suivi, et garde
+  l'adresse sous laquelle il l'était, donc le même album. Il est reconnu par
+  les adresses que déclarent ses flux (`<itunes:new-feed-url>`,
+  `<atom:link rel="self">`, retenues dans `podcasts.json`). Pour un podcast
+  suivi avant cet enregistrement, le même titre et un épisode déjà importé
+  suffisent.
 - Les épisodes qui ne sont pas en MP3 (souvent en M4A/AAC) sont convertis
   (voir [Conversion audio](#conversion-audio)).
 - Les podcasts sont en général destinés à l'écoute privée : ne pas

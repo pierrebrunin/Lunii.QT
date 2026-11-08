@@ -810,11 +810,15 @@ pub fn search_podcasts(token: u32, term: String, country: String, sink: Sink) {
 /// Apple Podcasts link; its cover is then downloaded as result 0).
 pub fn check_feed(token: u32, url: String, address: bool, sink: Sink) {
     std::thread::spawn(move || {
-        let result = if address {
+        let mut result = if address {
             podcast::fetch(&url)
         } else {
             podcast::parse_feed_url(&url)
         };
+        // already followed under another address: that one
+        if let Ok(p) = result.as_mut() {
+            podcast::match_followed(p);
+        }
         let image = result
             .as_ref()
             .ok()

@@ -58,6 +58,9 @@ pub struct Episode {
 #[derive(Debug, Clone)]
 pub struct Podcast {
     pub feed_url: String,
+    /// other addresses of the feed, declared by it (`<itunes:new-feed-url>`,
+    /// `<atom:link rel="self">`): the same podcast reached from elsewhere
+    pub aliases: Vec<String>,
     pub title: String,
     pub author: Option<String>,
     pub image_url: Option<String>,

@@ -251,6 +251,7 @@ pub(super) fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
     .unwrap_or_else(|| "Podcast".into());
     Ok(Podcast {
         feed_url: page_url.to_string(),
+        aliases: Vec::new(),
         title,
         author: og_meta(page, "site_name"),
         image_url: og_meta(page, "image").and_then(|i| absolute(page_url, &i)),

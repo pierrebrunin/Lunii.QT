@@ -58,6 +58,28 @@ pub(super) fn itunes<'a, 'i>(
     node.children().find(|c| c.has_tag_name((ITUNES, name)))
 }
 
+/// `<atom:link rel="self" href="…">` of a channel or Atom feed.
+fn self_link(node: roxmltree::Node) -> Option<String> {
+    node.children()
+        .find(|c| c.has_tag_name((ATOM, "link")) && c.attribute("rel") == Some("self"))
+        .and_then(|l| l.attribute("href"))
+        .map(str::to_string)
+}
+
+/// Web addresses among `declared`, other than `feed_url`, without duplicates.
+fn aliases(feed_url: &str, declared: impl Iterator<Item = String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for url in declared.map(|u| u.trim().to_string()) {
+        if (url.starts_with("https://") || url.starts_with("http://"))
+            && url != feed_url
+            && !out.contains(&url)
+        {
+            out.push(url);
+        }
+    }
+    out
+}
+
 pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
     let doc = roxmltree::Document::parse(xml).context("Invalid podcast feed")?;
     if doc.root_element().has_tag_name((ATOM, "feed")) {
@@ -114,8 +136,14 @@ pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
     episodes.reverse();
     episodes.sort_by(|a, b| a.0.cmp(&b.0));
 
+    let declared = itunes(channel, "new-feed-url")
+        .and_then(|n| n.text())
+        .map(str::to_string)
+        .into_iter()
+        .chain(self_link(channel));
     Ok(Podcast {
         feed_url: feed_url.to_string(),
+        aliases: aliases(feed_url, declared),
         title: child_text(channel, "title").unwrap_or_else(|| "Podcast".into()),
         author: itunes(channel, "author")
             .and_then(|a| a.text())
@@ -185,6 +213,7 @@ pub(super) fn parse_atom(feed_url: &str, feed: roxmltree::Node) -> Result<Podcas
         .or_else(|| atom(feed, "icon"));
     Ok(Podcast {
         feed_url: feed_url.to_string(),
+        aliases: aliases(feed_url, self_link(feed).into_iter()),
         title: atom(feed, "title").unwrap_or_else(|| "Podcast".into()),
         author: itunes(feed, "author")
             .and_then(|a| a.text())
@@ -323,5 +352,19 @@ mod tests {
         assert_eq!(parse_date("n'importe quoi").0, "");
         assert_eq!(parse_duration("59:30"), Some(3570));
         assert_eq!(parse_duration("abc"), None);
+    }
+
+    /// The other addresses a feed declares: the same podcast elsewhere.
+    #[test]
+    fn declared_addresses() {
+        let xml = r#"<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+            xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>T</title>
+            <atom:link rel="self" href="https://rf/podcast_1.xml"/>
+            <itunes:new-feed-url> https://rf/abc/podcast_1.xml </itunes:new-feed-url>
+            </channel></rss>"#;
+        let short = parse_feed("https://rf/podcast_1.xml", xml).unwrap();
+        assert_eq!(short.aliases, ["https://rf/abc/podcast_1.xml"]);
+        let long = parse_feed("https://rf/abc/podcast_1.xml", xml).unwrap();
+        assert_eq!(long.aliases, ["https://rf/podcast_1.xml"]);
     }
 }
