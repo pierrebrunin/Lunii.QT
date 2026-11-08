@@ -165,6 +165,7 @@ impl App {
                     message += &tr("\n(and too many others)\n");
                 }
                 message += &tr("\nDo you want to proceed ?");
+                self.state.borrow_mut().confirm_podcast = false;
                 ui.set_confirm_message(message.into());
                 ui.set_dialog(DialogKind::ConfirmRemove);
             }

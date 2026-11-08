@@ -95,6 +95,9 @@ struct State {
     durations_generation: u32,
     /// podcast of the selection dialog, and its selected episodes
     podcast: Option<(Box<PodcastView>, HashSet<usize>)>,
+    /// the removal confirmed is the one of podcast episodes, not of the
+    /// selected stories
+    confirm_podcast: bool,
     /// followed podcasts and their feeds (Podcasts view)
     podcasts: podcast::Podcasts,
     /// album shown in the details panel, with its pending changes
@@ -289,6 +292,10 @@ impl App {
             }
         }));
         ui.on_confirm_remove_accepted(with(|app| {
+            if std::mem::take(&mut app.state.borrow_mut().confirm_podcast) {
+                app.podcast_import();
+                return;
+            }
             let uuids = app.selected_uuids();
             app.launch(Task::Remove { uuids });
         }));
@@ -320,7 +327,8 @@ impl App {
         });
         ui.on_podcast_filter_edited(with(|app| app.rebuild_podcast_rows()));
         ui.on_podcast_mode_changed(with(|app| app.podcast_mode_changed()));
-        ui.on_podcast_accepted(with(|app| app.podcast_import()));
+        ui.on_podcast_accepted(with(|app| app.podcast_apply()));
+        ui.on_podcast_sort_changed(with(|app| app.rebuild_podcast_rows()));
         let w = Rc::downgrade(self);
         ui.on_podcast_toggle(move |index| {
             if let Some(app) = w.upgrade() {

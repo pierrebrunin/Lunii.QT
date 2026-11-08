@@ -303,6 +303,36 @@ msgstr "Afficher les UUID"
 msgid "Duration"
 msgstr "Durée"
 
+msgid "Title"
+msgstr "Titre"
+
+msgid "Published"
+msgstr "Publié le"
+
+msgid "On the device"
+msgstr "Sur l'appareil"
+
+msgid "to remove"
+msgstr "à supprimer"
+
+msgid "to import"
+msgstr "à importer"
+
+msgid "Remove ({})"
+msgstr "Supprimer ({})"
+
+msgid "Import ({}) and remove ({})"
+msgstr "Importer ({}) et supprimer ({})"
+
+msgid "You are requesting to remove from the device {} episode(s) :\n"
+msgstr "Vous demandez de supprimer de l'appareil {} épisode(s) :\n"
+
+msgid "Removing episodes..."
+msgstr "Suppression des épisodes..."
+
+msgid "Episodes to remove not found in the album"
+msgstr "Épisodes à supprimer introuvables dans l'album"
+
 msgid "Show size for each stories"
 msgstr "Afficher les tailles pour chaques histoires"
 
@@ -809,9 +839,6 @@ msgstr "Tous"
 
 msgid "None"
 msgstr "Aucun"
-
-msgid "already on the device"
-msgstr "déjà sur l'appareil"
 
 msgid "Import ({})"
 msgstr "Importer ({})"

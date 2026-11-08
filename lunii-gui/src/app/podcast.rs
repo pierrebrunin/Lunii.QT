@@ -23,6 +23,12 @@ pub struct PodcastView {
     pub imported: HashSet<String>,
     /// episodes already on the device as stories of their own
     pub stories: HashSet<String>,
+    /// episodes of the album whose track is known (`album.json` on the
+    /// device: by episode, or by title for albums imported before): they can
+    /// be removed
+    pub album_removable: HashSet<String>,
+    /// episodes on the device unchecked: to remove
+    pub removed: HashSet<usize>,
 }
 
 #[derive(Default)]
@@ -101,14 +107,36 @@ impl App {
     /// records them, or as this computer remembers them (albums imported
     /// before, or device busy).
     fn imported_in_album(&self, podcast: &Podcast) -> HashSet<String> {
+        self.album_episodes(podcast).0
+    }
+
+    /// See [`Self::imported_in_album`]; and those whose track is known on
+    /// the device, that can be removed.
+    fn album_episodes(&self, podcast: &Podcast) -> (HashSet<String>, HashSet<String>) {
         let uuid = podcast.album_uuid();
-        let on_device = (|| {
+        let info = (|| {
             let dev = self.state.borrow().device.clone()?;
             let dev = Self::lock_device(&dev).ok()?;
             let story = dev.stories().get(&uuid.to_string())?.clone();
-            podcast::album_episodes(&dev.album_info(&story)?)
+            dev.album_info(&story)
         })();
-        on_device.unwrap_or_else(|| podcast::imported_episodes(&uuid))
+        let Some(info) = info else {
+            return (podcast::imported_episodes(&uuid), HashSet::new());
+        };
+        if let Some(episodes) = podcast::album_episodes(&info) {
+            return (episodes.clone(), episodes);
+        }
+        // imported before the episodes were recorded on the device: their
+        // tracks found by title
+        let by_title: HashSet<String> = podcast
+            .episodes
+            .iter()
+            .filter(|e| info.tracks.contains(&e.title))
+            .map(|e| e.guid.clone())
+            .collect();
+        let mut imported = podcast::imported_episodes(&uuid);
+        imported.extend(by_title.iter().cloned());
+        (imported, by_title)
     }
 
     /// The podcasts of the albums on the device, followed if they are not
@@ -219,11 +247,12 @@ impl App {
             }
             Some(Ok(p)) => {
                 ui.set_podcast_loading(false);
-                let view = self.podcast_view(p);
+                let mut view = self.podcast_view(p);
                 let mut st = self.state.borrow_mut();
                 // same podcast: the selection is kept
                 let selected = match st.podcast.take() {
                     Some((old, selected)) if old.podcast.feed_url == view.podcast.feed_url => {
+                        view.removed = old.removed;
                         selected
                     }
                     _ => {
@@ -255,14 +284,17 @@ impl App {
                 .map(|e| e.guid.clone())
                 .collect()
         };
+        let (imported, album_removable) = if on_device {
+            self.album_episodes(&podcast)
+        } else {
+            (HashSet::new(), HashSet::new())
+        };
         PodcastView {
-            imported: if on_device {
-                self.imported_in_album(&podcast)
-            } else {
-                HashSet::new()
-            },
+            imported,
             on_device,
             stories,
+            album_removable,
+            removed: HashSet::new(),
             podcast,
         }
     }
@@ -603,32 +635,63 @@ impl App {
         }
     }
 
+    /// The episode `index` on the device can be unchecked, to remove it.
+    fn podcast_removable(&self, view: &PodcastView, index: usize) -> bool {
+        self.ui().get_podcast_mode() == 1
+            || view
+                .album_removable
+                .contains(&view.podcast.episodes[index].guid)
+    }
+
     pub(super) fn podcast_mode_changed(&self) {
         if let Some((view, selected)) = self.state.borrow_mut().podcast.as_mut() {
             let present = self.podcast_present(view);
-            selected.retain(|&i| !present.contains(&view.podcast.episodes[i].guid));
+            let episodes = &view.podcast.episodes;
+            selected.retain(|&i| !present.contains(&episodes[i].guid));
+            let removed: HashSet<usize> = view
+                .removed
+                .iter()
+                .copied()
+                .filter(|&i| present.contains(&episodes[i].guid) && self.podcast_removable(view, i))
+                .collect();
+            view.removed = removed;
         }
         self.update_podcast_header();
         self.rebuild_podcast_rows();
     }
 
-    /// Indexes of the episodes matching the filter, newest first.
+    /// Indexes of the episodes matching the filter, in the order of the
+    /// column chosen (newest first by default).
     pub(super) fn podcast_visible(&self) -> Vec<usize> {
-        let filter = self.ui().get_podcast_filter().to_lowercase();
+        let ui = self.ui();
+        let filter = ui.get_podcast_filter().to_lowercase();
         let st = self.state.borrow();
         let Some((view, _)) = st.podcast.as_ref() else {
             return Vec::new();
         };
-        (0..view.podcast.episodes.len())
+        let episodes = &view.podcast.episodes;
+        let mut visible: Vec<usize> = (0..episodes.len())
             .rev()
-            .filter(|&i| {
-                filter.is_empty()
-                    || view.podcast.episodes[i]
-                        .title
-                        .to_lowercase()
-                        .contains(&filter)
-            })
-            .collect()
+            .filter(|&i| filter.is_empty() || episodes[i].title.to_lowercase().contains(&filter))
+            .collect();
+        let present = self.podcast_present(view);
+        let column = SortColumn::from(ui.get_podcast_sort_column());
+        // stable: the same keys stay newest first
+        visible.sort_by(|&a, &b| {
+            let (ea, eb) = (&episodes[a], &episodes[b]);
+            let order = match column {
+                SortColumn::Title => ea.title.to_lowercase().cmp(&eb.title.to_lowercase()),
+                SortColumn::Duration => ea.duration.cmp(&eb.duration),
+                SortColumn::Date => ea.date.cmp(&eb.date).then(a.cmp(&b)),
+                SortColumn::Device => present.contains(&ea.guid).cmp(&present.contains(&eb.guid)),
+            };
+            if ui.get_podcast_sort_ascending() {
+                order
+            } else {
+                order.reverse()
+            }
+        });
+        visible
     }
 
     pub(super) fn rebuild_podcast_rows(&self) {
@@ -643,39 +706,49 @@ impl App {
                             .iter()
                             .map(|&i| {
                                 let e = &view.podcast.episodes[i];
-                                let date = podcast::display_date(&e.date);
-                                let info =
-                                    [date, e.duration.map(format_duration).unwrap_or_default()]
-                                        .into_iter()
-                                        .filter(|s| !s.is_empty())
-                                        .collect::<Vec<_>>()
-                                        .join(" · ");
                                 EpisodeRow {
                                     index: i as i32,
                                     title: e.title.clone().into(),
-                                    info: info.into(),
+                                    duration: e
+                                        .duration
+                                        .map(format_duration)
+                                        .unwrap_or_default()
+                                        .into(),
+                                    date: podcast::display_date(&e.date).into(),
                                     checked: selected.contains(&i),
                                     present: present.contains(&e.guid),
+                                    removable: self.podcast_removable(view, i),
+                                    remove: view.removed.contains(&i),
                                 }
                             })
                             .collect(),
-                        selected.len(),
+                        (selected.len(), view.removed.len()),
                     )
                 }
-                None => (Vec::new(), 0),
+                None => (Vec::new(), (0, 0)),
             }
         };
         self.podcast_rows.set_vec(rows);
-        self.ui().set_podcast_selected_count(count as i32);
+        self.ui().set_podcast_selected_count(count.0 as i32);
+        self.ui().set_podcast_remove_count(count.1 as i32);
     }
 
+    /// An episode checked or unchecked: to import if it is not on the
+    /// device, to remove (unchecked) if it is.
     pub(super) fn podcast_toggle(&self, index: usize) {
         if let Some((view, selected)) = self.state.borrow_mut().podcast.as_mut()
             && let Some(e) = view.podcast.episodes.get(index)
-            && !self.podcast_present(view).contains(&e.guid)
-            && !selected.remove(&index)
         {
-            selected.insert(index);
+            let set = if !self.podcast_present(view).contains(&e.guid) {
+                selected
+            } else if self.podcast_removable(view, index) {
+                &mut view.removed
+            } else {
+                return;
+            };
+            if !set.remove(&index) {
+                set.insert(index);
+            }
         }
         self.rebuild_podcast_rows();
     }
@@ -699,41 +772,106 @@ impl App {
         self.rebuild_podcast_rows();
     }
 
+    /// "Import": the episodes unchecked removed after a confirmation, then
+    /// the checked ones imported.
+    pub(super) fn podcast_apply(&self) {
+        let titles: Vec<String> = {
+            let st = self.state.borrow();
+            let Some((view, _)) = st.podcast.as_ref() else {
+                return;
+            };
+            let mut indexes: Vec<usize> = view.removed.iter().copied().collect();
+            indexes.sort();
+            indexes
+                .iter()
+                .map(|&i| view.podcast.episodes[i].title.clone())
+                .collect()
+        };
+        if titles.is_empty() {
+            self.podcast_import();
+            return;
+        }
+        let mut message = trf(
+            "You are requesting to remove from the device {} episode(s) :\n",
+            &[&titles.len().to_string()],
+        );
+        for t in &titles {
+            message += &format!("- {t}\n");
+        }
+        if message.chars().count() > 512 {
+            message = message.chars().take(512).collect::<String>() + "...";
+            message += &tr("\n(and too many others)\n");
+        }
+        message += &tr("\nDo you want to proceed ?");
+        self.state.borrow_mut().confirm_podcast = true;
+        let ui = self.ui();
+        ui.set_confirm_message(message.into());
+        ui.set_dialog(DialogKind::ConfirmRemove);
+    }
+
     pub(super) fn podcast_import(&self) {
-        let Some((podcast, episodes)) =
+        let Some((podcast, episodes, remove)) =
             self.state
                 .borrow_mut()
                 .podcast
                 .as_mut()
                 .map(|(view, selected)| {
                     // chronological order in the album
-                    let mut indexes: Vec<usize> = selected.drain().collect();
-                    indexes.sort();
-                    let episodes = indexes
-                        .iter()
-                        .map(|&i| view.podcast.episodes[i].clone())
-                        .collect::<Vec<_>>();
-                    (view.podcast.clone(), episodes)
+                    let pick = |set: &mut HashSet<usize>| {
+                        let mut indexes: Vec<usize> = set.drain().collect();
+                        indexes.sort();
+                        indexes
+                            .iter()
+                            .map(|&i| view.podcast.episodes[i].clone())
+                            .collect::<Vec<_>>()
+                    };
+                    let episodes = pick(selected);
+                    let remove = pick(&mut view.removed);
+                    (view.podcast.clone(), episodes, remove)
                 })
         else {
             return;
         };
-        if episodes.is_empty() {
+        if episodes.is_empty() && remove.is_empty() {
             return;
         }
         // followed from now on (imported as stories: not recorded otherwise)
         let _ = podcast::follow(&podcast);
         self.rebuild_podcast_rows();
-        self.status(&tr("Importing podcast..."));
+        self.status(&if episodes.is_empty() {
+            tr("Removing episodes...")
+        } else {
+            tr("Importing podcast...")
+        });
         self.show_log();
         let update_size = self.ui().get_show_size();
         let as_stories = self.ui().get_podcast_mode() == 1;
         self.launch(Task::ImportPodcast {
             podcast: Box::new(podcast),
             episodes,
+            remove,
             as_stories,
             update_size,
         });
+    }
+}
+
+/// Column the episodes are sorted by (`sort-column` of the view).
+enum SortColumn {
+    Title,
+    Duration,
+    Date,
+    Device,
+}
+
+impl From<i32> for SortColumn {
+    fn from(column: i32) -> Self {
+        match column {
+            0 => Self::Title,
+            1 => Self::Duration,
+            3 => Self::Device,
+            _ => Self::Date,
+        }
     }
 }
 

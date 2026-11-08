@@ -3,6 +3,7 @@
 //! A task runs in its own thread and talks to the UI with [`Event`]s, delivered
 //! in order on the Slint event loop.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -200,10 +201,13 @@ pub enum Task {
     Remove {
         uuids: Vec<String>,
     },
-    /// Episodes of a podcast imported as an album (or appended to it)
+    /// Episodes of a podcast removed from the device, then the others
+    /// imported as an album (or appended to it)
     ImportPodcast {
         podcast: Box<Podcast>,
         episodes: Vec<Episode>,
+        /// episodes on the device to remove first
+        remove: Vec<Episode>,
         /// one story per episode instead of an album
         as_stories: bool,
         update_size: bool,
@@ -440,6 +444,61 @@ impl Runner {
         .unwrap_or(false)
     }
 
+    /// Episodes of a podcast removed from the device: their stories, or their
+    /// tracks of the podcast album (the whole album if none is left).
+    fn remove_episodes(
+        &self,
+        podcast: &Podcast,
+        episodes: &[Episode],
+        as_stories: bool,
+    ) -> anyhow::Result<()> {
+        if as_stories {
+            let uuids: Vec<String> = episodes
+                .iter()
+                .map(|e| podcast.episode_uuid(e).to_string())
+                .collect();
+            return self.remove(&uuids);
+        }
+        let uuid = podcast.album_uuid();
+        let guids: HashSet<&str> = episodes.iter().map(|e| e.guid.as_str()).collect();
+        // tracks without their episode (albums imported before it was
+        // recorded): found by title
+        let titles: HashSet<&str> = episodes.iter().map(|e| e.title.as_str()).collect();
+        // tracks kept, as positions on the device
+        let (count, kept) = self
+            .with_device(|d| {
+                let story = d.stories().get(&uuid.to_string())?.clone();
+                let count = d.album_track_count(&story)?;
+                let info = d.album_info(&story)?;
+                Some((
+                    count,
+                    (0..count)
+                        .filter(|&i| {
+                            let guid = info.episodes.get(i).map_or("", String::as_str);
+                            let removed = if guid.is_empty() {
+                                info.tracks
+                                    .get(i)
+                                    .is_some_and(|t| titles.contains(t.as_str()))
+                            } else {
+                                guids.contains(guid)
+                            };
+                            !removed
+                        })
+                        .collect::<Vec<usize>>(),
+                ))
+            })
+            .flatten()
+            .ok_or_else(|| anyhow::anyhow!("This story is not an MP3 album created by Lunii"))?;
+        if kept.len() == count {
+            anyhow::bail!("Episodes to remove not found in the album");
+        }
+        if kept.is_empty() {
+            return self.remove(&[uuid.to_string()]);
+        }
+        let entries = kept.into_iter().map(album::AlbumEntry::Existing).collect();
+        self.edit_album(&uuid, entries, false)
+    }
+
     fn import_podcast(
         &self,
         podcast: &Podcast,
@@ -635,9 +694,20 @@ impl Runner {
             Task::ImportPodcast {
                 podcast,
                 episodes,
+                remove,
                 as_stories,
                 update_size,
-            } => self.import_podcast(&podcast, &episodes, as_stories, update_size)?,
+            } => {
+                if !remove.is_empty() {
+                    self.remove_episodes(&podcast, &remove, as_stories)?;
+                }
+                if !episodes.is_empty() {
+                    self.import_podcast(&podcast, &episodes, as_stories, update_size)?;
+                } else if update_size {
+                    self.on_device(|d| d.compute_sizes(&self.ctx))?;
+                    self.refresh();
+                }
+            }
             Task::Size => {
                 self.on_device(|d| d.compute_sizes(&self.ctx))?;
                 self.refresh();

@@ -197,6 +197,10 @@ export component MainWindow inherits Window {
     in property <string> podcast-header;
     in property <[EpisodeRow]> podcast-rows;
     in property <int> podcast-selected-count;
+    in property <int> podcast-remove-count;
+    // 0: title, 1: duration, 2: date, 3: on the device
+    in-out property <int> podcast-sort-column: 2;
+    in-out property <bool> podcast-sort-ascending: false;
     in-out property <string> podcast-filter;
     in-out property <int> podcast-mode;
     callback podcast-add();
@@ -208,6 +212,7 @@ export component MainWindow inherits Window {
     callback podcast-select-all(all: bool);
     callback podcast-filter-edited();
     callback podcast-accepted();
+    callback podcast-sort-changed();
     // "Add a podcast" dialog
     in-out property <string> podcast-add-query;
     in property <[PodcastResult]> podcast-add-results;
@@ -521,6 +526,9 @@ export component MainWindow inherits Window {
                 loading: root.podcast-loading;
                 rows: root.podcast-rows;
                 selected-count: root.podcast-selected-count;
+                remove-count: root.podcast-remove-count;
+                sort-column <=> root.podcast-sort-column;
+                sort-ascending <=> root.podcast-sort-ascending;
                 filter <=> root.podcast-filter;
                 mode <=> root.podcast-mode;
                 can-import: root.story-actions && root.can-import;
@@ -534,6 +542,7 @@ export component MainWindow inherits Window {
                 select-all(all) => { root.podcast-select-all(all); }
                 filter-edited => { root.podcast-filter-edited(); }
                 import => { root.podcast-accepted(); }
+                sort-changed => { root.podcast-sort-changed(); }
             }
         }
 

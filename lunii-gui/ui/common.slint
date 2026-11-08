@@ -107,11 +107,16 @@ export struct EpisodeRow {
     // index in the podcast episodes
     index: int,
     title: string,
-    // date, duration
-    info: string,
+    duration: string,
+    // publication date
+    date: string,
     checked: bool,
-    // already in the album on the device
+    // already on the device (in the album, or as a story)
     present: bool,
+    // on the device and can be unchecked to remove it
+    removable: bool,
+    // on the device, unchecked: to remove
+    remove: bool,
 }
 
 export global Theme {

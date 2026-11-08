@@ -4,6 +4,28 @@
 import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette } from "std-widgets.slint";
 import { Theme, EpisodeRow, FollowedRow } from "common.slint";
 
+// Column header: a click sorts by it, again reverses the order.
+component SortHeader inherits Rectangle {
+    in property <string> text;
+    in property <TextHorizontalAlignment> horizontal-alignment: left;
+    in property <bool> sorted;
+    in property <bool> ascending;
+    callback clicked();
+    area := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    Text {
+        width: 100%;
+        text: root.text + (root.sorted ? (root.ascending ? " ▲" : " ▼") : "");
+        horizontal-alignment: root.horizontal-alignment;
+        vertical-alignment: center;
+        font-weight: 600;
+        overflow: elide;
+        color: area.has-hover ? Theme.selection : Palette.foreground;
+    }
+}
+
 export component PodcastsView inherits HorizontalLayout {
     // followed podcasts
     in property <[FollowedRow]> followed;
@@ -14,6 +36,11 @@ export component PodcastsView inherits HorizontalLayout {
     in property <bool> loading;
     in property <[EpisodeRow]> rows;
     in property <int> selected-count;
+    // episodes on the device unchecked: to remove
+    in property <int> remove-count;
+    // 0: title, 1: duration, 2: date, 3: on the device
+    in-out property <int> sort-column: 2;
+    in-out property <bool> sort-ascending: false;
     in-out property <string> filter;
     // 0: one album (a menu to choose the episode), 1: one story per episode
     in-out property <int> mode;
@@ -31,6 +58,23 @@ export component PodcastsView inherits HorizontalLayout {
     callback select-all(all: bool);
     callback filter-edited();
     callback import();
+    callback sort-changed();
+
+    property <length> row-height: 28px;
+    property <length> col-duration: 70px;
+    property <length> col-date: 90px;
+    property <length> col-device: 110px;
+
+    function sort-by(column: int) {
+        if (root.sort-column == column) {
+            root.sort-ascending = !root.sort-ascending;
+        } else {
+            root.sort-column = column;
+            // A → Z, but the newest, longest and present first
+            root.sort-ascending = column == 0;
+        }
+        root.sort-changed();
+    }
 
     spacing: 8px;
 
@@ -164,34 +208,113 @@ export component PodcastsView inherits HorizontalLayout {
             vertical-stretch: 1;
             border-width: 1px;
             border-color: Palette.border;
-            ListView {
-                for row in root.rows: Rectangle {
-                    height: 40px;
-                    background: area.has-hover && !row.present ? #8882 : transparent;
-                    area := TouchArea {
-                        enabled: !row.present;
-                        clicked => { root.toggle(row.index); }
-                    }
+            background: Palette.alternate-background;
+            VerticalLayout {
+                // header
+                Rectangle {
+                    height: root.row-height;
+                    background: Palette.control-background;
                     HorizontalLayout {
                         padding-left: 6px;
-                        padding-right: 6px;
+                        // the scrollbar
+                        padding-right: 14px;
                         spacing: 6px;
-                        CheckBox {
-                            checked: row.checked || row.present;
-                            enabled: !row.present;
-                            toggled => { root.toggle(row.index); }
+                        SortHeader {
+                            text: @tr("On the device");
+                            width: root.col-device;
+                            sorted: root.sort-column == 3;
+                            ascending: root.sort-ascending;
+                            clicked => { root.sort-by(3); }
                         }
-                        VerticalLayout {
-                            alignment: center;
-                            Text {
-                                text: row.title;
-                                overflow: elide;
-                                color: row.present ? Theme.hidden-text : Palette.foreground;
+                        SortHeader {
+                            text: @tr("Title");
+                            horizontal-stretch: 1;
+                            sorted: root.sort-column == 0;
+                            ascending: root.sort-ascending;
+                            clicked => { root.sort-by(0); }
+                        }
+                        SortHeader {
+                            text: @tr("Duration");
+                            width: root.col-duration;
+                            horizontal-alignment: right;
+                            sorted: root.sort-column == 1;
+                            ascending: root.sort-ascending;
+                            clicked => { root.sort-by(1); }
+                        }
+                        SortHeader {
+                            text: @tr("Published");
+                            width: root.col-date;
+                            horizontal-alignment: right;
+                            sorted: root.sort-column == 2;
+                            ascending: root.sort-ascending;
+                            clicked => { root.sort-by(2); }
+                        }
+                    }
+                    Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
+                }
+                ListView {
+                    for row in root.rows: Rectangle {
+                        height: root.row-height;
+                        property <bool> enabled: !row.present || row.removable;
+                        background: area.has-hover && enabled ? #8882 : transparent;
+                        property <color> fg: enabled ? Palette.foreground : Theme.hidden-text;
+                        area := TouchArea {
+                            enabled: enabled;
+                            clicked => { root.toggle(row.index); }
+                        }
+                        HorizontalLayout {
+                            padding-left: 6px;
+                            // the scrollbar
+                            padding-right: 14px;
+                            spacing: 6px;
+                            // checked: on the device, or to import; the
+                            // changes to apply named beside
+                            HorizontalLayout {
+                                width: root.col-device;
+                                spacing: 4px;
+                                // its state follows the row only: the
+                                // clicks go to the TouchArea over it
+                                Rectangle {
+                                    width: box.preferred-width;
+                                    box := CheckBox {
+                                        width: 100%;
+                                        checked: row.present ? !row.remove : row.checked;
+                                        enabled: enabled;
+                                    }
+                                    TouchArea {
+                                        enabled: enabled;
+                                        clicked => { root.toggle(row.index); }
+                                    }
+                                }
+                                Text {
+                                    text: row.remove ? @tr("to remove") : row.checked && !row.present ? @tr("to import") : "";
+                                    color: row.remove ? #d33 : Theme.selection;
+                                    font-size: 11px;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
+                                    overflow: elide;
+                                }
                             }
                             Text {
-                                text: row.present ? row.info + " · " + @tr("already on the device") : row.info;
-                                font-size: 11px;
-                                color: Theme.hidden-text;
+                                text: row.title;
+                                color: fg;
+                                overflow: elide;
+                                vertical-alignment: center;
+                                horizontal-stretch: 1;
+                            }
+                            Text {
+                                text: row.duration;
+                                color: fg;
+                                width: root.col-duration;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: row.date;
+                                color: fg;
+                                width: root.col-date;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
                             }
                         }
                     }
@@ -205,9 +328,11 @@ export component PodcastsView inherits HorizontalLayout {
             spacing: 6px;
             Rectangle { horizontal-stretch: 1; }
             Button {
-                text: @tr("Import ({})", root.selected-count);
+                text: root.remove-count == 0 ? @tr("Import ({})", root.selected-count)
+                    : root.selected-count == 0 ? @tr("Remove ({})", root.remove-count)
+                    : @tr("Import ({}) and remove ({})", root.selected-count, root.remove-count);
                 primary: true;
-                enabled: root.can-import && root.selected-count > 0;
+                enabled: root.can-import && (root.selected-count > 0 || root.remove-count > 0);
                 clicked => { root.import(); }
             }
         }
