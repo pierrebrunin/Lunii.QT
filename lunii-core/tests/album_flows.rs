@@ -420,6 +420,170 @@ fn chapters_album_on_flam() {
     assert_eq!(info.chapters, album.chapters);
 }
 
+/// New episodes of a podcast, after those this computer remembers.
+fn new_episodes(p: &lunii_core::podcast::Podcast) -> Vec<lunii_core::podcast::Episode> {
+    let imported = lunii_core::podcast::imported_episodes(&p.album_uuid());
+    lunii_core::podcast::new_episodes(p, &imported)
+}
+
+/// RSS feed of the episodes `items` (newest first), titled `Episode <guid>`.
+fn rss(items: &[&str]) -> String {
+    let items: String = items
+        .iter()
+        .map(|g| {
+            format!(
+                "<item><title>Episode {g}</title><guid>{g}</guid><enclosure url=\"https://example.org/{g}.mp3\"/></item>"
+            )
+        })
+        .collect();
+    format!("<rss><channel><title>Podcast</title>{items}</channel></rss>")
+}
+
+/// Track of a podcast episode: an MP3 file titled as the episode.
+fn episode_track(dir: &Path, ep: &lunii_core::podcast::Episode) -> album::Track {
+    let path = dir.join(format!("{}.mp3", ep.guid));
+    std::fs::write(&path, mp3(20)).unwrap();
+    album::Track {
+        path,
+        title: ep.title.clone(),
+        disc: None,
+        number: None,
+    }
+}
+
+/// The album of a podcast records its feed and episodes on the device: any
+/// computer sees them, through appends and edits; the podcast of an album
+/// found on a device is followed.
+#[test]
+fn podcast_album_on_device() {
+    use lunii_core::album::AlbumEntry;
+    use lunii_core::podcast::{self, ImportPlan};
+    let _cfg = setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let ctx = Context::default();
+    let root = fake_flam(tmp.path());
+    let mut dev = open_device(&ctx, &root).unwrap();
+
+    let url = "https://example.org/device-test.xml";
+    let p = podcast::parse_feed(url, &rss(&["c", "b", "a"])).unwrap();
+    let uuid = p.album_uuid();
+    let tracks = |eps: &[podcast::Episode]| -> Vec<album::Track> {
+        eps.iter().map(|e| episode_track(tmp.path(), e)).collect()
+    };
+    let new_album = album::Album {
+        uuid: Some(uuid),
+        title: p.title.clone(),
+        artist: None,
+        cover: None,
+        tracks: tracks(&p.episodes[..2]),
+        chapters: Vec::new(),
+    };
+    let zip = tmp.path().join("album.zip");
+    new_album.write_studio_zip(&zip).unwrap();
+    dev.import_story(&ctx, &zip).unwrap();
+    let plan = ImportPlan::NewAlbum(zip);
+    podcast::record_on_device(dev.as_ref(), &p, &p.episodes[..2], &plan).unwrap();
+    let info_of = |dev: &dyn lunii_core::Device| {
+        let story = dev.stories().get(&uuid.to_string()).unwrap().clone();
+        dev.album_info(&story).unwrap()
+    };
+    let episodes = |info: &album::meta::AlbumInfo| {
+        let mut e: Vec<_> = podcast::album_episodes(info).unwrap().into_iter().collect();
+        e.sort();
+        e
+    };
+    assert_eq!(episodes(&info_of(dev.as_ref())), ["a", "b"]);
+    assert_eq!(info_of(dev.as_ref()).podcast.unwrap().feed, url);
+    // new episodes: from the device, not this computer (nothing recorded here)
+    assert!(podcast::imported_episodes(&uuid).is_empty());
+    let new: Vec<_> = podcast::new_episodes(
+        &p,
+        &podcast::album_episodes(&info_of(dev.as_ref())).unwrap(),
+    )
+    .into_iter()
+    .map(|e| e.guid)
+    .collect();
+    assert_eq!(new, ["c"]);
+
+    // an episode appended
+    dev.add_album_tracks(&ctx, &uuid, &tracks(&p.episodes[2..]))
+        .unwrap();
+    let plan = ImportPlan::Append(uuid, Vec::new());
+    podcast::record_on_device(dev.as_ref(), &p, &p.episodes[2..], &plan).unwrap();
+    assert_eq!(info_of(dev.as_ref()).episodes, ["a", "b", "c"]);
+
+    // edited: the first track removed, the others swapped
+    dev.edit_album(
+        &ctx,
+        &uuid,
+        &[AlbumEntry::Existing(2), AlbumEntry::Existing(1)],
+    )
+    .unwrap();
+    let edited = info_of(dev.as_ref());
+    assert_eq!(edited.episodes, ["c", "b"]);
+    assert_eq!(edited.podcast.as_ref().unwrap().feed, url);
+    assert_eq!(episodes(&edited), ["b", "c"]);
+
+    // another computer: the podcast found on the device is followed, once;
+    // no longer followed, it is not followed again
+    let source = edited.podcast.unwrap();
+    assert!(podcast::follow_album(&source, "Podcast").unwrap());
+    assert!(!podcast::follow_album(&source, "Podcast").unwrap());
+    assert!(podcast::saved_podcasts().iter().any(|s| s.album == uuid));
+    podcast::unfollow(&uuid).unwrap();
+    assert!(!podcast::saved_podcasts().iter().any(|s| s.album == uuid));
+    assert!(!podcast::follow_album(&source, "Podcast").unwrap());
+    // followed again by hand
+    podcast::follow(&p).unwrap();
+    assert!(podcast::saved_podcasts().iter().any(|s| s.album == uuid));
+}
+
+/// An album imported before the episodes were recorded on the device: its
+/// tracks matched by title to the episodes this computer remembers.
+#[test]
+fn podcast_album_imported_before() {
+    use lunii_core::podcast::{self, ImportPlan};
+    let _cfg = setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let ctx = Context::default();
+    let root = fake_flam(tmp.path());
+    let mut dev = open_device(&ctx, &root).unwrap();
+
+    let url = "https://example.org/legacy-test.xml";
+    let p = podcast::parse_feed(url, &rss(&["b", "a"])).unwrap();
+    let uuid = p.album_uuid();
+    let new_album = album::Album {
+        uuid: Some(uuid),
+        title: p.title.clone(),
+        artist: None,
+        cover: None,
+        tracks: vec![episode_track(tmp.path(), &p.episodes[0])],
+        chapters: Vec::new(),
+    };
+    let zip = tmp.path().join("album.zip");
+    new_album.write_studio_zip(&zip).unwrap();
+    dev.import_story(&ctx, &zip).unwrap();
+    // as the earlier versions did: on this computer only
+    podcast::record_imported(&p, &["a".into()], true).unwrap();
+    let story = dev.stories().get(&uuid.to_string()).unwrap().clone();
+    assert_eq!(
+        podcast::album_episodes(&dev.album_info(&story).unwrap()),
+        None
+    );
+
+    dev.add_album_tracks(&ctx, &uuid, &[episode_track(tmp.path(), &p.episodes[1])])
+        .unwrap();
+    podcast::record_on_device(
+        dev.as_ref(),
+        &p,
+        &p.episodes[1..],
+        &ImportPlan::Append(uuid, Vec::new()),
+    )
+    .unwrap();
+    let story = dev.stories().get(&uuid.to_string()).unwrap().clone();
+    assert_eq!(dev.album_info(&story).unwrap().episodes, ["a", "b"]);
+}
+
 /// Podcast update: the albums are remembered, the new episodes found.
 #[test]
 fn podcast_new_episodes() {
@@ -444,14 +608,11 @@ fn podcast_new_episodes() {
     assert_eq!(entry.title, "Mon podcast");
 
     let p = lunii_core::podcast::parse_feed(url, &feed(&["d", "c", "b", "a"])).unwrap();
-    let new: Vec<_> = lunii_core::podcast::new_episodes(&p)
-        .into_iter()
-        .map(|e| e.guid)
-        .collect();
+    let new: Vec<_> = new_episodes(&p).into_iter().map(|e| e.guid).collect();
     assert_eq!(new, ["c", "d"]);
     // an older episode left out is not new
     lunii_core::podcast::record_imported(&p, &["d".into()], false).unwrap();
-    assert!(lunii_core::podcast::new_episodes(&p).is_empty());
+    assert!(new_episodes(&p).is_empty());
     lunii_core::podcast::record_imported(&p, &["a".into(), "b".into()], true).unwrap();
 
     // followed without import, then no longer followed
@@ -463,10 +624,10 @@ fn podcast_new_episodes() {
             .iter()
             .any(|s| s.feed_url == url2)
     );
-    assert_eq!(lunii_core::podcast::new_episodes(&p2).len(), 1);
+    assert_eq!(new_episodes(&p2).len(), 1);
     // following again keeps the imported episodes
     lunii_core::podcast::follow(&p).unwrap();
-    assert_eq!(lunii_core::podcast::new_episodes(&p).len(), 2);
+    assert_eq!(new_episodes(&p).len(), 2);
     lunii_core::podcast::unfollow(&p2.album_uuid()).unwrap();
     assert!(
         !lunii_core::podcast::saved_podcasts()

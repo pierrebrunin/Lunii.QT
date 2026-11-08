@@ -1178,3 +1178,6 @@ msgstr "Sélectionnez une histoire pour voir ses détails."
 
 msgid "{} stories selected"
 msgstr "{} histoires sélectionnées"
+
+msgid "Podcast found on the device, followed: {}"
+msgstr "Podcast trouvé sur l'appareil, maintenant suivi : {}"

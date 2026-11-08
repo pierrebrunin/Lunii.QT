@@ -2,6 +2,9 @@
 //! the screens only hold the titles as pictures, this file keeps them as text
 //! to display and edit the album, with the duration of each track (measured
 //! when its audio is written).
+//!
+//! The album of a podcast also records its feed and the episode of each track:
+//! the device tells which episodes it holds, whatever computer imported them.
 
 use std::path::Path;
 
@@ -25,6 +28,18 @@ pub struct AlbumInfo {
     /// duration of each track in seconds, measured when its audio was written
     /// (0, or missing: unknown)
     pub durations: Vec<u32>,
+    /// feed of the podcast of the album, if it is one
+    pub podcast: Option<PodcastSource>,
+    /// episode (`guid`) of each track of a podcast album (empty: unknown, or
+    /// a track added from an MP3 file)
+    pub episodes: Vec<String>,
+}
+
+/// Feed of a podcast album: its address and the other ones it declares.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PodcastSource {
+    pub feed: String,
+    pub aliases: Vec<String>,
 }
 
 impl AlbumInfo {
@@ -40,6 +55,12 @@ impl AlbumInfo {
         let mut v = json!({"version": 1, "tracks": self.tracks});
         if self.durations.iter().any(|&d| d > 0) {
             v["durations"] = json!(self.durations);
+        }
+        if let Some(p) = &self.podcast {
+            v["podcast"] = json!({"feed": p.feed, "aliases": p.aliases});
+        }
+        if self.episodes.iter().any(|e| !e.is_empty()) {
+            v["episodes"] = json!(self.episodes);
         }
         if !self.chapters.is_empty() {
             v["chapters"] = self
@@ -77,10 +98,28 @@ impl AlbumInfo {
             .and_then(Value::as_array)
             .map(|ds| ds.iter().map(|d| d.as_u64().unwrap_or(0) as u32).collect())
             .unwrap_or_default();
+        let strings = |v: &Value| -> Vec<String> {
+            v.as_array()
+                .map(|a| {
+                    a.iter()
+                        .map(|s| s.as_str().unwrap_or_default().to_string())
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let podcast = v.get("podcast").and_then(|p| {
+            Some(PodcastSource {
+                feed: p.get("feed")?.as_str()?.to_string(),
+                aliases: p.get("aliases").map(strings).unwrap_or_default(),
+            })
+        });
+        let episodes = v.get("episodes").map(strings).unwrap_or_default();
         Some(Self {
             tracks,
             chapters,
             durations,
+            podcast,
+            episodes,
         })
     }
 }
@@ -169,7 +208,7 @@ pub fn from_story_json(story: &Value) -> Option<AlbumInfo> {
     Some(AlbumInfo {
         tracks,
         chapters,
-        durations: Vec::new(),
+        ..AlbumInfo::default()
     })
 }
 
@@ -197,6 +236,8 @@ pub fn on_device(story_dir: &Path) -> Option<AlbumInfo> {
     tracks.resize(count, String::new());
     let mut durations = saved.durations;
     durations.resize(count, 0);
+    let mut episodes = saved.episodes;
+    episodes.resize(count, String::new());
     let chapters = if saved.chapters.iter().map(|c| c.len).sum::<usize>() == count {
         saved.chapters
     } else {
@@ -206,6 +247,8 @@ pub fn on_device(story_dir: &Path) -> Option<AlbumInfo> {
         tracks,
         chapters,
         durations,
+        podcast: saved.podcast,
+        episodes,
     })
 }
 
@@ -261,6 +304,11 @@ mod tests {
                 len: 2,
             }],
             durations: vec![65, 0],
+            podcast: Some(PodcastSource {
+                feed: "https://ex/feed.xml".into(),
+                aliases: vec!["https://ex/other.xml".into()],
+            }),
+            episodes: vec!["guid-1".into(), String::new()],
         };
         write(dir.path(), &info).unwrap();
         assert_eq!(read(dir.path()).as_ref(), Some(&info));

@@ -177,6 +177,67 @@ pub fn record_plan(podcast: &Podcast, episodes: &[Episode], plan: &ImportPlan) -
     }
 }
 
+/// Episodes in the album of a podcast, as its `album.json` on the device
+/// records them. `None` for an album imported before they were recorded
+/// there: see [`imported_episodes`] (this computer only).
+pub fn album_episodes(info: &album::meta::AlbumInfo) -> Option<HashSet<String>> {
+    info.podcast.as_ref()?;
+    Some(
+        info.episodes
+            .iter()
+            .filter(|e| !e.is_empty())
+            .cloned()
+            .collect(),
+    )
+}
+
+/// Records in `album.json` on the device the feed of the podcast and the
+/// episodes of the tracks just imported with `plan` (the last ones of the
+/// album). An album imported before: its earlier tracks matched by title to
+/// the episodes this computer remembers.
+pub fn record_on_device(
+    dev: &dyn crate::device::Device,
+    podcast: &Podcast,
+    episodes: &[Episode],
+    plan: &ImportPlan,
+) -> Result<()> {
+    if matches!(plan, ImportPlan::Stories(_)) {
+        return Ok(());
+    }
+    let uuid = podcast.album_uuid();
+    let story = dev
+        .stories()
+        .get(&uuid.to_string())
+        .context("This story is not present on your storyteller")?;
+    let dir = dev.story_path(story);
+    let mut info =
+        album::meta::on_device(&dir).context("This story is not an MP3 album created by Lunii")?;
+    let count = info.tracks.len();
+    info.episodes.resize(count, String::new());
+    if info.podcast.is_none() {
+        let known = imported_episodes(&uuid);
+        for (title, guid) in info.tracks.iter().zip(info.episodes.iter_mut()) {
+            if guid.is_empty()
+                && let Some(ep) = podcast
+                    .episodes
+                    .iter()
+                    .find(|e| e.title == *title && known.contains(&e.guid))
+            {
+                *guid = ep.guid.clone();
+            }
+        }
+    }
+    let first = count.saturating_sub(episodes.len());
+    for (slot, ep) in info.episodes[first..].iter_mut().zip(episodes) {
+        *slot = ep.guid.clone();
+    }
+    info.podcast = Some(album::meta::PodcastSource {
+        feed: podcast.feed_url.clone(),
+        aliases: podcast.aliases.clone(),
+    });
+    album::meta::write(&dir, &info)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

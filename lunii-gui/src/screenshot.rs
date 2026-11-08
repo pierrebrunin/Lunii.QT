@@ -117,10 +117,12 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     std::fs::create_dir_all(&out)?;
     // settings and followed podcasts of a run of its own, unless one is given:
     // the real ones are left alone
-    if std::env::var_os("LUNII_CFG_DIR").is_none() {
-        let cfg = std::env::temp_dir().join(format!("lunii-screenshot-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&cfg);
-        std::fs::create_dir_all(&cfg)?;
+    let temp_cfg = std::env::var_os("LUNII_CFG_DIR")
+        .is_none()
+        .then(|| std::env::temp_dir().join(format!("lunii-screenshot-{}", std::process::id())));
+    if let Some(cfg) = &temp_cfg {
+        let _ = std::fs::remove_dir_all(cfg);
+        std::fs::create_dir_all(cfg)?;
         lunii_core::constants::set_cfg_dir(cfg);
     }
 
@@ -339,6 +341,9 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
         render(0, &shot("14-second-device"));
     }
 
+    if let Some(cfg) = temp_cfg {
+        let _ = std::fs::remove_dir_all(cfg);
+    }
     Ok(())
 }
 

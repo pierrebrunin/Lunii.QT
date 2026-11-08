@@ -377,6 +377,7 @@ impl App {
         );
         self.rebuild_rows();
         self.status("");
+        self.follow_device_podcasts();
 
         if sizes_unknown {
             self.ensure_sizes();

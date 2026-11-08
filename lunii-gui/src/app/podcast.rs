@@ -97,6 +97,54 @@ impl App {
             .any(|s| s.uuid == *uuid && s.album)
     }
 
+    /// Episodes in the album of `podcast` on the device: as its `album.json`
+    /// records them, or as this computer remembers them (albums imported
+    /// before, or device busy).
+    fn imported_in_album(&self, podcast: &Podcast) -> HashSet<String> {
+        let uuid = podcast.album_uuid();
+        let on_device = (|| {
+            let dev = self.state.borrow().device.clone()?;
+            let dev = Self::lock_device(&dev).ok()?;
+            let story = dev.stories().get(&uuid.to_string())?.clone();
+            podcast::album_episodes(&dev.album_info(&story)?)
+        })();
+        on_device.unwrap_or_else(|| podcast::imported_episodes(&uuid))
+    }
+
+    /// The podcasts of the albums on the device, followed if they are not
+    /// known yet: imported from another computer.
+    pub(super) fn follow_device_podcasts(&self) {
+        let found: Vec<(lunii_core::album::meta::PodcastSource, String)> = (|| {
+            let dev = self.state.borrow().device.clone()?;
+            let dev = Self::lock_device(&dev).ok()?;
+            Some(
+                dev.stories()
+                    .0
+                    .iter()
+                    .filter_map(|s| Some((dev.album_info(s)?.podcast?, s.name())))
+                    .collect(),
+            )
+        })()
+        .unwrap_or_default();
+        let mut added = false;
+        for (source, title) in found {
+            match podcast::follow_album(&source, &title) {
+                Ok(true) => {
+                    added = true;
+                    self.log(
+                        lunii_core::Level::Info,
+                        &trf("Podcast found on the device, followed: {}", &[&title]),
+                    );
+                }
+                Ok(false) => {}
+                Err(e) => self.log(lunii_core::Level::Warn, &format!("{e:#}")),
+            }
+        }
+        if added && self.ui().get_view() == 1 {
+            self.podcasts_show();
+        }
+    }
+
     fn rebuild_followed(&self) {
         let rows: Vec<FollowedRow> = {
             let st = self.state.borrow();
@@ -127,7 +175,7 @@ impl App {
         if !self.album_on_device(&p.album_uuid()) {
             return (trf("{} episodes", &[&p.episodes.len().to_string()]), false);
         }
-        match podcast::new_episodes(p).len() {
+        match podcast::new_episodes(p, &self.imported_in_album(p)).len() {
             0 => (tr("Up to date"), false),
             n => (trf("{} new episode(s)", &[&n.to_string()]), true),
         }
@@ -209,7 +257,7 @@ impl App {
         };
         PodcastView {
             imported: if on_device {
-                podcast::imported_episodes(&uuid)
+                self.imported_in_album(&podcast)
             } else {
                 HashSet::new()
             },

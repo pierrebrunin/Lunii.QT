@@ -484,6 +484,12 @@ impl Runner {
             }
         }
         podcast::record_plan(podcast, episodes, &plan)?;
+        // and on the device: seen from any computer
+        if let Some(Err(e)) =
+            self.with_device(|d| podcast::record_on_device(d, podcast, episodes, &plan))
+        {
+            self.ctx.warn(format!("{e:#}"));
+        }
         if update_size {
             self.on_device(|d| d.compute_sizes(&self.ctx))?;
             self.refresh();

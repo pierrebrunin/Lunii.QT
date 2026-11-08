@@ -557,7 +557,10 @@ pub(crate) fn edit_album<D: StoryWriter>(
 
     // 1. new files in the temporary directory (the album stays as it was on
     // abort or error)
-    let (titles, durations) = match prepare_album_files(dev, ctx, &story, &files, entries) {
+    // feed of a podcast album: kept
+    let podcast = meta::read(&story_dir).and_then(|i| i.podcast);
+    let (titles, durations, episodes) = match prepare_album_files(dev, ctx, &story, &files, entries)
+    {
         Ok(prepared) => prepared,
         Err(e) => {
             let _ = std::fs::remove_dir_all(&files.tmp);
@@ -592,6 +595,8 @@ pub(crate) fn edit_album<D: StoryWriter>(
         tracks: titles,
         chapters: Vec::new(),
         durations,
+        podcast,
+        episodes,
     };
     if let Err(e) = meta::write(&story_dir, &info) {
         ctx.warn(format!("{e:#}"));
@@ -648,15 +653,15 @@ impl AlbumFiles {
 
 /// Step 1 of an album edit: the files of the added tracks and the screens of
 /// the moved ones (their number changes) written in the temporary directory.
-/// Returns the titles (empty: unknown) and durations (0: unknown) of the new
-/// track list.
+/// Returns the titles (empty: unknown), durations (0: unknown) and podcast
+/// episodes (empty: unknown) of the new track list.
 fn prepare_album_files<D: StoryWriter>(
     dev: &D,
     ctx: &Context,
     story: &crate::story::Story,
     files: &AlbumFiles,
     entries: &[crate::album::AlbumEntry],
-) -> Result<(Vec<String>, Vec<u32>)> {
+) -> Result<(Vec<String>, Vec<u32>, Vec<String>)> {
     use crate::album::{self, AlbumEntry, meta};
     use crate::convert::image;
 
@@ -666,6 +671,7 @@ fn prepare_album_files<D: StoryWriter>(
     let short = story.short_uuid();
     let mut titles = Vec::with_capacity(entries.len());
     let mut durations = Vec::with_capacity(entries.len());
+    let mut episodes = Vec::with_capacity(entries.len());
     for (i, entry) in entries.iter().enumerate() {
         ctx.story_progress(&short, i, entries.len());
         check_abort(ctx)?;
@@ -688,6 +694,7 @@ fn prepare_album_files<D: StoryWriter>(
                 }
                 titles.push(track.title.clone());
                 durations.push(duration);
+                episodes.push(String::new());
             }
             &AlbumEntry::Existing(j) => {
                 let title = old.tracks.get(j).cloned().unwrap_or_default();
@@ -700,10 +707,11 @@ fn prepare_album_files<D: StoryWriter>(
                 }
                 titles.push(title);
                 durations.push(old.durations.get(j).copied().unwrap_or(0));
+                episodes.push(old.episodes.get(j).cloned().unwrap_or_default());
             }
         }
     }
-    Ok((titles, durations))
+    Ok((titles, durations, episodes))
 }
 
 /// Step 2 of an album edit: the moved tracks renamed, the removed ones (and

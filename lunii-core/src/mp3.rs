@@ -200,6 +200,7 @@ mod tests {
             tracks: vec!["Un".into(), "Deux".into()],
             chapters: Vec::new(),
             durations: vec![100, 200],
+            ..Default::default()
         };
         crate::album::meta::write(dir.path(), &info).unwrap();
         assert_eq!(story_duration(dir.path()), Some(300));

@@ -19,7 +19,7 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   │                        STUdio et modification d'album partagés (trait StoryWriter)
 │   ├── src/album/           dossier de MP3 → histoire : scan.rs (tags, sous-dossiers,
 │   │                        pochette), layout.rs (story.json), screens.rs (écrans),
-│   │                        meta.rs (titres et durées des pistes, album.json)
+│   │                        meta.rs (titres, durées, épisodes des pistes : album.json)
 │   ├── src/podcast/         podcasts : mod.rs (types, chargement d'une adresse),
 │   │                        feed.rs (RSS, Atom), page.rs (pages sans flux,
 │   │                        schema.org), html.rs, apple.rs (liens, recherche),
@@ -280,7 +280,21 @@ directement la fenêtre d'ajout) :
   et grisés.
 - L'UUID de l'album est dérivé de l'adresse du flux. Si l'album est déjà sur
   l'appareil, les épisodes choisis y sont **ajoutés**. Les épisodes déjà importés
-  sont retenus dans `~/.lunii/podcasts.json` et grisés dans la liste.
+  sont grisés dans la liste.
+- **Sur l'appareil**, le `album.json` de l'album d'un podcast retient l'adresse
+  du flux (et ses autres adresses) et l'épisode de chaque piste. C'est la
+  référence : les épisodes déjà importés se lisent là, quel que soit
+  l'ordinateur qui les a importés, et suivent les modifications de l'album
+  (piste retirée : l'épisode redevient importable). Chaque appareil a ainsi
+  son propre état.
+- **Sur l'ordinateur**, `~/.lunii/podcasts.json` retient les podcasts suivis.
+  Un podcast dont l'album est sur l'appareil branché est suivi
+  automatiquement s'il est inconnu (album importé depuis un autre ordinateur).
+  « Ne plus suivre » est retenu : l'album trouvé sur un appareil ne le fait
+  pas suivre de nouveau. La liste des épisodes importés de `podcasts.json`
+  ne sert plus qu'aux albums importés avant cet enregistrement sur
+  l'appareil : au prochain ajout d'épisodes, leurs pistes sont associées aux
+  épisodes par leur titre.
 - Un même podcast a souvent plusieurs adresses de flux (celle d'une page,
   celle d'Apple Podcasts, une ancienne adresse redirigée). Ajouté une deuxième
   fois sous une autre adresse, il est reconnu comme déjà suivi, et garde

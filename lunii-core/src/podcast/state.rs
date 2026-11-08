@@ -36,11 +36,12 @@ pub struct SavedPodcast {
     pub title: String,
 }
 
-/// The followed podcasts: added in the Podcasts view or imported as albums
-/// (on any device), by title.
+/// The followed podcasts: added in the Podcasts view, imported as albums or
+/// found on a device, by title.
 pub fn saved_podcasts() -> Vec<SavedPodcast> {
     let mut list: Vec<SavedPodcast> = load_state()
         .into_iter()
+        .filter(|(_, p)| !unfollowed(p))
         .filter_map(|(uuid, p)| {
             Some(SavedPodcast {
                 album: Uuid::parse_str(&uuid).ok()?,
@@ -57,11 +58,16 @@ pub fn saved_podcasts() -> Vec<SavedPodcast> {
     list
 }
 
-/// Episodes of `podcast` published after the latest one imported in its
+/// A podcast no longer followed: kept, so that its album found on a device
+/// does not follow it again.
+fn unfollowed(entry: &Value) -> bool {
+    entry.get("unfollowed").and_then(Value::as_bool) == Some(true)
+}
+
+/// Episodes of `podcast` published after the latest one `imported` in its
 /// album, oldest first (the older ones were left out on purpose). All of
 /// them if none was imported.
-pub fn new_episodes(podcast: &Podcast) -> Vec<Episode> {
-    let imported = imported_episodes(&podcast.album_uuid());
+pub fn new_episodes(podcast: &Podcast, imported: &HashSet<String>) -> Vec<Episode> {
     // episodes are oldest first: after the last imported one
     let start = podcast
         .episodes
@@ -181,13 +187,41 @@ pub fn follow(podcast: &Podcast) -> Result<()> {
 }
 
 /// Removes a podcast from the followed podcasts (its album on a device is
-/// kept, but no longer updated).
+/// kept, but no longer updated). Remembered as such: its album found on a
+/// device does not follow it again.
 pub fn unfollow(album: &Uuid) -> Result<()> {
     let mut state = load_state();
-    if state.remove(&album.to_string()).is_some() {
+    if let Some(entry) = state.get_mut(&album.to_string())
+        && let Some(map) = entry.as_object_mut()
+    {
+        map.insert("unfollowed".into(), true.into());
         save_state(&state)?;
     }
     Ok(())
+}
+
+/// Follows the podcast of an album found on a device, unless it is known
+/// (followed, or no longer followed, under any of its addresses). `true` if
+/// it is followed from now on.
+pub fn follow_album(source: &crate::album::meta::PodcastSource, title: &str) -> Result<bool> {
+    let podcast = Podcast {
+        feed_url: source.feed.clone(),
+        aliases: source.aliases.clone(),
+        title: title.to_string(),
+        author: None,
+        image_url: None,
+        episodes: Vec::new(),
+    };
+    let mut state = load_state();
+    if followed_feed(&state, &podcast).is_some() {
+        return Ok(false);
+    }
+    state.insert(
+        podcast.album_uuid().to_string(),
+        entry(None, &podcast, json!([])),
+    );
+    save_state(&state)?;
+    Ok(true)
 }
 
 pub(super) fn save_state(state: &BTreeMap<String, Value>) -> Result<()> {
