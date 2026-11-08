@@ -146,6 +146,15 @@ pub fn thirdparty_add_story(
     Ok(())
 }
 
+/// Stores the thumbnail of a story imported, replacing the one cached (a
+/// story imported again, an album of a podcast: same UUID, new picture).
+pub fn thirdparty_set_thumb(uuid: &Uuid, image_data: &[u8]) -> Result<()> {
+    let dir = cache_dir();
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(db_key(uuid)), image_data)?;
+    Ok(())
+}
+
 /// Stores a thumbnail in the cache (only if not already present).
 pub fn thirdparty_add_thumb(uuid: &Uuid, image_data: &[u8]) -> Result<()> {
     let dir = cache_dir();

@@ -5,7 +5,7 @@ use std::io::Cursor;
 
 use ab_glyph::{Font, FontRef, PxScale, ScaleFont, point};
 use anyhow::{Context as _, Result};
-use image::{DynamicImage, GrayImage, ImageFormat, Luma, imageops::FilterType};
+use image::{DynamicImage, GrayImage, ImageFormat, Luma, Rgb, RgbImage, imageops::FilterType};
 
 use crate::convert::image::{LUNII_H, LUNII_W};
 
@@ -48,7 +48,12 @@ pub(super) fn blank() -> GrayImage {
     GrayImage::from_pixel(LUNII_W, LUNII_H, Luma([BACKGROUND]))
 }
 
-pub(super) fn png(img: &GrayImage) -> Result<Vec<u8>> {
+pub(super) fn png<P: image::PixelWithColorType>(
+    img: &image::ImageBuffer<P, Vec<P::Subpixel>>,
+) -> Result<Vec<u8>>
+where
+    [P::Subpixel]: image::EncodableLayout,
+{
     let mut out = Cursor::new(Vec::new());
     img.write_to(&mut out, ImageFormat::Png)?;
     Ok(out.into_inner())
@@ -60,6 +65,19 @@ pub(super) fn fit_cover(img: &DynamicImage) -> GrayImage {
         .resize(LUNII_W, LUNII_H, FilterType::CatmullRom)
         .to_luma8();
     let mut out = blank();
+    let x = (LUNII_W - scaled.width()) / 2;
+    let y = (LUNII_H - scaled.height()) / 2;
+    image::imageops::overlay(&mut out, &scaled, x.into(), y.into());
+    out
+}
+
+/// Same as [`fit_cover`], in color: the thumbnail of the story (application,
+/// Flam story list), where the screens of the device are gray.
+pub(super) fn fit_cover_color(img: &DynamicImage) -> RgbImage {
+    let scaled = img
+        .resize(LUNII_W, LUNII_H, FilterType::CatmullRom)
+        .to_rgb8();
+    let mut out = RgbImage::from_pixel(LUNII_W, LUNII_H, Rgb([BACKGROUND; 3]));
     let x = (LUNII_W - scaled.width()) / 2;
     let y = (LUNII_H - scaled.height()) / 2;
     image::imageops::overlay(&mut out, &scaled, x.into(), y.into());

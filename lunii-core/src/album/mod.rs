@@ -198,7 +198,16 @@ impl Album {
             &serde_json::to_vec_pretty(&self.story_json())?,
         )?;
         let cover = png(&self.cover_image(&font))?;
-        add(FILE_STUDIO_THUMB, &cover)?;
+        // the tag cover in color, where the device shows it gray
+        let thumbnail = match self
+            .cover
+            .as_deref()
+            .and_then(|c| image::load_from_memory(c).ok())
+        {
+            Some(img) => png(&fit_cover_color(&img))?,
+            None => cover.clone(),
+        };
+        add(FILE_STUDIO_THUMB, &thumbnail)?;
         add(&format!("assets/{COVER_IMAGE}"), &cover)?;
         add(&format!("assets/{COVER_SOUND}"), &silent_mp3(1.0))?;
         for (c, chapter) in self.chapters.iter().enumerate() {
@@ -527,6 +536,25 @@ mod tests {
     fn uuid_is_stable() {
         assert_eq!(album(2).uuid(), album(2).uuid());
         assert_ne!(album(2).uuid(), album(3).uuid());
+    }
+
+    #[test]
+    fn thumbnail_keeps_colors() {
+        let red = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            100,
+            100,
+            image::Rgb([200, 20, 20]),
+        ));
+        let thumb = fit_cover_color(&red);
+        assert_eq!(thumb.dimensions(), (LUNII_W, LUNII_H));
+        let center = thumb.get_pixel(LUNII_W / 2, LUNII_H / 2);
+        assert!(
+            center[0] > 150 && center[1] < 60 && center[2] < 60,
+            "{center:?}"
+        );
+        // the screen of the device: gray
+        let gray = fit_cover(&red);
+        assert_eq!(gray.get_pixel(LUNII_W / 2, LUNII_H / 2).0.len(), 1);
     }
 
     #[test]

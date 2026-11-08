@@ -465,7 +465,7 @@ pub(crate) fn import_studio<D: StoryWriter>(dev: &mut D, ctx: &Context, path: &P
             continue;
         }
         if entry.ends_with(FILE_STUDIO_THUMB) {
-            crate::db::thirdparty_add_thumb(&studio.uuid, &archive.read(entry)?)?;
+            crate::db::thirdparty_set_thumb(&studio.uuid, &archive.read(entry)?)?;
             continue;
         }
         if !entry.starts_with("assets") {
