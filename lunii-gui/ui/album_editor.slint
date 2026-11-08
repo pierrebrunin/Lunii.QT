@@ -23,6 +23,8 @@ export component AlbumEditor inherits VerticalLayout {
 
     Rectangle {
         vertical-stretch: 1;
+        // a few tracks at least
+        min-height: 92px;
         border-width: 1px;
         border-color: Palette.border;
         ListView {
@@ -62,6 +64,7 @@ export component AlbumEditor inherits VerticalLayout {
             }
         }
     }
+    // in the narrow details panel: the track buttons, then those of the changes
     if root.editable: HorizontalLayout {
         spacing: 6px;
         Button {
@@ -71,11 +74,13 @@ export component AlbumEditor inherits VerticalLayout {
         }
         Button {
             text: "▲";
+            width: 36px;
             enabled: root.interactive && root.current > 0;
             clicked => { root.move(-1); }
         }
         Button {
             text: "▼";
+            width: 36px;
             enabled: root.interactive && root.current >= 0 && root.current < root.rows.length - 1;
             clicked => { root.move(1); }
         }
@@ -84,12 +89,15 @@ export component AlbumEditor inherits VerticalLayout {
             enabled: root.interactive && root.current >= 0 && root.rows.length > 1;
             clicked => { root.remove(); }
         }
+    }
+    if root.editable && root.modified: HorizontalLayout {
+        spacing: 6px;
         Rectangle { horizontal-stretch: 1; }
-        if root.modified: Button {
+        Button {
             text: @tr("Cancel");
             clicked => { root.revert(); }
         }
-        if root.modified: Button {
+        Button {
             text: @tr("Apply");
             primary: true;
             enabled: root.interactive;
@@ -98,6 +106,7 @@ export component AlbumEditor inherits VerticalLayout {
     }
     if !root.editable: Text {
         text: @tr("Album made of sub-folders: its tracks can't be changed");
+        wrap: word-wrap;
         font-size: 11px;
         color: Theme.hidden-text;
     }

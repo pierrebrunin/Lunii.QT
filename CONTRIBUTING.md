@@ -391,6 +391,13 @@ nommés du code (`{name}`) s'écrivent `{}` dans le `.po`.
   horodatage et sans les lignes de progression. Les quatre sessions précédentes
   sont gardées (`lunii.log.1` à `.4`), et le bouton « Ouvrir le dossier des
   journaux » ouvre ce dossier.
+- **Détails des histoires** : ils s'affichent dans un panneau à droite de la
+  liste, présent en permanence (sauf si la fenêtre fait moins de 760 px de
+  large, ou si Outils / Détails des histoires est décoché). La liste garde
+  donc sa taille quand on sélectionne une histoire. Sans sélection, ou avec
+  plusieurs histoires sélectionnées, le panneau l'indique. Sa largeur se règle
+  avec la poignée à sa gauche (de 240 px jusqu'à laisser 420 px à la liste) et
+  est enregistrée dans `settings.json` (`details_width`).
 - **Démarrage** : la base officielle est chargée en arrière-plan. La fenêtre
   s'ouvre tout de suite et les noms s'affichent dès que la base est prête.
 - **Rafraîchissement de la base** et **téléchargement du firmware** : ils

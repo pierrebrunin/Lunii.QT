@@ -1172,3 +1172,9 @@ msgstr "erreur d'encodage MP3 : {}"
 
 msgid "MP3 encoding produced no audio"
 msgstr "l'encodage MP3 n'a produit aucun son"
+
+msgid "Select a story to see its details."
+msgstr "Sélectionnez une histoire pour voir ses détails."
+
+msgid "{} stories selected"
+msgstr "{} histoires sélectionnées"

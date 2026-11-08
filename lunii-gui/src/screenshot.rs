@@ -87,6 +87,25 @@ fn render(window: usize, path: &Path) {
     });
 }
 
+/// Mouse press at `from`, moved to `to`, released there.
+fn drag(ui: &MainWindow, from: (f32, f32), to: (f32, f32)) {
+    use slint::LogicalPosition;
+    use slint::platform::{PointerEventButton, WindowEvent};
+    let window = ui.window();
+    let at = |(x, y)| LogicalPosition::new(x, y);
+    let button = PointerEventButton::Left;
+    window.dispatch_event(WindowEvent::PointerMoved { position: at(from) });
+    window.dispatch_event(WindowEvent::PointerPressed {
+        position: at(from),
+        button,
+    });
+    window.dispatch_event(WindowEvent::PointerMoved { position: at(to) });
+    window.dispatch_event(WindowEvent::PointerReleased {
+        position: at(to),
+        button,
+    });
+}
+
 pub fn run(out: PathBuf) -> anyhow::Result<()> {
     let queue: Queue = Arc::default();
     slint::platform::set_platform(Box::new(ShotPlatform {
@@ -98,7 +117,7 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
 
     let ui = MainWindow::new()?;
     let lang = crate::i18n::apply_language();
-    ui.window().set_size(PhysicalSize::new(900, 650));
+    ui.window().set_size(PhysicalSize::new(1000, 650));
     let app = App::new(&ui);
     ui.show()?;
     app.start();
@@ -119,6 +138,13 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     app.row_pointer(0, false, false, false);
     pump(&queue, 500);
     render(0, &shot("02-details"));
+
+    // panel edge dragged 150 px to the left: a wider panel
+    let width = ui.get_details_width();
+    drag(&ui, (659.0, 350.0), (509.0, 350.0));
+    pump(&queue, 100);
+    render(0, &shot("02-details-wide"));
+    ui.set_details_width(width);
 
     app.row_pointer(2, true, false, false);
     pump(&queue, 200);

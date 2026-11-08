@@ -18,8 +18,21 @@ pub fn get_bool(name: &str) -> bool {
 }
 
 pub fn set_bool(name: &str, value: bool) -> Result<()> {
+    set(name, value.into())
+}
+
+/// A number setting (`None` if unset).
+pub fn get_number(name: &str) -> Option<f64> {
+    load().get(name).and_then(Value::as_f64)
+}
+
+pub fn set_number(name: &str, value: f64) -> Result<()> {
+    set(name, value.into())
+}
+
+fn set(name: &str, value: Value) -> Result<()> {
     let mut settings = load();
-    settings.insert(name.into(), value.into());
+    settings.insert(name.into(), value);
     let dir = ensure_cfg_dir()?;
     std::fs::write(
         dir.join("settings.json"),

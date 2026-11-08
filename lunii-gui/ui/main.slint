@@ -57,8 +57,29 @@ export component MainWindow inherits Window {
     callback key-nav(delta: int, shift: bool);
     callback select-all();
 
-    // details panel
+    // details panel, beside the list: always there (unless turned off or the
+    // window is too narrow), so that the list keeps its size
     in property <bool> details-visible;
+    // stories selected: the panel tells when there is none or several
+    in property <int> selected-count;
+    // room for the panel beside the list: updated by a handler (a binding to
+    // the window width would be a layout binding loop)
+    property <bool> wide: true;
+    // width chosen by dragging the panel edge (saved in the settings), shown
+    // narrower when the list would not have enough room
+    in-out property <length> details-width: 330px;
+    property <length> details-min-width: 240px;
+    property <length> details-max-width: max(root.details-min-width, root.width - 420px);
+    property <length> details-shown-width: 330px;
+    changed width => {
+        root.wide = root.width >= 760px;
+        root.details-shown-width = clamp(root.details-width, root.details-min-width, root.details-max-width);
+    }
+    changed details-width => {
+        root.details-shown-width = clamp(root.details-width, root.details-min-width, root.details-max-width);
+    }
+    // the panel edge released: the width is saved
+    callback details-width-changed();
     in property <image> picture;
     in property <bool> has-picture;
     in property <string> description;
@@ -111,10 +132,12 @@ export component MainWindow inherits Window {
     in-out property <bool> log-visible;
     // height chosen by dragging the panel edge
     in-out property <length> log-height: 170px;
-    // what the rest of the window needs (bars, list, story details, progress):
-    // the panel is shown lower when there is not enough room, and gets back to
-    // its height once there is
-    property <length> details-height: root.view == 0 && root.details-visible ? (root.album-visible ? 260px : 192px) + 6px : 0px;
+    // what the rest of the window needs (bars, list, progress): the panel is
+    // shown lower when there is not enough room, and gets back to its height
+    // once there is
+    // the track list of an album in the details panel needs more than the
+    // story list alone
+    property <length> details-height: root.view == 0 && root.details-visible && root.album-visible ? 120px : 0px;
     // progress bars of a running task
     property <length> progress-height: root.total-visible || root.story-visible ? 40px : 0px;
     // smallest panel: its toolbar, two lines and the log file path
@@ -204,7 +227,7 @@ export component MainWindow inherits Window {
 
     title: "Lunii " + root.app-version;
     icon: root.device-icon;
-    preferred-width: 860px;
+    preferred-width: 1000px;
     preferred-height: 640px;
     min-width: 500px;
     min-height: 400px;
@@ -368,13 +391,14 @@ export component MainWindow inherits Window {
         Rectangle {
             vertical-stretch: 1;
             min-height: 200px;
-            VerticalLayout {
+            HorizontalLayout {
                 visible: root.view == 0;
                 width: parent.width;
                 height: parent.height;
-                spacing: 6px;
+                spacing: 2px;
                 // ---------------------------------------------------------------- stories
                 ContextMenuArea {
+                    horizontal-stretch: 1;
                     enabled: root.story-actions;
                     Menu {
                         MenuItem { title: @tr("Move Top"); enabled: root.selection-actions; activated => { root.action(Action.move-top); } }
@@ -414,48 +438,76 @@ export component MainWindow inherits Window {
                 }
 
                 // ---------------------------------------------------------------- details
-                // only in the stories view: hidden, this view still sets the
-                // minimum height of the window content
-                if root.details-visible && root.view == 0: HorizontalLayout {
-                    spacing: 6px;
-                    height: root.album-visible ? 260px : 192px;
-                    opacity: root.details-dimmed ? 0.5 : 1;
-                    if root.has-picture: VerticalLayout {
-                        alignment: start;
-                        Image {
-                            source: root.picture;
-                            width: 192px;
-                            height: 192px;
-                            image-fit: contain;
+                // drag handle resizing the panel
+                if root.view == 0 && root.show-details && root.device-ready && root.wide: Rectangle {
+                    width: 6px;
+                    Rectangle {
+                        width: 2px;
+                        height: 40px;
+                        border-radius: 1px;
+                        background: details-handle.has-hover || details-handle.pressed ? Palette.foreground : Palette.border;
+                    }
+                    details-handle := TouchArea {
+                        mouse-cursor: ew-resize;
+                        moved => {
+                            root.details-width = clamp(root.details-shown-width - (self.mouse-x - self.pressed-x), root.details-min-width, root.details-max-width);
+                        }
+                        pointer-event(event) => {
+                            if event.kind == PointerEventKind.up {
+                                root.details-width-changed();
+                            }
                         }
                     }
-                    if !root.album-visible: TextEdit {
+                }
+                if root.view == 0 && root.show-details && root.device-ready && root.wide: VerticalLayout {
+                    width: root.details-shown-width;
+                    spacing: 6px;
+                    opacity: root.details-visible && root.details-dimmed ? 0.5 : 1;
+                    if root.details-visible && root.has-picture: Image {
+                        source: root.picture;
+                        // smaller beside the tracks of an album
+                        height: root.album-visible ? 120px : 200px;
+                        image-fit: contain;
+                    }
+                    if root.details-visible && !root.album-visible: TextEdit {
                         text: root.description;
                         read-only: true;
                         wrap: word-wrap;
-                        horizontal-stretch: 1;
+                        vertical-stretch: 1;
                     }
-                    if root.album-visible: VerticalLayout {
-                        spacing: 4px;
-                        horizontal-stretch: 1;
+                    if root.details-visible && root.album-visible && root.description != "": Text {
+                        text: root.description;
+                        wrap: word-wrap;
+                        max-height: 54px;
+                        overflow: elide;
+                    }
+                    if root.details-visible && root.album-visible: AlbumEditor {
+                        vertical-stretch: 1;
+                        rows: root.album-rows;
+                        current <=> root.album-current;
+                        modified: root.album-modified;
+                        editable: root.album-editable;
+                        interactive: !root.busy;
+                        move(delta) => { root.album-move(delta); }
+                        remove => { root.album-remove(); }
+                        add-files => { root.album-add-files(); }
+                        apply => { root.album-apply(); }
+                        revert => { root.album-revert(); }
+                    }
+                    // nothing to show: no story or several selected, or details
+                    // being read
+                    if !root.details-visible: Rectangle {
+                        vertical-stretch: 1;
+                        border-width: 1px;
+                        border-radius: 4px;
+                        border-color: Palette.border;
                         Text {
-                            text: root.description;
+                            width: parent.width - 32px;
+                            text: root.selected-count == 0 ? @tr("Select a story to see its details.")
+                                : root.selected-count > 1 ? @tr("{} stories selected", root.selected-count) : "";
                             wrap: word-wrap;
-                            max-height: 40px;
-                            overflow: elide;
-                        }
-                        AlbumEditor {
-                            vertical-stretch: 1;
-                            rows: root.album-rows;
-                            current <=> root.album-current;
-                            modified: root.album-modified;
-                            editable: root.album-editable;
-                            interactive: !root.busy;
-                            move(delta) => { root.album-move(delta); }
-                            remove => { root.album-remove(); }
-                            add-files => { root.album-add-files(); }
-                            apply => { root.album-apply(); }
-                            revert => { root.album-revert(); }
+                            horizontal-alignment: center;
+                            color: Theme.hidden-text;
                         }
                     }
                 }

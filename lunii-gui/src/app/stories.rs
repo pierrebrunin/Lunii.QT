@@ -257,6 +257,7 @@ impl App {
         };
         ui.set_current_row(current);
         ui.set_has_selection(has_selection);
+        ui.set_selected_count(self.state.borrow().selected.len() as i32);
         ui.set_can_export(can_export);
         ui.set_can_import(can_import);
         ui.set_can_export_all(can_export_all);
@@ -301,10 +302,7 @@ impl App {
         let image = picture.as_deref().and_then(decode_image);
         let no_desc = desc.is_empty() || desc == DESC_NOT_FOUND;
         let album = ui.get_album_visible();
-        if no_desc && image.is_none() && !album {
-            ui.set_details_visible(false);
-            return;
-        }
+        // shown even without a description: the panel keeps its place
         let desc = match (no_desc, album) {
             (true, true) => String::new(),
             (true, false) => tr(DESC_NOT_FOUND),
