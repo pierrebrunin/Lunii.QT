@@ -389,6 +389,9 @@ msgstr "Mode nuit"
 msgid "Device"
 msgstr "Appareil"
 
+msgid "Podcast: drag the episodes to change their order. They are added and removed in the Podcasts view."
+msgstr "Podcast : glissez les épisodes pour changer leur ordre. Ils s'ajoutent et se suppriment dans l'onglet Podcasts."
+
 msgid "Refresh connected devices"
 msgstr "Rafraichir les appareils"
 

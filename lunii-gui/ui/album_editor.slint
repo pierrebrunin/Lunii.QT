@@ -11,13 +11,22 @@ export component AlbumEditor inherits VerticalLayout {
     in property <bool> modified;
     // albums made of sub-folders: read only
     in property <bool> editable;
+    // album of a podcast: its episodes are only moved (with the mouse), they
+    // are added and removed in the Podcasts view
+    in property <bool> podcast;
     // no task running
     in property <bool> interactive;
     callback move(delta: int);
+    // track `from` dragged before the row `gap` (rows.length: at the end)
+    callback dropped(from: int, gap: int);
     callback remove();
     callback add-files();
     callback apply();
     callback revert();
+
+    // a track being dragged: its drop point, -1 otherwise
+    property <int> drag-gap: -1;
+    property <length> row-height: 22px;
 
     spacing: 4px;
 
@@ -27,13 +36,44 @@ export component AlbumEditor inherits VerticalLayout {
         min-height: 92px;
         border-width: 1px;
         border-color: Palette.border;
-        ListView {
+        list := ListView {
             for row[i] in root.rows: Rectangle {
-                height: row.header ? 26px : 22px;
+                height: row.header ? 26px : root.row-height;
                 background: i == root.current ? Theme.selection : area.has-hover && root.editable && !row.header ? #8882 : transparent;
+                // editable albums have no sub-folder headers: rows of the same height
                 area := TouchArea {
-                    enabled: root.editable && !row.header;
-                    clicked => { root.current = i; }
+                    enabled: root.editable && !row.header && root.interactive;
+                    mouse-cursor: root.drag-gap >= 0 ? MouseCursor.grabbing : MouseCursor.default;
+                    pointer-event(event) => {
+                        if (event.button != PointerEventButton.left) {
+                            return;
+                        }
+                        if (event.kind == PointerEventKind.down) {
+                            root.current = i;
+                            root.drag-gap = -1;
+                        } else if (event.kind == PointerEventKind.up && root.drag-gap >= 0) {
+                            let gap = root.drag-gap;
+                            root.drag-gap = -1;
+                            if (gap != i && gap != i + 1) {
+                                root.dropped(i, gap);
+                            }
+                        } else if (event.kind == PointerEventKind.cancel) {
+                            root.drag-gap = -1;
+                        }
+                    }
+                    moved => {
+                        if (!self.pressed || (root.drag-gap < 0 && abs(self.mouse-y - self.pressed-y) < 5px)) {
+                            return;
+                        }
+                        root.drag-gap = max(0, min(root.rows.length, i + round(self.mouse-y / root.row-height)));
+                        // near an edge: the list scrolls
+                        let y = i * root.row-height + list.content-y + self.mouse-y;
+                        if (y < root.row-height) {
+                            list.content-y = min(0px, list.content-y + root.row-height / 2);
+                        } else if (y > list.visible-height - root.row-height) {
+                            list.content-y = max(min(0px, list.visible-height - list.content-height), list.content-y - root.row-height / 2);
+                        }
+                    }
                 }
                 HorizontalLayout {
                     padding-left: 6px;
@@ -63,9 +103,23 @@ export component AlbumEditor inherits VerticalLayout {
                 }
             }
         }
+        // drop point of the track dragged
+        if root.drag-gap >= 0: Rectangle {
+            x: 4px;
+            width: parent.width - 22px;
+            height: 2px;
+            y: max(0px, min(parent.height - 2px, root.drag-gap * root.row-height + list.content-y - 1px));
+            background: Theme.selection;
+        }
     }
     // in the narrow details panel: the track buttons, then those of the changes
-    if root.editable: HorizontalLayout {
+    if root.editable && root.podcast: Text {
+        text: @tr("Podcast: drag the episodes to change their order. They are added and removed in the Podcasts view.");
+        wrap: word-wrap;
+        font-size: 11px;
+        color: Theme.hidden-text;
+    }
+    if root.editable && !root.podcast: HorizontalLayout {
         spacing: 6px;
         Button {
             text: @tr("Add MP3...");

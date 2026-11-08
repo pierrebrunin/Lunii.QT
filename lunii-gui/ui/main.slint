@@ -89,10 +89,14 @@ export component MainWindow inherits Window {
     // track list of the selected album
     in property <bool> album-visible;
     in property <bool> album-editable;
+    // album of a podcast: episodes only moved (added, removed in Podcasts)
+    in property <bool> album-podcast;
     in property <[AlbumTrackRow]> album-rows;
     in-out property <int> album-current: -1;
     in property <bool> album-modified;
     callback album-move(delta: int);
+    // track `from` dragged before the row `gap`
+    callback album-drop(from: int, gap: int);
     callback album-remove();
     callback album-add-files();
     callback album-apply();
@@ -174,6 +178,8 @@ export component MainWindow inherits Window {
     in property <bool> can-export;
     in property <bool> can-export-all;
     in property <bool> can-add-to-album;
+    // the album selected is not the one of a podcast: MP3 files can be added
+    in property <bool> can-add-mp3;
     in property <bool> update-available;
     in property <string> latest-version;
     // every menu entry goes through this callback
@@ -306,7 +312,7 @@ export component MainWindow inherits Window {
             MenuSeparator { }
             MenuItem { title: @tr("Import"); shortcut: @keys(Control + I); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import); } }
             MenuItem { title: @tr("Import MP3 album"); shortcut: @keys(Control + Shift + I); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import-album); } }
-            MenuItem { title: @tr("Add MP3 to album"); enabled: root.story-actions && root.can-add-to-album; activated => { root.action(Action.add-to-album); } }
+            MenuItem { title: @tr("Add MP3 to album"); enabled: root.story-actions && root.can-add-mp3; activated => { root.action(Action.add-to-album); } }
             MenuItem { title: @tr("Edit the album"); enabled: root.story-actions && root.can-add-to-album; activated => { root.action(Action.edit-album); } }
             MenuItem { title: @tr("Import a podcast"); shortcut: @keys(Control + P); enabled: !root.modal; activated => { root.action(Action.import-podcast); } }
             MenuItem { title: @tr("Export"); shortcut: @keys(Control + S); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
@@ -412,7 +418,7 @@ export component MainWindow inherits Window {
                         MenuSeparator { }
                         MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action(Action.import); } }
                         MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action(Action.import-album); } }
-                        MenuItem { title: @tr("Add MP3 to album"); enabled: root.can-add-to-album; activated => { root.action(Action.add-to-album); } }
+                        MenuItem { title: @tr("Add MP3 to album"); enabled: root.can-add-mp3; activated => { root.action(Action.add-to-album); } }
                         MenuItem { title: @tr("Edit the album"); enabled: root.can-add-to-album; activated => { root.action(Action.edit-album); } }
                         MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
                         MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action(Action.export-all); } }
@@ -490,8 +496,10 @@ export component MainWindow inherits Window {
                         current <=> root.album-current;
                         modified: root.album-modified;
                         editable: root.album-editable;
+                        podcast: root.album-podcast;
                         interactive: !root.busy;
                         move(delta) => { root.album-move(delta); }
+                        dropped(from, gap) => { root.album-drop(from, gap); }
                         remove => { root.album-remove(); }
                         add-files => { root.album-add-files(); }
                         apply => { root.album-apply(); }

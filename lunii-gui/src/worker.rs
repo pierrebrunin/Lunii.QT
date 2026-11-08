@@ -102,6 +102,9 @@ pub struct StoryInfo {
     pub duration: Option<u32>,
     /// MP3 album created by Lunii, tracks can be appended
     pub album: bool,
+    /// album of a podcast: its episodes are added and removed from the
+    /// Podcasts view
+    pub podcast: bool,
 }
 
 /// A device opened in the background, with what the UI needs (read there too).
@@ -125,6 +128,7 @@ pub fn snapshot(dev: &dyn Device) -> Vec<StoryInfo> {
             size: s.size,
             duration: db::story_duration(&s.uuid),
             album: dev.album_track_count(s).is_some(),
+            podcast: dev.album_info(s).is_some_and(|i| i.podcast.is_some()),
         })
         .collect()
 }

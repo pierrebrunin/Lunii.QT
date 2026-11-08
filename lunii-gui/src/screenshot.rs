@@ -186,6 +186,14 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     drag(&ui, (659.0, 350.0), (509.0, 350.0));
     pump(&queue, 100);
     render(0, &shot("02-details-wide"));
+    // album of a podcast: its first episode dragged after the second one
+    if ui.get_album_podcast() && ui.get_album_rows().row_count() >= 2 {
+        press_move(&ui, (700.0, 96.0), (700.0, 134.0));
+        release(&ui, (700.0, 134.0));
+        pump(&queue, 100);
+        render(0, &shot("02-podcast-album-moved"));
+        ui.invoke_album_revert();
+    }
     ui.set_details_width(width);
 
     app.row_pointer(2, true, false, false);

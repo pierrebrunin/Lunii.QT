@@ -222,7 +222,15 @@ impl App {
     /// Updates rows highlight, menu states and details panel.
     pub(super) fn selection_changed(&self) {
         let ui = self.ui();
-        let (current, has_selection, can_export, can_import, can_export_all, can_add_to_album) = {
+        let (
+            current,
+            has_selection,
+            can_export,
+            can_import,
+            can_export_all,
+            can_add_to_album,
+            can_add_mp3,
+        ) = {
             let st = self.state.borrow();
             for (row, &i) in st.visible.iter().enumerate() {
                 let selected = st.selected.contains(&st.stories[i].uuid);
@@ -246,6 +254,12 @@ impl App {
                     .stories
                     .iter()
                     .any(|s| st.selected.contains(&s.uuid) && s.album);
+            // not to the album of a podcast: its episodes only
+            let can_add_mp3 = can_add_to_album
+                && !st
+                    .stories
+                    .iter()
+                    .any(|s| st.selected.contains(&s.uuid) && s.podcast);
             (
                 st.current.map(|c| c as i32).unwrap_or(-1),
                 !st.selected.is_empty(),
@@ -253,6 +267,7 @@ impl App {
                 can_import,
                 dev.is_some_and(|d| d.export_all) && !st.stories.is_empty(),
                 can_add_to_album,
+                can_add_mp3,
             )
         };
         ui.set_current_row(current);
@@ -262,6 +277,7 @@ impl App {
         ui.set_can_import(can_import);
         ui.set_can_export_all(can_export_all);
         ui.set_can_add_to_album(can_add_to_album);
+        ui.set_can_add_mp3(can_add_mp3);
         self.update_device_status();
         self.update_details();
     }

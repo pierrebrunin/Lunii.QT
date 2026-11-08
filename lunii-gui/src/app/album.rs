@@ -18,6 +18,8 @@ pub(super) struct AlbumEdit {
     /// sub-folders: read only
     chapters: Vec<Chapter>,
     editable: bool,
+    /// album of a podcast: its tracks are only moved
+    podcast: bool,
     /// track list being edited, with the titles to display
     tracks: Vec<(AlbumEntry, String)>,
 }
@@ -29,6 +31,7 @@ impl AlbumEdit {
             titles: info.tracks,
             chapters: info.chapters,
             editable,
+            podcast: info.podcast.is_some(),
             tracks: Vec::new(),
         };
         edit.revert();
@@ -119,6 +122,7 @@ impl App {
         let shown = found.is_some();
         if let Some(edit) = &found {
             ui.set_album_editable(edit.editable);
+            ui.set_album_podcast(edit.podcast);
         }
         self.state.borrow_mut().album = found;
         ui.set_album_current(-1);
@@ -170,7 +174,34 @@ impl App {
         });
     }
 
+    /// Track `from` dragged with the mouse before the row `gap` (after the
+    /// last one: `gap` = number of tracks).
+    pub(super) fn album_drop(&self, from: usize, gap: usize) {
+        self.album_change(|tracks, current| {
+            if from >= tracks.len() || gap > tracks.len() {
+                return current;
+            }
+            let track = tracks.remove(from);
+            let to = if gap > from { gap - 1 } else { gap };
+            tracks.insert(to, track);
+            to as i32
+        });
+    }
+
+    /// The album of a podcast: its episodes are added and removed from the
+    /// Podcasts view only.
+    fn album_is_podcast(&self) -> bool {
+        self.state
+            .borrow()
+            .album
+            .as_ref()
+            .is_some_and(|a| a.podcast)
+    }
+
     pub(super) fn album_remove(&self) {
+        if self.album_is_podcast() {
+            return;
+        }
         self.album_change(|tracks, current| {
             if current < 0 || current as usize >= tracks.len() || tracks.len() < 2 {
                 return current;
@@ -189,6 +220,9 @@ impl App {
     }
 
     pub(super) fn album_add_files(&self) {
+        if self.album_is_podcast() {
+            return;
+        }
         let Some(files) = rfd::FileDialog::new()
             .set_title(tr("MP3 files to add to the album"))
             .add_filter("MP3", &["mp3", "MP3"])

@@ -358,6 +358,12 @@ impl App {
                 app.album_move(delta);
             }
         });
+        let w = Rc::downgrade(self);
+        ui.on_album_drop(move |from, gap| {
+            if let Some(app) = w.upgrade() {
+                app.album_drop(from.max(0) as usize, gap.max(0) as usize);
+            }
+        });
         ui.on_open_url(|url| {
             let _ = open::that(url.as_str());
         });
