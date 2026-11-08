@@ -21,14 +21,14 @@
 //! Titles and cover come from the ID3 tags (file name / folder name otherwise,
 //! `cover.jpg`, `folder.jpg`... for the cover),
 //! the screens are generated (320x240, gray levels). The generated archive goes
-//! through the regular STUdio import: ciphering, transcoding to mono 44.1 kHz
-//! (ffmpeg), thumbnail.
+//! through the regular STUdio import: ciphering, transcoding to mono 44.1 kHz,
+//! thumbnail.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use ab_glyph::FontRef;
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 use image::GrayImage;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -114,11 +114,6 @@ impl Album {
             key.push_str(&c.title);
         }
         Uuid::new_v5(&ALBUM_NAMESPACE, key.as_bytes())
-    }
-
-    /// Some track is not a mono 44.1 kHz MP3: ffmpeg is needed.
-    pub fn needs_transcoding(&self) -> bool {
-        needs_transcoding(&self.tracks)
     }
 
     /// Size of the audio files, for the remaining time estimation.
@@ -308,15 +303,6 @@ impl SingleStory<'_> {
     }
 }
 
-/// Some track is not a mono 44.1 kHz MP3: ffmpeg is needed.
-pub fn needs_transcoding(tracks: &[Track]) -> bool {
-    tracks.iter().any(|t| {
-        std::fs::read(&t.path)
-            .map(|data| crate::convert::audio::transcoding_required("a.mp3", &data))
-            .unwrap_or(true)
-    })
-}
-
 /// A track of an album being edited on the device (see
 /// [`crate::device::Device::edit_album`]).
 #[derive(Debug, Clone)]
@@ -390,17 +376,6 @@ fn track_audio(path: &Path) -> Result<Vec<u8>> {
     std::fs::read(path).with_context(|| format!("unable to read {}", path.display()))
 }
 
-/// Error if some track must be converted to mono 44.1 kHz and ffmpeg is
-/// missing.
-pub fn check_ffmpeg(tracks: &[Track]) -> Result<()> {
-    if needs_transcoding(tracks) && !crate::constants::transcoding_supported() {
-        bail!(
-            "These MP3 files must be converted to mono 44.1 kHz: FFMPEG is required (Tools menu)"
-        );
-    }
-    Ok(())
-}
-
 /// The tracks, processed as `opts` requires: with the volume normalized,
 /// converted copies written in `dir` (the titles are kept).
 pub fn prepare_tracks(
@@ -417,7 +392,7 @@ pub fn prepare_tracks(
     for (i, track) in tracks.iter().enumerate() {
         check_abort(ctx)?;
         ctx.info(format!("🔊 Normalizing the volume : {}", track.title));
-        ctx.file_progress("⌛ FFMPEG", i as u64, tracks.len() as u64);
+        ctx.file_progress("⌛ MP3", i as u64, tracks.len() as u64);
         let data = audio::normalized_mp3(&track_audio(&track.path)?).with_context(|| {
             format!("unable to normalize the volume of {}", track.path.display())
         })?;
@@ -495,7 +470,7 @@ mod tests {
             },
         ];
         assert_ne!(a.uuid(), album(5).uuid());
-        let s = StudioStory::load(&a.story_json(), false).unwrap();
+        let s = StudioStory::load(&a.story_json()).unwrap();
         // cover + 2 chapter screens + 5 track screens; one silence + 5 tracks
         assert_eq!(s.ri.len(), 8);
         assert_eq!(s.si.len(), 6);
@@ -517,8 +492,7 @@ mod tests {
     #[test]
     fn story_json_is_valid_studio() {
         let a = album(3);
-        let s = StudioStory::load(&a.story_json(), false).unwrap();
-        assert!(s.compatible);
+        let s = StudioStory::load(&a.story_json()).unwrap();
         assert_eq!(s.uuid, a.uuid());
         // cover + 3 track screens; one silence (cover + menu) + 3 tracks
         assert_eq!(s.ri.len(), 4);
@@ -541,7 +515,7 @@ mod tests {
             thumbnail: None,
             audio: Path::new("x.mp3"),
         };
-        let s = StudioStory::load(&story.story_json(), false).unwrap();
+        let s = StudioStory::load(&story.story_json()).unwrap();
         assert_eq!(s.uuid, story.uuid);
         assert_eq!((s.ri.len(), s.si.len()), (1, 2));
         let ni = s.ni_data().unwrap();

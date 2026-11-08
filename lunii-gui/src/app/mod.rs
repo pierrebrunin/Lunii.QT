@@ -189,7 +189,6 @@ impl App {
         ui.set_app_version(APP_VERSION.into());
         ui.set_rows(ModelRc::from(app.rows.clone()));
         ui.set_devices(ModelRc::from(app.devices_model.clone()));
-        ui.set_ffmpeg_present(which_ffmpeg().is_some());
         let normalize = lunii_core::settings::get_bool("normalize_volume");
         ui.set_normalize_volume(normalize);
         ui.set_show_duration(!lunii_core::settings::get_bool("hide_duration"));
@@ -548,7 +547,6 @@ impl App {
                 ui.set_story_visible(false);
                 ui.set_file_visible(false);
                 ui.set_abort_visible(false);
-                ui.set_ffmpeg_present(which_ffmpeg().is_some());
                 self.selection_changed();
                 self.podcasts_refresh_device();
                 if !sized {

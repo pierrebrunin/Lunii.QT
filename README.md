@@ -30,7 +30,6 @@ Oubliez toutes les anciennes manipulations concernant les fichiers .md et le fir
 ### Limitations :
 * L'application <u>n'autorise plus</u> d'exporter les histoires officielles pour les Lunii, à cause du piratage.  
 Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonctionneront que sur le device d'origine.
-* Le transcodage audio nécessite la présence de [FFMPEG](#vérification)
 
 
 ### Table des matières
@@ -149,36 +148,9 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 * **Récupération du Firmware** pour votre appareil (cf. [cette section](#mise-à-jour-du-firmware))
   
 ## Transcodage audio
-Certaines histoires tierces utilisent des fichiers non MP3. Ils ne peuvent donc pas être installés tels quels sur Lunii. Cela nécessite une étape de **transcodage**. Ce processus supplémentaire est réalisé à l'aide de l'outil **FFMPEG** disponible [ici](https://github.com/eugeneware/ffmpeg-static/releases/latest )  
- 
+Certaines histoires tierces utilisent des fichiers non MP3 (OGG, WAV, M4A…) ou des MP3 en stéréo. Lunii ne peut pas les lire tels quels : l'application les convertit en MP3 mono 44,1 kHz pendant l'import.
 
-**ATTENTION** : le transcodage est <u>très long</u>, il faut être patient. C'est pourquoi vous devriez préférer le format [.plain.pk](#plainpk) qui utilise un format audio compatible.
-
-### Installation
-#### Windows & MacOS
-
-  **NOTE 1 :** Le binaire de FFMPEG ne sera plus inclu par défaut dans les archives.  
-  **NOTE 2 :** Vous pouvez récupérer une version plus récente en utilisant le même menu.  
-  
-Procedure:
-1) Cliquez sur Menu "Outils" puis "FFMPEG **Absent**"
-2) Lunii va lancer le téléchargement de FFMPEG
-3) FFMPEG sera installé dans le dossier `~/.lunii`
-4) Vérifiez avec Menu Outils / FFMPEG **détecté**
-5) L'application est prête
-
-#### Linux
-1) ouvrir un terminal
-2) exécutez la commande suivante :   
-`sudo apt-get install ffmpeg`
-4) redémarrez lunii
-
-### Vérification 
-Dans l'application, le menu `Tools` affiche l'état de la détection.
-#### Non trouvé
-![FFMPEG Non disponible](res/ffmpeg_off.png)  
-#### Trouvé
-![FFMPEG disponible](./res/ffmpeg_on.png)
+Cette conversion est intégrée à l'application : **aucun logiciel à installer** (FFMPEG n'est plus nécessaire). Elle reconnaît le MP3, l'AAC/M4A, l'OGG Vorbis, le FLAC et le WAV. Le format Opus, très rare dans les histoires, n'est pas pris en charge.
 
 ## Mise à jour du firmware
 

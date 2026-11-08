@@ -13,14 +13,18 @@ anyhow = "1"
 base64 = "0.23"
 deunicode = "1"
 dirs = "7"
+ebur128 = "0.1"
 fs4 = "1"
 id3 = { version = "1", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif", "webp"] }
 indexmap = "2"
 roxmltree = "0.21"
+rubato = "5"
+rusty_mp3 = "1"
 log = "0.4"
 serde_json = { version = "1", features = ["preserve_order"] }
 sevenz-rust2 = "0.24"
+symphonia = { version = "0.6", features = ["all-codecs", "all-formats"] }
 thiserror = "2"
 unicode-normalization = "0.1"
 ureq = { version = "3", features = ["json"] }

@@ -332,19 +332,13 @@ pub(crate) fn convert_studio_audio(
     file: &str,
     new_name: &str,
     mut data: Vec<u8>,
-    transcoding: bool,
 ) -> Result<Vec<u8>> {
     if crate::convert::audio::transcoding_required(file, &data) {
-        if !transcoding {
-            bail!(
-                "STUdio story with non MP3 audio file. You need FFMPEG tool to import such kind of story, refer to README.md"
-            );
-        }
         ctx.warn(format!(
             "⌛ Transcoding audio {new_name} : {} KB ...",
             data.len() / 1024
         ));
-        ctx.file_progress("⌛ FFMPEG", 0, 0);
+        ctx.file_progress("⌛ MP3", 0, 0);
         data = crate::convert::audio::audio_to_mp3(&data)?;
         ctx.file_progress("", 0, 0);
     }
@@ -450,13 +444,7 @@ pub(crate) fn import_studio<D: StoryWriter>(dev: &mut D, ctx: &Context, path: &P
         bail!("missing 'story.json'. Unable to add this story.");
     }
     let story_json: serde_json::Value = serde_json::from_slice(&archive.read(FILE_STUDIO_JSON)?)?;
-    let transcoding = crate::constants::transcoding_supported();
-    let studio = StudioStory::load(&story_json, transcoding)?;
-    if !studio.compatible {
-        bail!(
-            "STUdio story with non MP3 audio file. You need FFMPEG tool to import such kind of story, refer to README.md"
-        );
-    }
+    let studio = StudioStory::load(&story_json)?;
 
     crate::db::thirdparty_add_story(&studio.uuid, Some(&studio.title), Some(&studio.description))?;
     dev.check_not_loaded(&studio.uuid)?;
@@ -494,7 +482,7 @@ pub(crate) fn import_studio<D: StoryWriter>(dev: &mut D, ctx: &Context, path: &P
             )
         } else if let Some((name, _)) = studio.si.get(&file) {
             let new_name = studio_asset_path(name, false);
-            let data = convert_studio_audio(ctx, &file, &new_name, data, transcoding)?;
+            let data = convert_studio_audio(ctx, &file, &new_name, data)?;
             if let Some(track) = crate::album::meta::track_number(&file)
                 && let Some(seconds) = crate::mp3::audio_duration(&data)
             {
@@ -549,7 +537,7 @@ pub(crate) fn edit_album<D: StoryWriter>(
     uuid: &uuid::Uuid,
     entries: &[crate::album::AlbumEntry],
 ) -> Result<()> {
-    use crate::album::{self, AlbumEntry, meta};
+    use crate::album::{self, meta};
 
     let story = dev
         .stories()
@@ -560,20 +548,6 @@ pub(crate) fn edit_album<D: StoryWriter>(
     let count = album::device_track_count(&story_dir)
         .context("This story is not an MP3 album created by Lunii")?;
     check_album_entries(entries, count)?;
-    let new_tracks: Vec<album::Track> = entries
-        .iter()
-        .filter_map(|e| match e {
-            AlbumEntry::New(t) => Some(t.clone()),
-            AlbumEntry::Existing(_) => None,
-        })
-        .collect();
-    let transcoding = crate::constants::transcoding_supported();
-    if album::needs_transcoding(&new_tracks) && !transcoding {
-        bail!(
-            "These MP3 files must be converted to mono 44.1 kHz: FFMPEG is required (Tools menu)"
-        );
-    }
-
     let files = AlbumFiles {
         dir: story_dir.clone(),
         tmp: story_dir.join("edit.tmp"),
@@ -583,14 +557,13 @@ pub(crate) fn edit_album<D: StoryWriter>(
 
     // 1. new files in the temporary directory (the album stays as it was on
     // abort or error)
-    let (titles, durations) =
-        match prepare_album_files(dev, ctx, &story, &files, entries, transcoding) {
-            Ok(prepared) => prepared,
-            Err(e) => {
-                let _ = std::fs::remove_dir_all(&files.tmp);
-                return Err(e);
-            }
-        };
+    let (titles, durations) = match prepare_album_files(dev, ctx, &story, &files, entries) {
+        Ok(prepared) => prepared,
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&files.tmp);
+            return Err(e);
+        }
+    };
 
     // 2. tracks moved in place (no abort from here)
     let damaged = "The album may be damaged, remove it and import it again";
@@ -611,7 +584,7 @@ pub(crate) fn edit_album<D: StoryWriter>(
         .collect();
     let names: Vec<&str> = names.iter().map(String::as_str).collect();
     let studio =
-        crate::story::StudioStory::load(&album::story_json(story.uuid, &header, "", &names), true)?;
+        crate::story::StudioStory::load(&album::story_json(story.uuid, &header, "", &names))?;
     let index = write_index_files(dev, &story_dir, &studio)?;
     dev.seal_story(ctx, &story_dir, &story, &index[0].1, false)?;
     remove_album_excerpts(&story_dir, count.max(entries.len()));
@@ -683,7 +656,6 @@ fn prepare_album_files<D: StoryWriter>(
     story: &crate::story::Story,
     files: &AlbumFiles,
     entries: &[crate::album::AlbumEntry],
-    transcoding: bool,
 ) -> Result<(Vec<String>, Vec<u32>)> {
     use crate::album::{self, AlbumEntry, meta};
     use crate::convert::image;
@@ -706,13 +678,7 @@ fn prepare_album_files<D: StoryWriter>(
                     let data = if asset.is_image() {
                         image::image_to_bitmap_rle4(&asset.data)?
                     } else {
-                        let data = convert_studio_audio(
-                            ctx,
-                            &asset.name,
-                            &asset.name,
-                            asset.data,
-                            transcoding,
-                        )?;
+                        let data = convert_studio_audio(ctx, &asset.name, &asset.name, asset.data)?;
                         duration = crate::mp3::audio_duration(&data).unwrap_or(0);
                         data
                     };
@@ -807,7 +773,7 @@ mod tests {
         let ctx = Context::default();
         let titles = ["Un", "Deux"];
         let json = crate::album::story_json(uuid::Uuid::from_u128(7), "Album", "", &titles);
-        let studio = crate::story::StudioStory::load(&json, false).unwrap();
+        let studio = crate::story::StudioStory::load(&json).unwrap();
         for (sub, map) in [("rf", &studio.ri), ("sf", &studio.si)] {
             for (name, _) in map.values() {
                 write_file(&dir.path().join(sub).join("000").join(name), b"data").unwrap();

@@ -30,7 +30,6 @@ Forget about all previous .md and firmware recommendations.
 ### Limitations
 * Application <u>no longer</u> allows Lunii Official stories to be exported (due to piracy)  
   Flam devices <u>can</u> back up and restore their stories, but they will only work on the original device.
-* Audio transcoding requires FFMPEG v6 to be present ([more details](#audio-transcoding))
 
 ### Table of contents
 <!-- TOC -->
@@ -148,35 +147,9 @@ Forget about all previous .md and firmware recommendations.
 * **Get Firmware**  for your device (refer [this section](#firmware-upgrade))
 
 ## Audio Transcoding
-Some third-party stories are using non MP3 files. Thus they can't be installed as it is on Lunii. It requires a **transcoding** step. This extra process is done using **FFMPEG** tool ( [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html) )
+Some third-party stories use non MP3 files (OGG, WAV, M4A…) or stereo MP3 files. Lunii can't play them as they are: the application converts them to mono 44.1 kHz MP3 during the import.
 
-**WARNING** : transcoding is <u>very long</u>, you should be patient. That's why you should prefer the [.plain.pk](#plainpk) format that use compatible audio.
-
-#### Windows & MacOS
-
-   **NOTE 1:** The FFMPEG binary is no longer included by default in the archives.  
-   **NOTE 2:** You can get a more recent version using the same menu.  
-
-Procedure:
-1) Click on the "Tools" menu, then "FFMPEG **is missing**"
-2) Lunii will start downloading FFMPEG
-3) FFMPEG will be installed in the `~/.lunii` folder
-4) Check with Tools menu / FFMPEG **Detected**
-5) App is ready
-
-#### Linux
-1) Open a terminal
-2) Run the following command:  
-`sudo apt-get install ffmpeg`
-3) Restart lunii
-
-### Checking 
-Within the application, the Tools menu will display the status of detection.
-#### Not found
-![Not available](res/ffmpeg_off.png)  
-#### Found
-![Available](./res/ffmpeg_on.png)
-
+This conversion is built into the application: **nothing to install** (FFMPEG is no longer needed). It reads MP3, AAC/M4A, OGG Vorbis, FLAC and WAV. The Opus format, very rare in stories, is not supported.
 
 ## Firmware upgrade
 

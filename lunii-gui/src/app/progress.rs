@@ -14,7 +14,7 @@ pub(super) struct Eta {
 }
 
 /// The speed is measured over this window: reactive, but smoothing the
-/// pauses (file closing, ffmpeg transcoding...).
+/// pauses (file closing, audio conversion...).
 pub(super) const ETA_WINDOW: Duration = Duration::from_secs(20);
 
 /// No estimation before this delay: the first seconds aren't representative.

@@ -1,6 +1,6 @@
 //! Constants shared by every module.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{OnceLock, RwLock};
 
 /// Hardcoded key found in the external flash of Lunii v1/v2 devices
@@ -85,52 +85,6 @@ pub fn ensure_cfg_dir() -> std::io::Result<PathBuf> {
     let dir = cfg_dir();
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
-}
-
-// ---------------------------------------------------------------------------
-// FFMPEG
-// ---------------------------------------------------------------------------
-
-fn ffmpeg_binary_name() -> &'static str {
-    if cfg!(windows) {
-        "ffmpeg.exe"
-    } else {
-        "ffmpeg"
-    }
-}
-
-fn is_executable(path: &Path) -> bool {
-    if !path.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        path.metadata()
-            .map(|m| m.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false)
-    }
-    #[cfg(not(unix))]
-    {
-        true
-    }
-}
-
-/// Looks for ffmpeg, first in the configuration directory, then in `PATH`.
-pub fn which_ffmpeg() -> Option<PathBuf> {
-    let local = cfg_dir().join(ffmpeg_binary_name());
-    if is_executable(&local) {
-        return Some(local);
-    }
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|dir| dir.join(ffmpeg_binary_name()))
-        .find(|candidate| is_executable(candidate))
-}
-
-/// `True` when audio transcoding is possible on this host.
-pub fn transcoding_supported() -> bool {
-    which_ffmpeg().is_some()
 }
 
 // ---------------------------------------------------------------------------

@@ -111,8 +111,6 @@ enum Command {
     },
     /// Check if a new version of Lunii is available
     CheckUpdate,
-    /// Download FFMPEG (Windows / macOS) into ~/.lunii
-    InstallFfmpeg,
 }
 
 #[derive(Args)]
@@ -547,12 +545,6 @@ fn db_command(ctx: &Context, cmd: DbCommand) -> Result<()> {
                 "third-party : {third} stories ({})",
                 file_third_party_db().display()
             );
-            println!(
-                "ffmpeg      : {}",
-                which_ffmpeg()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or("not found".into())
-            );
         }
     }
     Ok(())
@@ -561,7 +553,7 @@ fn db_command(ctx: &Context, cmd: DbCommand) -> Result<()> {
 fn run(cli: Cli, ctx: &Context) -> Result<()> {
     let needs_db = !matches!(
         cli.command,
-        Command::Devices | Command::CheckUpdate | Command::InstallFfmpeg | Command::Db(_)
+        Command::Devices | Command::CheckUpdate | Command::Db(_)
     );
     if needs_db {
         if cli.offline {
@@ -650,11 +642,6 @@ fn run(cli: Cli, ctx: &Context) -> Result<()> {
             }
             None => bail!("Unable to check for updates"),
         },
-        Command::InstallFfmpeg => {
-            let path = tools::install_ffmpeg(ctx)?;
-            ctx.info(format!("✅ FFMPEG installed ({}).", path.display()));
-            Ok(())
-        }
     }
 }
 

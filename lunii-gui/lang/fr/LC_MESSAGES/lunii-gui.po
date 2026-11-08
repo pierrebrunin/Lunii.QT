@@ -126,9 +126,6 @@ msgstr "Format plain.pk détecté, au lieu de STUdio ! Impossible de charger cet
 msgid "missing 'story.json'. Unable to add this story."
 msgstr "Fichier 'story.json' manquant. Impossible de charger cette histoire."
 
-msgid "STUdio story with non MP3 audio file. You need FFMPEG tool to import such kind of story, refer to README.md"
-msgstr "Histoire STUdio avec des audio non MP3. L'outil FFMPEG est nécessaire pour ce type d'histoire, consulter README.md"
-
 msgid "⌛ Removing tags from audio {}"
 msgstr "⌛ Suppression des tags de l'audio {}"
 
@@ -336,9 +333,6 @@ msgstr "Afficher le journal"
 msgid "Update to v2.X.X"
 msgstr "Mise à jour vers v2.X.X"
 
-msgid "FFMPEG detected"
-msgstr "FFMPEG détecté"
-
 msgid "Recover"
 msgstr "Récupérer"
 
@@ -437,9 +431,6 @@ msgstr "Mise à jour v2.X.X disponible"
 
 msgid "Help"
 msgstr "Aide"
-
-msgid "FFMPEG is missing (📥)"
-msgstr "FFMPEG absent (📥)"
 
 msgid "No Lunii detected 😥, try File/Open"
 msgstr "Aucune Lunii détectée 😥, essayer Fichier/Ouvrir"
@@ -612,32 +603,11 @@ msgstr "✅ Base STUdio importée ({}/{})."
 msgid "✅ Downloaded {} items."
 msgstr "✅ {} éléments téléchargés."
 
-msgid "🛑 You must rely on your Linux package manager to install FFMPEG."
-msgstr "🛑 Installez FFMPEG en utilisant le gestionnaire de paquets de votre distribution Linux."
-
-msgid "e.g., on Ubuntu/Debian: sudo apt install ffmpeg"
-msgstr "par exemple, sur Ubuntu/Debian : sudo apt install ffmpeg"
-
-msgid "🛑 Unsupported OS."
-msgstr "🛑 OS non supporté."
-
-msgid "Downloading FFmpeg for {}..."
-msgstr "Téléchargement de FFmpeg pour {}..."
-
 msgid "Downloading {:,}MB"
 msgstr "Téléchargement de {:,}Mo"
 
 msgid "🛑 Failed to download {}: {}"
 msgstr "🛑 Echec du téléchargement {}: {}"
-
-msgid "FFmpeg archive downloaded, extracting..."
-msgstr "Archive de FFmpeg téléchargée, extraction..."
-
-msgid "🛑 Failed to extract ffmpeg executable"
-msgstr "🛑 Impossible d'extraire l'éxécutable ffmpeg"
-
-msgid "✅ FFMPEG installed."
-msgstr "✅ FFMPEG est installé."
 
 msgid "🚧 Cleaning storage ..."
 msgstr "🚧 Nettoyage de l'appareil ..."
@@ -801,9 +771,6 @@ msgstr "🛑 Aucun fichier MP3 dans ce dossier"
 msgid "🎵 MP3 album '{}' : {} tracks"
 msgstr "🎵 Album MP3 '{}' : {} pistes"
 
-msgid "These MP3 files must be converted to mono 44.1 kHz: FFMPEG is required (Tools menu)"
-msgstr "Ces MP3 doivent être convertis en mono 44,1 kHz : FFMPEG est nécessaire (menu Outils)"
-
 msgid "Add MP3 to album"
 msgstr "Ajouter des MP3 à l'album"
 
@@ -863,9 +830,6 @@ msgstr "⬇ Téléchargement de {} épisode(s) de '{}'..."
 
 msgid "✅ {} episode(s) of '{}' imported in {}"
 msgstr "✅ {} épisode(s) de '{}' importé(s) en {}"
-
-msgid "These episodes must be converted to MP3: FFMPEG is required (Tools menu)"
-msgstr "Ces épisodes doivent être convertis en MP3 : FFMPEG est nécessaire (menu Outils)"
 
 msgid "The podcast address must start with https://"
 msgstr "L'adresse du podcast doit commencer par https://"
@@ -929,21 +893,6 @@ msgstr "Fichier 7z invalide : {}"
 
 msgid "Bad zip file: {}"
 msgstr "Fichier zip invalide : {}"
-
-msgid "FFMPEG is not available"
-msgstr "FFMPEG n'est pas disponible"
-
-msgid "ffmpeg error: {}"
-msgstr "Erreur ffmpeg : {}"
-
-msgid "ffmpeg produced no audio: {}"
-msgstr "ffmpeg n'a produit aucun son : {}"
-
-msgid "unable to start ffmpeg"
-msgstr "impossible de lancer ffmpeg"
-
-msgid "unable to write the ffmpeg input file"
-msgstr "impossible d'écrire le fichier d'entrée de ffmpeg"
 
 msgid "Destination path '{}' already exists"
 msgstr "Le chemin de destination '{}' existe déjà"
@@ -1043,9 +992,6 @@ msgstr "aucun nœud dans story.json"
 
 msgid "Unsupported OS."
 msgstr "Système d'exploitation non pris en charge."
-
-msgid "You must rely on your Linux package manager to install FFMPEG (e.g., on Ubuntu/Debian: sudo apt install ffmpeg)"
-msgstr "Installez FFMPEG avec le gestionnaire de paquets de votre distribution Linux (par exemple sur Ubuntu/Debian : sudo apt install ffmpeg)"
 
 msgid "invalid JSON file"
 msgstr "fichier JSON invalide"
@@ -1202,3 +1148,27 @@ msgstr "🔍 Recherche des Lunii et Flam…"
 
 msgid "⏳ Reading {}..."
 msgstr "⏳ Lecture de {}…"
+
+msgid "unsupported audio format ({})"
+msgstr "format audio non pris en charge ({})"
+
+msgid "unsupported audio codec ({})"
+msgstr "codec audio non pris en charge ({})"
+
+msgid "unreadable audio ({})"
+msgstr "audio illisible ({})"
+
+msgid "no audio track"
+msgstr "aucune piste audio"
+
+msgid "no audio decoded"
+msgstr "aucun son décodé"
+
+msgid "unable to resample the audio"
+msgstr "impossible de rééchantillonner l'audio"
+
+msgid "MP3 encoding error: {}"
+msgstr "erreur d'encodage MP3 : {}"
+
+msgid "MP3 encoding produced no audio"
+msgstr "l'encodage MP3 n'a produit aucun son"

@@ -1,4 +1,4 @@
-//! MP3 album import on a fake Flam (no network, no ffmpeg: the MP3 files are
+//! MP3 album import on a fake Flam (no network, no conversion: the MP3 files are
 //! already mono 44.1 kHz).
 
 use std::path::{Path, PathBuf};

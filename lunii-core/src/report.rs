@@ -17,7 +17,7 @@ pub trait Reporter: Send + Sync {
     fn story_progress(&self, _short_uuid: &str, _current: usize, _total: usize) {}
 
     /// Progress of the current file (replaces `signal_file_progress`).
-    /// `label` is a speed indication (`"123 KB/s"`) or a status (`"⌛ FFMPEG"`).
+    /// `label` is a speed indication (`"123 KB/s"`) or a status (`"⌛ MP3"`).
     fn file_progress(&self, _label: &str, _current: u64, _total: u64) {}
 }
 

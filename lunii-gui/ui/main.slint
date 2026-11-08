@@ -149,7 +149,6 @@ export component MainWindow inherits Window {
     in property <bool> can-export;
     in property <bool> can-export-all;
     in property <bool> can-add-to-album;
-    in property <bool> ffmpeg-present;
     in property <bool> update-available;
     in property <string> latest-version;
     // every menu entry goes through this callback
@@ -265,13 +264,7 @@ export component MainWindow inherits Window {
             MenuItem { enabled: !root.modal; title: @tr("Show UUID"); checkable: true; checked <=> root.show-uuid; }
             MenuItem { enabled: !root.modal; title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action(Action.show-details); } }
             MenuSeparator { }
-            MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: root.ffmpeg-present && !root.modal; activated => { root.action(Action.normalize-volume); } }
-            MenuItem {
-                title: root.ffmpeg-present ? @tr("FFMPEG detected") : @tr("FFMPEG is missing (📥)");
-                checked: root.ffmpeg-present;
-                enabled: root.idle;
-                activated => { root.action(Action.ffmpeg); }
-            }
+            MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: !root.modal; activated => { root.action(Action.normalize-volume); } }
             MenuSeparator { }
             Menu {
                 title: @tr("Advanced");

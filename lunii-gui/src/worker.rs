@@ -227,7 +227,6 @@ pub enum Task {
     Cleanup,
     DbImport(PathBuf),
     RefreshDb,
-    Ffmpeg,
     FirmwareLogin {
         email: String,
         password: String,
@@ -370,7 +369,6 @@ impl Runner {
         self.emit(Event::Total(0, 1));
         let start = Instant::now();
         let tracks = album::scan_files(files)?.tracks;
-        album::check_ffmpeg(&tracks)?;
         let work = TempDir(std::env::temp_dir().join(format!("lunii-append-{uuid}")));
         let tracks = album::prepare_tracks(&self.ctx, &tracks, self.audio, &work.0)?;
         let result = self.on_device(|d| d.add_album_tracks(&self.ctx, uuid, &tracks));
@@ -407,7 +405,6 @@ impl Runner {
         )));
         self.emit(Event::Total(0, 1));
         let start = Instant::now();
-        album::check_ffmpeg(&new)?;
         let work = TempDir(std::env::temp_dir().join(format!("lunii-edit-{uuid}")));
         // the added tracks, normalized if required
         let mut prepared = album::prepare_tracks(&self.ctx, &new, self.audio, &work.0)?.into_iter();
@@ -509,7 +506,6 @@ impl Runner {
             "🎵 MP3 album '{}' : {} tracks",
             &[&album.title, &album.tracks.len().to_string()],
         ));
-        album::check_ffmpeg(&album.tracks)?;
         let work = TempDir(std::env::temp_dir().join(format!("lunii-album-{}", album.uuid())));
         album.tracks = album::prepare_tracks(&self.ctx, &album.tracks, self.audio, &work.0)?;
         let zip = std::env::temp_dir().join(format!("lunii-album-{}.zip", album.uuid()));
@@ -685,14 +681,6 @@ impl Runner {
                 self.refresh();
                 self.emit(Event::DbRefreshed(ok));
             }
-            Task::Ffmpeg => match tools::install_ffmpeg(&self.ctx) {
-                Ok(_) => self.message(tr("✅ FFMPEG installed.")),
-                Err(e) if e.is::<Aborted>() => return Err(e),
-                Err(e) => {
-                    self.emit(Event::ShowLog);
-                    self.message(crate::i18n::tr_message(&format!("{e:#}")));
-                }
-            },
             Task::FirmwareLogin {
                 email,
                 password,

@@ -10,7 +10,7 @@ pub fn download_cover(podcast: &Podcast) -> Option<Vec<u8>> {
 }
 
 /// Downloads the episodes into `dir`, converted to mono 44.1 kHz MP3 when
-/// needed or with the volume normalized (ffmpeg), and returns them as album
+/// needed or with the volume normalized, and returns them as album
 /// tracks. `on_episode(i)` is called
 /// before each one.
 pub fn download_episodes(
@@ -39,13 +39,13 @@ pub fn download_episodes(
         check_abort(ctx)?;
 
         let mp3 = if opts.normalize() {
-            ctx.file_progress("⌛ FFMPEG", 0, 0);
+            ctx.file_progress("⌛ MP3", 0, 0);
             let mp3 = audio::normalized_mp3(&data)
                 .with_context(|| format!("unable to convert '{}'", ep.title))?;
             ctx.file_progress("", 0, 0);
             mp3
         } else if audio::transcoding_required(&ep.url, &data) {
-            ctx.file_progress("⌛ FFMPEG", 0, 0);
+            ctx.file_progress("⌛ MP3", 0, 0);
             let mp3 = audio::audio_to_mp3(&data)
                 .with_context(|| format!("unable to convert '{}'", ep.title))?;
             ctx.file_progress("", 0, 0);
@@ -129,17 +129,6 @@ pub fn prepare_import(
     dir: &Path,
     on_episode: impl FnMut(usize),
 ) -> Result<ImportPlan> {
-    let needs_ffmpeg = episodes.iter().any(|e| {
-        !e.url
-            .to_lowercase()
-            .split('?')
-            .next()
-            .unwrap_or("")
-            .ends_with(".mp3")
-    });
-    if needs_ffmpeg && !crate::constants::transcoding_supported() {
-        bail!("These episodes must be converted to MP3: FFMPEG is required (Tools menu)");
-    }
     let tracks = download_episodes(ctx, episodes, dir, mode.audio, on_episode)?;
 
     if mode.as_stories {

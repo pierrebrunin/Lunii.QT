@@ -204,7 +204,6 @@ impl App {
                     _ => Task::Cleanup,
                 });
             }
-            Action::Ffmpeg => self.launch(Task::Ffmpeg),
             Action::Update => {
                 let _ = open::that(RELEASES_URL);
             }

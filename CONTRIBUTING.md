@@ -14,7 +14,7 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   ├── src/db.rs            bases officielle / tierce, cache des vignettes
 │   ├── src/story.rs         Story, StoryList, STUdio, détection des archives
 │   ├── src/archive.rs       lecture uniforme zip / 7z
-│   ├── src/convert/         images (BMP RLE4, LIFF) et audio (MP3, ffmpeg, volume)
+│   ├── src/convert/         images (BMP RLE4, LIFF) et audio (MP3, conversion, volume)
 │   ├── src/device/          trait Device, Lunii v1/v2/v3, Flam ; common.rs : import
 │   │                        STUdio et modification d'album partagés (trait StoryWriter)
 │   ├── src/album/           dossier de MP3 → histoire : scan.rs (tags, sous-dossiers,
@@ -27,7 +27,7 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   │                        state.rs (podcasts suivis)
 │   ├── src/settings.rs      réglages (~/.lunii/settings.json)
 │   ├── src/firmware.rs      téléchargement des firmwares
-│   ├── src/tools.rs         import base STUdio, ffmpeg, mise à jour
+│   ├── src/tools.rs         import base STUdio, téléchargements, mise à jour
 │   └── tests/               scénarios complets sur de faux appareils
 ├── lunii-cli/         outil en ligne de commande
 └── lunii-gui/         interface graphique Slint (binaire `lunii`)
@@ -76,9 +76,6 @@ renommé en `~/.lunii` au premier lancement.
 - **Windows** : la chaîne MSVC (Build Tools de Visual Studio, « Développement
   Desktop en C++ »).
 - **macOS** : les outils en ligne de commande Xcode (`xcode-select --install`).
-- **ffmpeg** (facultatif) : transcodage de l'audio non conforme, podcasts M4A,
-  égalisation du volume. Il est cherché dans `~/.lunii`, puis dans le
-  `PATH`. Sans lui, les tests qui en ont besoin sont ignorés (ils l'indiquent).
 
 ## Compilation
 
@@ -145,8 +142,6 @@ Les workflows sont dans `.github/workflows/` (à la racine du dépôt) :
 - **macOS** : l'application n'a qu'une signature ad hoc, sans certificat
   développeur Apple ni notarisation. Au premier lancement, il faut l'autoriser
   (voir la section macOS du README principal).
-- **ffmpeg** n'est pas inclus : sous Windows et macOS, le menu Outils le
-  télécharge. Sous Linux, c'est celui du système.
 
 La logique de packaging est dans `packaging/` (un script par système), et
 fonctionne aussi en local. Outils nécessaires :
@@ -217,14 +212,14 @@ Histoires / **Importer un album MP3** (Ctrl+Maj+I) transforme un dossier de MP3
   (320×240, niveaux de gris) sont dessinés avec la police DejaVu Sans Bold
   embarquée (`res/fonts`).
 - **Audio** : les appareils veulent du MP3 mono 44,1 kHz. Les autres MP3, comme
-  la musique en stéréo, sont convertis par ffmpeg, qui est alors nécessaire.
+  la musique en stéréo, sont convertis (voir [Conversion audio](#conversion-audio)).
 - **Sous-dossiers** : un dossier sans MP3 mais avec des sous-dossiers de MP3
   (CD, chapitres, saisons…) donne une histoire à deux menus : on choisit
   d'abord le sous-dossier (écran avec son nom), puis la piste. HOME remonte d'un
   menu. À la fin du dernier titre d'un sous-dossier, le suivant démarre. Les
   sous-dossiers sont triés dans l'ordre naturel (`CD 2` avant `CD 10`). On ne
   peut pas ajouter de pistes à ces albums.
-- **Volume** : Outils / **Égaliser le volume** (ffmpeg, réglage retenu) ramène
+- **Volume** : Outils / **Égaliser le volume** (réglage retenu) ramène
   toutes les pistes des albums et des podcasts au même niveau sonore (EBU R128,
   -16 LUFS), utile pour mélanger des sources différentes. Chaque piste est alors
   réencodée, l'import est un peu plus long.
@@ -286,9 +281,8 @@ directement la fenêtre d'ajout) :
 - L'UUID de l'album est dérivé de l'adresse du flux. Si l'album est déjà sur
   l'appareil, les épisodes choisis y sont **ajoutés**. Les épisodes déjà importés
   sont retenus dans `~/.lunii/podcasts.json` et grisés dans la liste.
-- Les épisodes qui ne sont pas en MP3 (souvent en M4A/AAC) doivent être
-  convertis : ffmpeg est alors nécessaire. Il lit depuis un fichier temporaire
-  et non depuis un pipe, car l'index des M4A est souvent à la fin.
+- Les épisodes qui ne sont pas en MP3 (souvent en M4A/AAC) sont convertis
+  (voir [Conversion audio](#conversion-audio)).
 - Les podcasts sont en général destinés à l'écoute privée : ne pas
   redistribuer les fichiers.
 
@@ -346,6 +340,29 @@ cargo build -p lunii-gui --features screenshot
 LUNII_DEVICES=/chemin/faux_lunii LUNII_NO_UPDATE_CHECK=1 \
 LUNII_SCREENSHOT=/tmp/captures target/debug/lunii
 ```
+
+### Conversion audio
+
+Les appareils veulent du MP3 mono 44,1 kHz sans tags. Un fichier audio est
+converti s'il n'a pas l'extension `.mp3`, ou si c'est un MP3 stéréo, à moins de
+44,1 kHz, en débit moyen (ABR) ou illisible. Sinon, seuls ses tags sont
+retirés.
+
+La conversion est faite dans l'application, en Rust, sans programme externe
+(`lunii-core/src/convert/transcode.rs`) :
+- **décodage** avec Symphonia : MP3, AAC/M4A, Vorbis, FLAC, WAV, ALAC, AIFF…
+  Le format est reconnu d'après le contenu, pas l'extension. L'Opus n'est pas
+  pris en charge ;
+- **mono** : les canaux sont additionnés à -3 dB chacun, comme le faisait
+  ffmpeg (même niveau pour une voix enregistrée en stéréo), puis baissés si
+  la somme dépasse la pleine échelle ;
+- **rééchantillonnage** à 44,1 kHz avec Rubato (FFT) ;
+- **volume** (option) : sonie mesurée selon EBU R128 (crate `ebur128`), puis
+  un gain unique pour viser -16 LUFS, limité pour garder les crêtes sous
+  -1,5 dBTP. Contrairement au filtre `loudnorm` de ffmpeg, la dynamique de la
+  piste n'est pas modifiée ;
+- **encodage** avec rusty_mp3 en débit constant de 64 kbit/s, sans la trame
+  d'en-tête Info/Xing.
 
 ### Traductions
 
@@ -417,7 +434,7 @@ Comme dans les versions précédentes, l'ouverture d'un appareil réécrit son i
 Le comportement a été vérifié octet par octet contre la version 3.1 :
 mêmes fichiers sur l'appareil et mêmes exports pour Lunii v2, Lunii v3 et Flam,
 avec des archives plain.pk, v2 (zip et 7z), STUdio (conversion d'images,
-suppression des tags, transcodage ffmpeg) et Flam plain.
+suppression des tags, transcodage, alors par ffmpeg) et Flam plain.
 
 Écarts volontaires, qui corrigent des bugs de la version 3.1 :
 
@@ -436,7 +453,7 @@ suppression des tags, transcodage ffmpeg) et Flam plain.
   `.content.hidden/` n'existait pas.
 - **Vignette Flam manquante** : avertissement au lieu d'un plantage.
 - **Archive STUdio en 7z** : les tags ID3 sont supprimés, comme pour le zip.
-- **MP3 illisible** dans une archive STUdio : transcodé par ffmpeg au lieu de
+- **MP3 illisible** dans une archive STUdio : transcodé au lieu de
   faire échouer l'import.
 - **Mode nuit sur une histoire masquée** : agit sur le bon dossier.
 - **Export interrompu ou en erreur** : l'archive partielle est supprimée.

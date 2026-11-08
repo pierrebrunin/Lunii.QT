@@ -243,12 +243,10 @@ pub struct StudioStory {
     /// audio asset -> (normalized name, index)
     pub si: IndexMap<String, (String, usize)>,
     pub li: Vec<i32>,
-    /// `false` if some audio is not MP3 and ffmpeg is not available
-    pub compatible: bool,
 }
 
 impl StudioStory {
-    pub fn load(story_json: &Value, transcoding_supported: bool) -> Result<Self> {
+    pub fn load(story_json: &Value) -> Result<Self> {
         let str_field = |k: &str| {
             story_json
                 .get(k)
@@ -278,7 +276,6 @@ impl StudioStory {
             ri: IndexMap::new(),
             si: IndexMap::new(),
             li: Vec::new(),
-            compatible: false,
         };
 
         let mut first_uuid = None;
@@ -306,18 +303,12 @@ impl StudioStory {
                 .get("audio")
                 .and_then(Value::as_str)
                 .filter(|s| !s.is_empty())
+                && !story.si.contains_key(audio)
             {
-                if !transcoding_supported && !audio.to_lowercase().ends_with(".mp3") {
-                    story.uuid = first_uuid.unwrap_or_default();
-                    story.compatible = false;
-                    return Ok(story);
-                }
-                if !story.si.contains_key(audio) {
-                    let idx = story.si.len();
-                    story
-                        .si
-                        .insert(audio.to_string(), (normalized_name(audio), idx));
-                }
+                let idx = story.si.len();
+                story
+                    .si
+                    .insert(audio.to_string(), (normalized_name(audio), idx));
             }
         }
         story.uuid = first_uuid.context("no stage node in story.json")?;
@@ -353,7 +344,6 @@ impl StudioStory {
         }
 
         story.stage_nodes = stage_nodes;
-        story.compatible = true;
         Ok(story)
     }
 
@@ -663,8 +653,7 @@ mod tests {
 
     #[test]
     fn studio_conversion() {
-        let s = StudioStory::load(&sample_studio(), false).unwrap();
-        assert!(s.compatible);
+        let s = StudioStory::load(&sample_studio()).unwrap();
         assert!(s.nm);
         assert_eq!(s.short_uuid(), "11111111");
         // short asset names are padded to the 8 characters the devices expect
@@ -678,14 +667,6 @@ mod tests {
         assert_eq!(&n0[8..20], &[0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(&n0[20..32], &[0xFF; 12]);
         assert_eq!(&n0[32..44], &[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-    }
-
-    #[test]
-    fn studio_needs_ffmpeg_for_ogg() {
-        let mut j = sample_studio();
-        j["stageNodes"][1]["audio"] = json!("story.ogg");
-        assert!(!StudioStory::load(&j, false).unwrap().compatible);
-        assert!(StudioStory::load(&j, true).unwrap().compatible);
     }
 
     #[test]
