@@ -5,6 +5,8 @@
 
 :fr: [README en français](README.md) :fr:
 
+> ℹ️ **This repository is a fork** of [Lunii.QT](https://github.com/o-daneel/Lunii.QT), the original project by o-daneel. The app has been rewritten in Rust with a Slint UI, and extended (MP3 albums, podcasts…). Thanks to o-daneel and the contributors of the original project.
+
 # Lunii
 An app (Rust, Slint UI) to manage <u>Lunii</u> and <u>Flam</u> Storytellers, including **reorder** / **import** / **export** / **hide** / **firmware download**   
 for Windows 11 / MacOs (11 BigSur => 26 Tahoe) / Linux   

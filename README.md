@@ -5,6 +5,8 @@
 
 :uk: [English README](./README_EN.md) :uk:
 
+> ℹ️ **Ce dépôt est un fork** de [Lunii.QT](https://github.com/o-daneel/Lunii.QT), le projet d'origine d'o-daneel. L'application y a été réécrite en Rust avec une interface Slint, et enrichie (albums MP3, podcasts…). Merci à o-daneel et aux contributeurs du projet d'origine.
+
 # Lunii
 
 Une application (Rust, interface Slint) pour gérer sa fabrique à histoires (fah) <u>Lunii</u> et <u>Flam</u>, avec les opérations de  **organisation** / **importation** / **exportation** / **téléchargement du firmware**   
