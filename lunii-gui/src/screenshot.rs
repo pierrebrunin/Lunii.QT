@@ -120,6 +120,27 @@ fn release(ui: &MainWindow, at: (f32, f32)) {
     });
 }
 
+/// Right button pressed and released at `at`.
+fn right_click(ui: &MainWindow, at: (f32, f32)) {
+    use slint::platform::{PointerEventButton, WindowEvent};
+    let window = ui.window();
+    let position = slint::LogicalPosition::new(at.0, at.1);
+    let button = PointerEventButton::Right;
+    window.dispatch_event(WindowEvent::PointerMoved { position });
+    window.dispatch_event(WindowEvent::PointerPressed { position, button });
+    window.dispatch_event(WindowEvent::PointerReleased { position, button });
+}
+
+/// Escape: the popup shown closed.
+fn close_popup(ui: &MainWindow) {
+    use slint::platform::{Key, WindowEvent};
+    let text: slint::SharedString = Key::Escape.into();
+    ui.window()
+        .dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+    ui.window()
+        .dispatch_event(WindowEvent::KeyReleased { text });
+}
+
 /// Mouse press at `from`, moved to `to`, released there.
 fn drag(ui: &MainWindow, from: (f32, f32), to: (f32, f32)) {
     use slint::LogicalPosition;
@@ -212,6 +233,13 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
         pump(&queue, 300);
         render(0, &shot("03-dropped"));
     }
+
+    // right click on a row: its context menu
+    right_click(&ui, (200.0, row_center(1)));
+    pump(&queue, 200);
+    render(0, &shot("03-context-menu"));
+    close_popup(&ui);
+    pump(&queue, 100);
 
     ui.set_filter("studio".into());
     ui.invoke_filter_edited();

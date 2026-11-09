@@ -26,6 +26,9 @@ export component StoryTable inherits Rectangle {
 
     // left click (ctrl, shift) or right click on a row
     callback row-pointer(row: int, ctrl: bool, shift: bool, right: bool);
+    // right click on a row, at `position` in the table: its context menu (the
+    // rows take the right button, a ContextMenuArea around never gets it)
+    callback context-menu(position: Point);
     // arrow keys / page keys
     callback key-nav(delta: int, shift: bool);
     callback select-all();
@@ -192,6 +195,10 @@ export component StoryTable inherits Rectangle {
                                     }
                                 } else if (event.button == PointerEventButton.right) {
                                     root.row-pointer(index, false, false, true);
+                                    root.context-menu({
+                                        x: self.absolute-position.x - root.absolute-position.x + self.mouse-x,
+                                        y: self.absolute-position.y - root.absolute-position.y + self.mouse-y,
+                                    });
                                 }
                             }
                             if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {

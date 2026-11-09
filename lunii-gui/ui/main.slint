@@ -405,7 +405,7 @@ export component MainWindow inherits Window {
                 height: parent.height;
                 spacing: 2px;
                 // ---------------------------------------------------------------- stories
-                ContextMenuArea {
+                story-menu := ContextMenuArea {
                     horizontal-stretch: 1;
                     enabled: root.story-actions;
                     Menu {
@@ -440,6 +440,12 @@ export component MainWindow inherits Window {
                         drop-hover: root.drop-hover;
                         placeholder: root.list-placeholder;
                         row-pointer(row, ctrl, shift, right) => { root.row-pointer(row, ctrl, shift, right); }
+                        // the table fills the ContextMenuArea: same coordinates
+                        context-menu(position) => {
+                            if (root.story-actions) {
+                                story-menu.show(position);
+                            }
+                        }
                         key-nav(delta, shift) => { root.key-nav(delta, shift); }
                         select-all => { root.select-all(); }
                         can-move: root.selection-actions;
