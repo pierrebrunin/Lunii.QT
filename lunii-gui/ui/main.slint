@@ -3,7 +3,7 @@
 import { LineEdit, ProgressIndicator, Spinner, TextEdit, Palette, VerticalBox } from "std-widgets.slint";
 import { Action, StoryRow, LogLine, DialogKind, Theme, IconButton, InfoRow, EpisodeRow, AlbumTrackRow, FollowedRow, PodcastResult, ViewSwitch } from "common.slint";
 import { StoryTable } from "story_table.slint";
-import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, DeviceInfoDialog, AddPodcastDialog } from "dialogs.slint";
+import { ConfirmRemoveDialog, LoginDialog, NightModeDialog, AboutDialog, DeviceInfoDialog, AddPodcastDialog, UnfollowDialog } from "dialogs.slint";
 import { PodcastsView } from "podcasts.slint";
 import { AlbumEditor } from "album_editor.slint";
 import { LogPanel } from "log_panel.slint";
@@ -215,6 +215,8 @@ export component MainWindow inherits Window {
     callback podcast-select(index: int);
     callback podcast-refresh();
     callback podcast-unfollow();
+    // the podcast unfollowed, its album or stories removed from the device or not
+    callback podcast-unfollow-accepted(remove: bool);
     callback podcast-mode-changed();
     callback podcast-toggle(index: int);
     callback podcast-select-all(all: bool);
@@ -694,6 +696,13 @@ export component MainWindow inherits Window {
         message: root.confirm-message;
         close => { root.dialog = DialogKind.none; }
         accepted => { root.dialog = DialogKind.none; root.confirm-remove-accepted(); }
+    }
+    if root.dialog == DialogKind.unfollow-podcast: UnfollowDialog {
+        width: root.width;
+        height: root.height;
+        message: root.confirm-message;
+        close => { root.dialog = DialogKind.none; }
+        accepted(remove) => { root.dialog = DialogKind.none; root.podcast-unfollow-accepted(remove); }
     }
     if root.dialog == DialogKind.add-podcast: AddPodcastDialog {
         width: root.width;

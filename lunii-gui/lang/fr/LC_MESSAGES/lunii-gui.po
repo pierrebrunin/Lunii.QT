@@ -1118,6 +1118,21 @@ msgstr "{} nouvel(s) épisode(s)"
 msgid "'{}' is no longer followed"
 msgstr "« {} » n'est plus suivi"
 
+msgid "'{}' is on the device :\n"
+msgstr "« {} » est sur l'appareil :\n"
+
+msgid "\nRemove it from the device too ?"
+msgstr "\nLe supprimer aussi de l'appareil ?"
+
+msgid "Unfollow the podcast"
+msgstr "Ne plus suivre le podcast"
+
+msgid "Keep on the device"
+msgstr "Garder sur l'appareil"
+
+msgid "Remove from the device"
+msgstr "Supprimer de l'appareil"
+
 msgid "Album made of sub-folders: its tracks can't be changed"
 msgstr "Album à sous-dossiers : ses pistes ne peuvent pas être modifiées"
 

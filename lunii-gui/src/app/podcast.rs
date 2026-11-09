@@ -38,6 +38,8 @@ pub(super) struct Podcasts {
     feeds: HashMap<String, Option<Result<Podcast, String>>>,
     /// "Add a podcast" dialog
     add: AddDialog,
+    /// podcast being unfollowed, with its album or stories on the device
+    unfollow: Option<(SavedPodcast, Vec<String>)>,
 }
 
 /// "Add a podcast" dialog: a search (several results) or an address (one).
@@ -572,6 +574,8 @@ impl App {
         self.podcast_select(index.map_or(-1, |i| i as i32));
     }
 
+    /// "Unfollow": what of the podcast is on the device is removed or kept,
+    /// as asked; nothing on it, the podcast is unfollowed right away.
     pub(super) fn podcast_unfollow(&self) {
         let current = self.ui().get_podcast_current();
         let Some(entry) = usize::try_from(current)
@@ -580,14 +584,67 @@ impl App {
         else {
             return;
         };
+        let on_device = self.podcast_stories_on_device(&entry);
+        if on_device.is_empty() {
+            self.podcast_unfollow_done(&entry);
+            return;
+        }
+        let mut message = trf("'{}' is on the device :\n", &[&entry.title]);
+        for (_, name) in &on_device {
+            message += &format!("- {name}\n");
+        }
+        if message.chars().count() > 512 {
+            message = message.chars().take(512).collect::<String>() + "...";
+            message += &tr("\n(and too many others)\n");
+        }
+        message += &tr("\nRemove it from the device too ?");
+        let uuids = on_device.into_iter().map(|(uuid, _)| uuid).collect();
+        self.state.borrow_mut().podcasts.unfollow = Some((entry, uuids));
+        let ui = self.ui();
+        ui.set_confirm_message(message.into());
+        ui.set_dialog(DialogKind::UnfollowPodcast);
+    }
+
+    /// The podcast unfollowed after the dialog: its album or stories removed
+    /// from the device if `remove`.
+    pub(super) fn podcast_unfollow_accepted(&self, remove: bool) {
+        let Some((entry, uuids)) = self.state.borrow_mut().podcasts.unfollow.take() else {
+            return;
+        };
+        if !self.podcast_unfollow_done(&entry) {
+            return;
+        }
+        if remove {
+            self.launch(Task::Remove { uuids });
+        }
+    }
+
+    /// Album and stories of `entry` on the device (uuid, name): the stories
+    /// of its episodes known once its feed is loaded.
+    fn podcast_stories_on_device(&self, entry: &SavedPodcast) -> Vec<(String, String)> {
+        let st = self.state.borrow();
+        let episodes: HashSet<Uuid> = match st.podcasts.feeds.get(&entry.feed_url) {
+            Some(Some(Ok(p))) => p.episodes.iter().map(|e| p.episode_uuid(e)).collect(),
+            _ => HashSet::new(),
+        };
+        st.stories
+            .iter()
+            .filter(|s| s.uuid == entry.album || episodes.contains(&s.uuid))
+            .map(|s| (s.str_uuid.clone(), s.name.clone()))
+            .collect()
+    }
+
+    /// `entry` no longer followed: false if it could not be recorded.
+    fn podcast_unfollow_done(&self, entry: &SavedPodcast) -> bool {
         if let Err(e) = podcast::unfollow(&entry.album) {
             self.status(&format!("🛑 {e:#}"));
-            return;
+            return false;
         }
         self.status(&trf("'{}' is no longer followed", &[&entry.title]));
         self.ui().set_podcast_current(-1);
         self.ui().set_podcast_header("".into());
         self.podcasts_show();
+        true
     }
 
     /// After a task (import, update): what is on the device changed.

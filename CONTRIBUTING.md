@@ -291,7 +291,10 @@ directement la fenêtre d'ajout) :
   Un podcast dont l'album est sur l'appareil branché est suivi
   automatiquement s'il est inconnu (album importé depuis un autre ordinateur).
   « Ne plus suivre » est retenu : l'album trouvé sur un appareil ne le fait
-  pas suivre de nouveau. La liste des épisodes importés de `podcasts.json`
+  pas suivre de nouveau. Si l'album, ou des épisodes importés comme
+  histoires, sont sur l'appareil branché, « Ne plus suivre » demande s'il
+  faut aussi les supprimer de l'appareil (les épisodes importés comme
+  histoires ne sont reconnus qu'une fois le flux chargé). La liste des épisodes importés de `podcasts.json`
   ne sert plus qu'aux albums importés avant cet enregistrement sur
   l'appareil : au prochain ajout d'épisodes, leurs pistes sont associées aux
   épisodes par leur titre.

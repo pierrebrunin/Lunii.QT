@@ -15,6 +15,7 @@ use slint::platform::{EventLoopProxy, Platform, PlatformError, WindowAdapter};
 use slint::{ComponentHandle, Model, PhysicalSize};
 
 use crate::app::App;
+use crate::i18n::{tr, trf};
 use crate::{DialogKind, MainWindow};
 
 type Queue = Arc<Mutex<Vec<Box<dyn FnOnce() + Send>>>>;
@@ -233,6 +234,21 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     app.action(crate::Action::NightModeSettings);
     pump(&queue, 200);
     render(0, &shot("07-night-mode"));
+    ui.set_dialog(DialogKind::None);
+
+    // "Unfollow" of a podcast whose album is on the device
+    ui.set_confirm_message(
+        format!(
+            "{}- {}\n{}",
+            trf("'{}' is on the device :\n", &["Podcast"]),
+            "Podcast",
+            tr("\nRemove it from the device too ?")
+        )
+        .into(),
+    );
+    ui.set_dialog(DialogKind::UnfollowPodcast);
+    pump(&queue, 200);
+    render(0, &shot("06-unfollow-podcast"));
     ui.set_dialog(DialogKind::None);
 
     app.action(crate::Action::About);

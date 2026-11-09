@@ -102,6 +102,29 @@ export component ConfirmRemoveDialog inherits Overlay {
     }
 }
 
+// "Unfollow" of a podcast on the device: its album or stories removed too, or
+// kept.
+export component UnfollowDialog inherits Overlay {
+    in property <string> message;
+    callback accepted(remove: bool);
+
+    title: @tr("Unfollow the podcast");
+    // three buttons on one line, their French labels the longest
+    panel-width: 520px;
+
+    Text {
+        text: root.message;
+        wrap: word-wrap;
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: 8px;
+        Button { text: @tr("Cancel"); clicked => { root.close(); } }
+        Button { text: @tr("Keep on the device"); clicked => { root.accepted(false); } }
+        Button { text: @tr("Remove from the device"); clicked => { root.accepted(true); } }
+    }
+}
+
 export component LoginDialog inherits Overlay {
     in-out property <string> email;
     in-out property <string> password;

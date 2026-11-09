@@ -326,6 +326,12 @@ impl App {
         ui.on_podcast_refresh(with(|app| app.podcast_refresh()));
         ui.on_podcast_unfollow(with(|app| app.podcast_unfollow()));
         let w = Rc::downgrade(self);
+        ui.on_podcast_unfollow_accepted(move |remove| {
+            if let Some(app) = w.upgrade() {
+                app.podcast_unfollow_accepted(remove);
+            }
+        });
+        let w = Rc::downgrade(self);
         ui.on_podcast_select(move |index| {
             if let Some(app) = w.upgrade() {
                 app.podcast_select(index);
