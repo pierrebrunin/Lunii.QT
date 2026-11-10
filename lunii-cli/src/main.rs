@@ -326,7 +326,7 @@ fn show_info(ctx: &Context, device: Option<&Path>) -> Result<()> {
     if !dev.can_import() {
         println!("⚠️ No story keys for this Lunii v3, import is not possible (see README).");
     }
-    if let Some(lunii) = dev.as_lunii() {
+    if let Some(lunii) = dev.as_lunii().filter(|l| l.night_mode_supported()) {
         println!(
             "- night mode : {}",
             if lunii.night_mode_enabled() {

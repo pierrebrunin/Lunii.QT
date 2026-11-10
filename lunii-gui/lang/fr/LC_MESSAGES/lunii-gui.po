@@ -258,8 +258,11 @@ msgstr "Lecture des histoires chargées dans la Lunii..."
 msgid "Config file not found, using default values"
 msgstr "Fichier de configuration manquant, utilisation des valeurs par défaut"
 
-msgid "🛑 Unsupported config version {}, using default values"
-msgstr "🛑 Version du fichier de configuration non supporté {}, utilisation des valeurs par défaut"
+msgid "Unsupported config version {}, night mode unavailable"
+msgstr "Version du fichier de configuration non supportée {}, mode nuit indisponible"
+
+msgid "This Lunii does not support night mode"
+msgstr "Cette Lunii ne gère pas le mode nuit"
 
 msgid "Reading Lunii config..."
 msgstr "Lecture de la configuration de la Lunii..."

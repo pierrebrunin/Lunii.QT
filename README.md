@@ -81,7 +81,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
    (il suffit d'aller dans Menu About/Update to v2.X.X)
 2. **Le modèle de votre Lunii/Flam** lorsqu'elle est connectée (son emplacement et ses informations techniques sont dans Fichier / Informations sur l'appareil, ou d'un clic sur la barre d'état).   
    Le bouton à gauche relance la détection automatique.
-3. Gestion du **Mode nuit** ([ici](#mode-nuit))
+3. Gestion du **Mode nuit** ([ici](#mode-nuit)), affichée seulement si la Lunii branchée le gère (Flam exclue)
 4. Actualisation de la **base de données Officielle** : Met à jour la liste des histoires et leurs descriptions depuis le Luniistore. Utilisez ce bouton lorsque certaines histoires officielles ne sont pas reconnues.
 5. La **liste de vos histoires** avec leur durée. Le menu **Outils** permet d'afficher aussi leur taille, leur base de données (DB) et leur UUID, masqués par défaut.  
    L'UUID : Un identifiant unique permettant de lier les histoires à leur dossier sur la Lunii/Flam. Les huit derniers caractères de l'UUID composent le nom du dossier de l'histoire.

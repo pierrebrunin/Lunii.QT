@@ -43,6 +43,8 @@ pub struct LuniiDevice {
     bt: Vec<u8>,
     /// Device settings (`.cfg`), see `LUNII_CFGPOS_*`
     pub config: Vec<u16>,
+    /// The firmware handles the night mode: its `.cfg` was found and read
+    night_mode_supported: bool,
     stories: StoryList,
     /// Debug: write plain files on the device
     pub debug_plain: bool,
@@ -102,6 +104,7 @@ impl LuniiDevice {
             story_iv: None,
             bt: Vec::new(),
             config: DEFAULT_CONFIG.to_vec(),
+            night_mode_supported: false,
             stories: StoryList::new(),
             debug_plain: false,
         };
@@ -115,7 +118,13 @@ impl LuniiDevice {
             dev.unsupported_md_parse(ctx, &md)?;
         }
 
-        dev.config = feed_config(ctx, mount_point);
+        match feed_config(ctx, mount_point) {
+            Some(config) => {
+                dev.config = config;
+                dev.night_mode_supported = true;
+            }
+            None => dev.config = DEFAULT_CONFIG.to_vec(),
+        }
         dev.stories = feed_stories(ctx, mount_point);
         dev.update_pack_index()?;
         Ok(dev)
@@ -820,8 +829,23 @@ impl LuniiDevice {
         zip.finish()
     }
 
+    /// The night mode is handled by this Lunii: its firmware wrote a
+    /// settings file (`.cfg`) in a known format. Otherwise no setting is
+    /// written, nor story flagged.
+    pub fn night_mode_supported(&self) -> bool {
+        self.night_mode_supported
+    }
+
+    fn ensure_night_mode(&self) -> Result<()> {
+        if !self.night_mode_supported {
+            bail!("This Lunii does not support night mode");
+        }
+        Ok(())
+    }
+
     /// Writes the device settings (`.cfg`).
     pub fn update_config(&self) -> Result<()> {
+        self.ensure_night_mode()?;
         let mut cfg = vec![0x00, 0x01]; // version
         for (index, value) in self.config.iter().enumerate() {
             cfg.extend_from_slice(&(index as u16).to_le_bytes());
@@ -832,15 +856,18 @@ impl LuniiDevice {
     }
 
     pub fn night_mode_enabled(&self) -> bool {
-        self.config
-            .get(LUNII_CFGPOS_NM_ENABLED)
-            .copied()
-            .unwrap_or(0)
-            == 1
+        self.night_mode_supported
+            && self
+                .config
+                .get(LUNII_CFGPOS_NM_ENABLED)
+                .copied()
+                .unwrap_or(0)
+                == 1
     }
 
     /// Toggles the night mode flag (`nm` file) of stories.
     pub fn toggle_night_mode(&mut self, uuids: &[Uuid]) -> Result<()> {
+        self.ensure_night_mode()?;
         for uuid in uuids {
             let story = self
                 .stories
@@ -1073,19 +1100,20 @@ pub fn feed_stories(ctx: &Context, root: &Path) -> StoryList {
     list
 }
 
-/// Reads the settings file (`.cfg`).
-pub fn feed_config(ctx: &Context, root: &Path) -> Vec<u16> {
+/// Reads the settings file (`.cfg`): `None` when it is missing or in an
+/// unknown format (the night mode is then not offered).
+pub fn feed_config(ctx: &Context, root: &Path) -> Option<Vec<u16>> {
     let mut config = DEFAULT_CONFIG.to_vec();
     let Ok(cfg) = std::fs::read(root.join(".cfg")) else {
-        ctx.debug("Config file not found, using default values");
-        return config;
+        ctx.debug("Config file not found, night mode unavailable");
+        return None;
     };
     let version = u16_le(&cfg, 0);
     if version != 0x100 {
-        ctx.error(format!(
-            "🛑 Unsupported config version {version}, using default values"
+        ctx.warn(format!(
+            "Unsupported config version {version}, night mode unavailable"
         ));
-        return config;
+        return None;
     }
     ctx.debug("Reading Lunii config...");
     for item in cfg[2..].as_chunks::<4>().0 {
@@ -1095,7 +1123,7 @@ pub fn feed_config(ctx: &Context, root: &Path) -> Vec<u16> {
             config[index] = value;
         }
     }
-    config
+    Some(config)
 }
 
 impl common::StoryWriter for LuniiDevice {

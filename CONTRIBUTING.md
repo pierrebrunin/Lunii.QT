@@ -187,12 +187,12 @@ vignette et description, barres de progression avec bouton d'arrêt, barre
 d'état (un clic sur le SNU ouvre les informations de l'appareil : modèle, firmware,
 emplacement, stockage, clés ; aussi par Fichier / Informations sur l'appareil), menus et raccourcis
 (Ctrl+I, Ctrl+S, Suppr, Alt+↑/↓, Ctrl+↑/↓, Ctrl+H, Ctrl+N, Ctrl+L, F5, F1…),
-réglages du mode nuit, connexion Luniistore pour le firmware, journal de debug,
+réglages du mode nuit (seulement sur une Lunii compatible, voir plus bas), connexion Luniistore pour le firmware, journal de debug,
 vérification des mises à jour, glisser-déposer d'archives.
 
 Deux vues, au choix en haut de la fenêtre : **Histoires** (la liste de
-l'appareil) et **Podcasts**. Les dialogues (suppression, connexion, mode nuit, à
-propos) sont modaux : tant que l'un est ouvert, les menus et leurs raccourcis
+l'appareil) et **Podcasts**. Les dialogues (suppression, connexion, ajout d'un
+podcast, informations de l'appareil, mode nuit, à propos) sont modaux : tant que l'un est ouvert, les menus et leurs raccourcis
 sont désactivés ; Échap ou la croix le ferme.
 
 ### Albums MP3
@@ -433,6 +433,11 @@ nommés du code (`{name}`) s'écrivent `{}` dans le `.po`.
   pas repris.
 - **Factory reset** : l'entrée était cachée et non implémentée ; elle n'est
   pas reprise.
+- **Mode nuit seulement sur une Lunii compatible** : réglages, marquage des
+  histoires et colonne « NM » ne sont proposés que si la Lunii a un fichier
+  `.cfg` lisible (version `0x100`), écrit par un firmware qui gère le mode
+  nuit. Sinon (Flam, `.cfg` absent ou inconnu), rien n'est affiché et aucun
+  `.cfg` n'est créé.
 - **Mode nuit d'une histoire masquée** : il est conservé à la réouverture de
   l'appareil. La version 3.1 le cherchait dans `.content/` au lieu de
   `.content.hidden/`.

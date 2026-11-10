@@ -46,7 +46,10 @@ pub(super) fn describe_device(dev: &dyn Device, path: &Path) -> DevInfo {
         hw_text,
         can_import: dev.can_import(),
         export_all,
-        config: lunii.map(|l| l.config.clone()),
+        // only for a Lunii whose firmware handles the night mode
+        config: lunii
+            .filter(|l| l.night_mode_supported())
+            .map(|l| l.config.clone()),
     }
 }
 
@@ -279,6 +282,7 @@ impl App {
         }
         let ui = self.ui();
         ui.set_device_ready(false);
+        ui.set_show_nm(false);
         ui.set_nm_available(false);
         ui.set_nm_active(false);
         self.rebuild_rows();
@@ -353,6 +357,7 @@ impl App {
         let version = info.version;
         let is_flam = version == DeviceVersion::FlamV1;
         let sizes_unknown = stories.iter().any(|s| s.size.is_none());
+        let nm_supported = info.config.is_some();
         let nm_active = info
             .config
             .as_ref()
@@ -367,9 +372,8 @@ impl App {
         self.forget_durations();
 
         ui.set_device_icon(if is_flam { flam_icon() } else { lunii_icon() });
-        ui.set_is_flam(is_flam);
-        ui.set_show_nm(!is_flam);
-        ui.set_nm_available(!is_flam);
+        ui.set_show_nm(nm_supported);
+        ui.set_nm_available(nm_supported);
         ui.set_nm_active(nm_active);
         ui.set_device_ready(true);
         ui.set_list_placeholder(

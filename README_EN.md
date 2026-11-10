@@ -81,7 +81,7 @@ Forget about all previous .md and firmware recommendations.
    (just get it with Menu About/Update to v2.X.X)
 2. The **model of your Lunii/Flam** when it's connected (its location and technical details are in File / Device information, or a click on the status bar).   
    The button on the left updates automatic detection.
-3. Configuring **Night mode** ([here](#night-mode))
+3. Configuring **Night mode** ([here](#night-mode)), shown only when the connected Lunii supports it (not on Flam)
 4. **Official DB refresh** : Updates the list of stories and related information from the official Lunii Store. Use it when some official are not recognized.
 5. The **list of your stories** with their duration. The **Tools** menu also shows their size, Database (DB) origin and UUID, hidden by default.  
    The UUID: This unique identifier allows you to associate stories with their folder on the Lunii, thanks to the last eight characters that make up the name of the folder associated with that story.

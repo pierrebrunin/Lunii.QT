@@ -188,6 +188,7 @@ fn hide_move_nm_remove_recover_cleanup() {
         .map(|i| Uuid::parse_str(&format!("aaaaaaaa-0000-4000-8000-0000000000{i:02}")).unwrap())
         .collect();
     let root = lunii_v2(tmp.path());
+    std::fs::write(root.join(".cfg"), [0x00, 0x01]).unwrap();
     let mut dev = open_device(&ctx(), &root).unwrap();
     for (i, id) in ids.iter().enumerate() {
         dev.import_story(&ctx(), &plain_story(tmp.path(), *id, &format!("S{i}")))
@@ -261,8 +262,11 @@ fn night_mode_config_roundtrip() {
     setup();
     let tmp = tempfile::tempdir().unwrap();
     let root = lunii_v2(tmp.path());
+    // written by a firmware handling the night mode: version, (index, value)
+    std::fs::write(root.join(".cfg"), [0x00, 0x01, 0x03, 0x00, 0x00, 0x00]).unwrap();
     let mut dev = open_device(&ctx(), &root).unwrap();
     let lunii = dev.as_lunii_mut().unwrap();
+    assert!(lunii.night_mode_supported());
     assert!(!lunii.night_mode_enabled());
     lunii.config[LUNII_CFGPOS_NM_ENABLED] = 1;
     lunii.config[LUNII_CFGPOS_NM_STORYCOUNT] = 7;
@@ -275,6 +279,35 @@ fn night_mode_config_roundtrip() {
     let cfg = std::fs::read(root.join(".cfg")).unwrap();
     assert_eq!(&cfg[..2], &[0x00, 0x01]);
     assert_eq!(cfg.len(), 2 + 4 * 10);
+}
+
+#[test]
+fn night_mode_unavailable_without_config_file() {
+    setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let root = lunii_v2(tmp.path());
+    let mut dev = open_device(&ctx(), &root).unwrap();
+    dev.import_story(
+        &ctx(),
+        &plain_story(
+            tmp.path(),
+            Uuid::parse_str("aaaaaaaa-0000-4000-8000-000000000042").unwrap(),
+            "Histoire",
+        ),
+    )
+    .unwrap();
+    let uuid = dev.stories()[0].uuid;
+    let lunii = dev.as_lunii_mut().unwrap();
+    assert!(!lunii.night_mode_supported());
+    assert!(!lunii.night_mode_enabled());
+    assert!(lunii.update_config().is_err());
+    assert!(lunii.toggle_night_mode(&[uuid]).is_err());
+    assert!(!root.join(".cfg").exists());
+
+    // unknown format: not offered either
+    std::fs::write(root.join(".cfg"), [0x00, 0x02]).unwrap();
+    let dev = open_device(&ctx(), &root).unwrap();
+    assert!(!dev.as_lunii().unwrap().night_mode_supported());
 }
 
 #[test]

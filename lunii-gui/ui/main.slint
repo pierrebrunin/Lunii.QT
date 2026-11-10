@@ -43,7 +43,7 @@ export component MainWindow inherits Window {
     // stories
     in property <[StoryRow]> rows;
     in property <int> current-row: -1;
-    in property <bool> show-nm: true;
+    in property <bool> show-nm: false;
     in-out property <bool> show-size: false;
     // optional columns of the story list (saved in the settings)
     in-out property <bool> show-duration: true;
@@ -172,7 +172,6 @@ export component MainWindow inherits Window {
 
     // menu states
     in property <bool> device-ready;
-    in property <bool> is-flam;
     in property <bool> can-import;
     in property <bool> has-selection;
     in property <bool> can-export;
@@ -309,7 +308,7 @@ export component MainWindow inherits Window {
             MenuItem { title: @tr("Move Bottom"); shortcut: @keys(Control + DownArrow); enabled: root.selection-actions; activated => { root.action(Action.move-bottom); } }
             MenuSeparator { }
             MenuItem { title: @tr("Hide / Show"); shortcut: @keys(Control + H); enabled: root.selection-actions; activated => { root.action(Action.hide); } }
-            MenuItem { title: @tr("Force Night Mode"); shortcut: @keys(Control + N); enabled: root.selection-actions && !root.is-flam; activated => { root.action(Action.night-mode); } }
+            if root.nm-available: MenuItem { title: @tr("Force Night Mode"); shortcut: @keys(Control + N); enabled: root.selection-actions; activated => { root.action(Action.night-mode); } }
             MenuSeparator { }
             MenuItem { title: @tr("Import"); shortcut: @keys(Control + I); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import); } }
             MenuItem { title: @tr("Import MP3 album"); shortcut: @keys(Control + Shift + I); enabled: root.story-actions && root.can-import; activated => { root.action(Action.import-album); } }
@@ -363,14 +362,14 @@ export component MainWindow inherits Window {
                     height: 22px;
                 }
             }
-            IconButton {
+            if root.nm-available: IconButton {
                 icon: root.nm-active ? @image-url("../../res/mode_night.png") : @image-url("../../res/mode_day.png");
                 icon-size: 22px;
                 icon-width: 47px;
-                enabled: root.nm-available && !root.busy;
+                enabled: !root.busy;
                 clicked => { root.action(Action.night-mode-settings); }
             }
-            Rectangle { min-width: 8px; max-width: 40px; horizontal-stretch: 0.2; }
+            if root.nm-available: Rectangle { min-width: 8px; max-width: 40px; horizontal-stretch: 0.2; }
             VerticalLayout {
                 alignment: center;
                 ViewSwitch {
@@ -415,7 +414,7 @@ export component MainWindow inherits Window {
                         MenuItem { title: @tr("Move Bottom"); enabled: root.selection-actions; activated => { root.action(Action.move-bottom); } }
                         MenuSeparator { }
                         MenuItem { title: @tr("Hide / Show"); enabled: root.selection-actions; activated => { root.action(Action.hide); } }
-                        MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions && !root.is-flam; activated => { root.action(Action.night-mode); } }
+                        if root.nm-available: MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions; activated => { root.action(Action.night-mode); } }
                         MenuSeparator { }
                         MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action(Action.import); } }
                         MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action(Action.import-album); } }
