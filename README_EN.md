@@ -305,8 +305,13 @@ development guide is [`CONTRIBUTING.md`](CONTRIBUTING.md) (in French), which doc
 the prerequisites, the build, the checks to run before pushing, the useful
 environment variables and the translation workflow.
 
+It needs Rust, in the version set in [`mise.toml`](mise.toml).
+[mise](https://github.com/jdx/mise) is optional: `mise install` installs that
+version (with rustfmt and clippy); otherwise a Rust toolchain installed with
+rustup is enough.
+
 ```bash
-cd rust
+mise install            # optional
 cargo build --release
 ./target/release/lunii
 ```

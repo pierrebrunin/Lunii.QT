@@ -311,8 +311,13 @@ développement, [`CONTRIBUTING.md`](CONTRIBUTING.md), décrit les prérequis, la
 compilation, les vérifications avant de pousser, les variables d'environnement
 utiles et la génération des traductions.
 
+Il faut Rust, dans la version fixée par [`mise.toml`](mise.toml).
+[mise](https://github.com/jdx/mise) est facultatif : `mise install` installe
+cette version (et rustfmt, clippy) ; sinon, une toolchain Rust installée avec
+rustup suffit.
+
 ```bash
-cd rust
+mise install            # facultatif
 cargo build --release
 ./target/release/lunii
 ```

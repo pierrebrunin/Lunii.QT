@@ -64,7 +64,9 @@ renommé en `~/.lunii` au premier lancement.
   mise install
   ```
   mise installe rustup s'il manque, puis la toolchain demandée. Pour changer
-  de version de Rust, il suffit de modifier `mise.toml`.
+  de version de Rust, il suffit de modifier `mise.toml`. mise est facultatif :
+  à défaut, installer cette version avec rustup
+  (`rustup toolchain install <version> -c rustfmt,clippy`).
 - **Linux** : un compilateur C, `pkg-config` et les en-têtes fontconfig
   (Slint). Sur Debian / Ubuntu :
   ```bash
@@ -80,7 +82,6 @@ renommé en `~/.lunii` au premier lancement.
 ## Compilation
 
 ```bash
-cd rust
 cargo build --release          # target/release/lunii (interface) et lunii-cli
 cargo run -p lunii-gui         # lance l'interface (debug)
 cargo run -p lunii-cli -- --help
