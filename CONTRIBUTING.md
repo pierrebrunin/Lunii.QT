@@ -359,8 +359,14 @@ La langue suit le système (français ou anglais) ; `LUNII_LANG=en` ou
 | `LUNII_SHOT_IMPORT=<a>:<b>` | (captures) importe ces archives ou dossiers par l'interface ; si le dernier est un album, capture aussi ses pistes et son dialogue de modification (qui est appliquée) |
 
 `tools/fake-lunii.sh [--no-run] [dossier]` crée une fausse Lunii v2 avec des
-histoires inventées (couvertures, une cachée, une en mode nuit) et lance
-l'application dessus ; il affiche les variables à reprendre pour la relancer.
+histoires inventées (couvertures, deux cachées, deux en mode nuit, deux
+perdues) et lance l'application dessus ; il affiche les variables à reprendre
+pour la relancer.
+
+`tools/screenshots.sh` refait les captures du README
+(`res/screenshot_{main,debug,lost,interface}.png`) sur cette fausse Lunii ;
+les cadres numérotés de `screenshot_interface.png` sont dessinés par
+`tools/annotate_interface.py` (Python 3 avec Pillow).
 
 Captures d'écran sans affichage (rendu logiciel), avec la feature `screenshot` :
 
