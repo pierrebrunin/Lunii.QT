@@ -39,6 +39,11 @@ Forget about all previous .md and firmware recommendations.
   - [User Interface](#user-interface)
     - [Main window](#main-window)
     - [Night mode](#night-mode)
+  - [Podcasts](#podcasts)
+    - [Search and follow a podcast](#search-and-follow-a-podcast)
+    - [Add episodes to the device](#add-episodes-to-the-device)
+    - [Remove episodes](#remove-episodes)
+    - [Unfollow a podcast](#unfollow-a-podcast)
   - [Shortcuts](#shortcuts)
   - [Features](#features)
   - [Audio Transcoding](#audio-transcoding)
@@ -109,6 +114,42 @@ Forget about all previous .md and firmware recommendations.
 ### Night mode
 <img src="./res/screenshot_nm_off.png" width="300"><img src="./res/screenshot_nm_on.png" width="300">  
 
+## Podcasts
+
+The **Podcasts** view (button at the top of the window, or Stories / Import a podcast, `Ctrl+P`) puts the episodes of a podcast on your Lunii/Flam. On the left, the followed podcasts; on the right, the episodes of the selected one.
+
+### Search and follow a podcast
+1. Click **+** above **Followed podcasts**. The **Add a podcast** dialog opens.
+2. Type in the field, then Enter or **Search**:
+   * the podcast **name**: it is searched in the Apple Podcasts catalog. Click the right result.  
+     Greyed results ("feed not public") cannot be loaded this way: paste the address of the podcast page instead;
+   * or its **address**: RSS feed, web page of the podcast (for instance a series on radiofrance.fr) or Apple Podcasts link.
+3. The podcast is loaded and checked (title, number of episodes), then click **Follow**.
+
+The followed podcasts are reloaded in the background each time the view is opened. Under each of them, a line shows its **new episodes** (in bold) if its album is already on the device, or its number of episodes otherwise. The **↻** button reloads the selected podcast.  
+A podcast whose album is on the connected device is followed automatically (album imported from another computer).
+
+### Add episodes to the device
+1. Choose the podcast on the left.
+2. Choose the import mode, **Import as:**
+   * **an album** (default): a single story, one episode per track in chronological order, with a menu to choose the episode. If the album is already on the device, the chosen episodes are **appended** to it;
+   * **one story per episode**: each episode shows up as a story of its own in the device list.
+3. Check the episodes you want (**to import**). The filter field and the **All** / **None** buttons help choosing; clicking a column header sorts the list (title, duration, publication date, on the device).
+4. Click **Import (n)**. The log shows the progress.
+
+The episodes already on the device are checked in the **On the device** column. Episodes that are not MP3 are converted, and the Tools / **Normalize volume (albums, podcasts)** option brings all the tracks to the same loudness.
+
+### Remove episodes
+In the episode list, **uncheck** an episode that is on the device: it becomes **to remove**. The button turns into **Remove (n)**, or **Import (n) and remove (m)** if episodes are checked too. A confirmation lists the episodes before removing them.  
+In an album, only the episodes whose track is recognized can be removed; the others stay greyed.
+
+### Unfollow a podcast
+Select it, then click **Unfollow**. If its album, or episodes imported as stories, are on the device, the application asks what to do with them:
+* **Keep on the device**: the podcast leaves the list, its episodes stay on the Lunii/Flam (but the album is no longer updated);
+* **Remove from the device**: the album or the stories of the podcast are removed too.
+
+> Podcasts are usually meant for private listening: do not redistribute the files.
+
 ## Shortcuts
 
 | Keys           | Actions                          |
@@ -119,6 +160,7 @@ Forget about all previous .md and firmware recommendations.
 | `Ctrl+Down`    | Move the selected item(s) Bottom |
 |                |                                  |
 | `Ctrl+I`       | Import new story                 |
+| `Ctrl+P`       | Add a podcast (Podcasts view)    |
 | `Ctrl+S`       | Export the selection             |
 | `Ctrl+Shift+S` | Export all the stories           |
 | `Ctrl+H`       | Hide/Show selected stories       |
@@ -145,6 +187,7 @@ Forget about all previous .md and firmware recommendations.
   _(app will try to fix broken stories, in particular auth files on v1/v2)_
   * Recover them (if they are complete)
   * Remove them (**be careful, files will be deleted**)  
+* **Podcasts**: search and follow your podcasts, import their episodes as an album or as stories (refer [this section](#podcasts))
 * **Get Firmware**  for your device (refer [this section](#firmware-upgrade))
 
 ## Audio Transcoding

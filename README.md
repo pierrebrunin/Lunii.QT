@@ -40,6 +40,11 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
   - [Interface Utilisateur](#interface-utilisateur)
     - [Fenêtre principale](#fenêtre-principale)
     - [Mode Nuit](#mode-nuit)
+  - [Podcasts](#podcasts)
+    - [Rechercher et suivre un podcast](#rechercher-et-suivre-un-podcast)
+    - [Ajouter des épisodes sur l'appareil](#ajouter-des-épisodes-sur-lappareil)
+    - [Supprimer des épisodes](#supprimer-des-épisodes)
+    - [Ne plus suivre un podcast](#ne-plus-suivre-un-podcast)
   - [Raccourcis clavier](#raccourcis-clavier)
   - [Fonctionnalités](#fonctionnalités)
   - [Transcodage audio](#transcodage-audio)
@@ -107,6 +112,42 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 ### Mode Nuit
 <img src="./res/screenshot_nm_off.png" width="300"><img src="./res/screenshot_nm_on.png" width="300">  
 
+## Podcasts
+
+La vue **Podcasts** (bouton en haut de la fenêtre, ou Histoires / Importer un podcast, `Ctrl+P`) met les épisodes d'un podcast sur la Lunii/Flam. À gauche, les podcasts suivis ; à droite, les épisodes de celui qui est sélectionné.
+
+### Rechercher et suivre un podcast
+1. Cliquez sur **+** au-dessus des **Podcasts suivis**. La fenêtre **Ajouter un podcast** s'ouvre.
+2. Tapez dans le champ, puis Entrée ou **Rechercher** :
+   * le **nom** du podcast : il est cherché dans le catalogue Apple Podcasts. Cliquez sur le bon résultat.  
+     Les résultats grisés (« flux non public ») ne peuvent pas être chargés ainsi : collez plutôt l'adresse de la page du podcast ;
+   * ou son **adresse** : flux RSS, page web du podcast (par exemple une série sur radiofrance.fr) ou lien Apple Podcasts.
+3. Le podcast est chargé et vérifié (titre, nombre d'épisodes), puis cliquez sur **Suivre**.
+
+Les podcasts suivis sont rechargés en arrière-plan à chaque ouverture de la vue. Sous chacun, une ligne indique ses **nouveaux épisodes** (en gras) si son album est déjà sur l'appareil, ou son nombre d'épisodes sinon. Le bouton **↻** recharge le podcast sélectionné.  
+Un podcast dont l'album est sur l'appareil branché est suivi automatiquement (album importé depuis un autre ordinateur).
+
+### Ajouter des épisodes sur l'appareil
+1. Choisissez le podcast à gauche.
+2. Choisissez le mode d'import, **Importer comme :**
+   * **un album** (par défaut) : une seule histoire, un épisode par piste dans l'ordre chronologique, avec un menu pour choisir l'épisode. Si l'album est déjà sur l'appareil, les épisodes choisis y sont **ajoutés** ;
+   * **une histoire par épisode** : chaque épisode apparaît comme une histoire à part dans la liste de l'appareil.
+3. Cochez les épisodes voulus (mention **à importer**). Le champ de filtre et les boutons **Tous** / **Aucun** aident à choisir ; un clic sur l'en-tête d'une colonne trie la liste (titre, durée, date de publication, présence sur l'appareil).
+4. Cliquez sur **Importer (n)**. Le journal affiche la progression.
+
+Les épisodes déjà sur l'appareil sont cochés dans la colonne **Sur l'appareil**. Les épisodes qui ne sont pas en MP3 sont convertis, et l'option Outils / **Égaliser le volume (albums, podcasts)** ramène toutes les pistes au même niveau sonore.
+
+### Supprimer des épisodes
+Dans la liste des épisodes, **décochez** un épisode présent sur l'appareil : il passe **à supprimer**. Le bouton devient **Supprimer (n)**, ou **Importer (n) et supprimer (m)** si des épisodes sont aussi cochés. Une confirmation liste les épisodes avant de les supprimer.  
+Dans un album, seuls les épisodes dont la piste est reconnue peuvent être retirés ; les autres restent grisés.
+
+### Ne plus suivre un podcast
+Sélectionnez-le puis cliquez sur **Ne plus suivre**. Si son album, ou des épisodes importés comme histoires, sont sur l'appareil, l'application demande quoi en faire :
+* **Garder sur l'appareil** : le podcast disparaît de la liste, ses épisodes restent sur la Lunii/Flam (mais l'album n'est plus mis à jour) ;
+* **Supprimer de l'appareil** : l'album ou les histoires du podcast sont aussi supprimés.
+
+> Les podcasts sont en général destinés à l'écoute privée : ne redistribuez pas les fichiers.
+
 ## Raccourcis clavier
 
 | Keys           | Actions                                             |
@@ -117,6 +158,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 | `Ctrl+Down`    | Déplace la ou les sélection(s) en dernière position |
 |                |                                                     |
 | `Ctrl+I`       | Importe une nouvelle histoire                       |
+| `Ctrl+P`       | Ajoute un podcast (vue Podcasts)                    |
 | `Ctrl+S`       | Exporte la sélection                                |
 | `Ctrl+Shift+S` | Exporte toutes les histoires                        |
 | `Ctrl+H`       | Masquer/Démasquer les histoires sélectionnées       |
@@ -146,6 +188,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
     _(l'application tentera de réparer les histoires, en particulier les fichiers sur les Lunii v1/v2)_
   * les récupérer (si elles sont saines)
   * les supprimer (**attention, les fichiers seront supprimés**)  
+* **Podcasts** : recherchez et suivez vos podcasts, importez leurs épisodes en album ou en histoires (cf. [cette section](#podcasts))
 * **Récupération du Firmware** pour votre appareil (cf. [cette section](#mise-à-jour-du-firmware))
   
 ## Transcodage audio
