@@ -133,13 +133,13 @@ Un podcast dont l'album est sur l'appareil branché est suivi automatiquement (a
 2. Choisissez le mode d'import, **Importer comme :**
    * **un album** (par défaut) : une seule histoire, un épisode par piste dans l'ordre chronologique, avec un menu pour choisir l'épisode. Si l'album est déjà sur l'appareil, les épisodes choisis y sont **ajoutés** ;
    * **une histoire par épisode** : chaque épisode apparaît comme une histoire à part dans la liste de l'appareil.
-3. Cochez les épisodes voulus (mention **à importer**). Le champ de filtre et les boutons **Tous** / **Aucun** aident à choisir ; un clic sur l'en-tête d'une colonne trie la liste (titre, durée, date de publication, présence sur l'appareil).
+3. Cochez les épisodes voulus, par leur case (mention **à importer**) ; un clic ailleurs sur la ligne la sélectionne seulement. Le champ de filtre et les boutons **Tous** / **Aucun** aident à choisir ; un clic sur l'en-tête d'une colonne trie la liste (titre, durée, date de publication, présence sur l'appareil).
 4. Cliquez sur **Importer (n)**. Le journal affiche la progression.
 
 Les épisodes déjà sur l'appareil sont cochés dans la colonne **Sur l'appareil**. Les épisodes qui ne sont pas en MP3 sont convertis, et l'option Histoires / **Égaliser le volume (albums, podcasts)** ramène toutes les pistes au même niveau sonore.
 
 ### Supprimer des épisodes
-Dans la liste des épisodes, **décochez** un épisode présent sur l'appareil : il passe **à supprimer**. Le bouton devient **Supprimer (n)**, ou **Importer (n) et supprimer (m)** si des épisodes sont aussi cochés. Une confirmation liste les épisodes avant de les supprimer.  
+Dans la liste des épisodes, **décochez** la case d'un épisode présent sur l'appareil : il passe **à supprimer**. Le bouton devient **Supprimer (n)**, ou **Importer (n) et supprimer (m)** si des épisodes sont aussi cochés. Une confirmation liste les épisodes avant de les supprimer.  
 Dans un album, seuls les épisodes dont la piste est reconnue peuvent être retirés ; les autres restent grisés.
 
 ### Ne plus suivre un podcast

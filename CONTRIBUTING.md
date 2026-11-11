@@ -273,7 +273,7 @@ directement la fenêtre d'ajout) :
   flux publient aussi des annonces ou d'autres émissions : l'application ne
   tente pas de deviner les « nouveaux » épisodes. Ils sont
   enregistrés dans `~/.lunii/podcasts.json`, comme les épisodes importés ;
-- **à droite, les épisodes** du podcast sélectionné, à cocher (filtre, Tous /
+- **à droite, les épisodes** du podcast sélectionné, à cocher par leur case (filtre, Tous /
   Aucun), le mode d'import, puis **Importer (n)**. ↻ recharge le flux, **Ne plus
   suivre** retire le podcast de la liste (son album reste sur l'appareil, mais
   n'est plus mis à jour).

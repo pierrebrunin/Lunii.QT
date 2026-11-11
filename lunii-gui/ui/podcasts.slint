@@ -39,6 +39,8 @@ export component PodcastsView inherits HorizontalLayout {
     // its episodes are being loaded
     in property <bool> loading;
     in property <[EpisodeRow]> rows;
+    // episode selected by a click on its row (its box checks it)
+    property <int> selected-episode: -1;
     in property <int> selected-count;
     // episodes on the device unchecked: to remove
     in property <int> remove-count;
@@ -120,7 +122,10 @@ export component PodcastsView inherits HorizontalLayout {
                     height: 42px;
                     background: i == root.current ? Theme.selection : feed-area.has-hover ? #8882 : transparent;
                     feed-area := TouchArea {
-                        clicked => { root.select(i); }
+                        clicked => {
+                            root.selected-episode = -1;
+                            root.select(i);
+                        }
                     }
                     VerticalLayout {
                         padding-left: 8px;
@@ -284,11 +289,12 @@ export component PodcastsView inherits HorizontalLayout {
                     for row in root.rows: Rectangle {
                         height: root.row-height;
                         property <bool> enabled: !row.present || row.removable;
-                        background: area.has-hover && enabled ? #8882 : transparent;
-                        property <color> fg: enabled ? Palette.foreground : Theme.hidden-text;
+                        property <bool> selected: row.index == root.selected-episode;
+                        background: selected ? Theme.selection : area.has-hover ? #8882 : transparent;
+                        property <color> fg: selected ? #fff : enabled ? Palette.foreground : Theme.hidden-text;
+                        // a click selects the row; only its box checks it
                         area := TouchArea {
-                            enabled: enabled;
-                            clicked => { root.toggle(row.index); }
+                            clicked => { root.selected-episode = row.index; }
                         }
                         HorizontalLayout {
                             padding-left: 6px;
@@ -301,7 +307,8 @@ export component PodcastsView inherits HorizontalLayout {
                                 width: root.col-device;
                                 spacing: 4px;
                                 // its state follows the row only: the
-                                // clicks go to the TouchArea over it
+                                // clicks go to the TouchArea over it, that
+                                // checks or unchecks the episode
                                 Rectangle {
                                     width: box.preferred-width;
                                     box := CheckBox {
@@ -316,7 +323,7 @@ export component PodcastsView inherits HorizontalLayout {
                                 }
                                 Text {
                                     text: row.remove ? @tr("to remove") : row.checked && !row.present ? @tr("to import") : "";
-                                    color: row.remove ? #d33 : Theme.selection;
+                                    color: selected ? #fff : row.remove ? #d33 : Theme.selection;
                                     font-size: 11px;
                                     vertical-alignment: center;
                                     horizontal-stretch: 1;
