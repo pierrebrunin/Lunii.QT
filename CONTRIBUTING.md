@@ -358,6 +358,10 @@ La langue suit le système (français ou anglais) ; `LUNII_LANG=en` ou
 | `LUNII_SHOT_SEARCH=<mots ou adresse>` | (captures, avec `LUNII_SHOT_FEED`) ajoute la fenêtre d'ajout d'un podcast : vraie recherche (réseau), premier résultat vérifié puis suivi |
 | `LUNII_SHOT_IMPORT=<a>:<b>` | (captures) importe ces archives ou dossiers par l'interface ; si le dernier est un album, capture aussi ses pistes et son dialogue de modification (qui est appliquée) |
 
+`tools/fake-lunii.sh [--no-run] [dossier]` crée une fausse Lunii v2 avec des
+histoires inventées (couvertures, une cachée, une en mode nuit) et lance
+l'application dessus ; il affiche les variables à reprendre pour la relancer.
+
 Captures d'écran sans affichage (rendu logiciel), avec la feature `screenshot` :
 
 ```bash
