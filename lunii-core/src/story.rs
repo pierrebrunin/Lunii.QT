@@ -617,6 +617,16 @@ pub fn uuid_from_archive(first_entry: &str) -> Result<(String, Uuid)> {
     }
 }
 
+/// UUID of a story archive, read in its least deep entry: the first one may
+/// be in a subdirectory (`<uuid>/img/...` sorts before `<uuid>/info`).
+pub fn uuid_from_entries(names: &[String]) -> Result<(String, Uuid)> {
+    let shallowest = names
+        .iter()
+        .min_by_key(|n| n.trim_end_matches(['/', '\\']).matches(['/', '\\']).count())
+        .context("empty archive")?;
+    uuid_from_archive(shallowest)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -647,6 +657,13 @@ mod tests {
         let (_, u) = uuid_from_archive("0123456789ABCDEF0123456789ABCDEF/ri").unwrap();
         assert_eq!(short_uuid(&u), "89ABCDEF");
         assert!(uuid_from_archive("000/ri").is_err());
+        let names: Vec<String> = [
+            "0123456789ABCDEF0123456789ABCDEF/img/thumbnail.lif",
+            "0123456789ABCDEF0123456789ABCDEF/info",
+        ]
+        .map(String::from)
+        .to_vec();
+        assert_eq!(uuid_from_entries(&names).unwrap().1, u);
     }
 
     fn sample_studio() -> Value {

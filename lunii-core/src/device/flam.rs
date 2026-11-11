@@ -15,7 +15,7 @@ use crate::crypto::{self, hex_spaced, hexlify, reverse_bytes};
 use crate::report::{Context, check_abort};
 use crate::story::{
     self, Story, StoryList, archive_type, story_is_flam, story_is_lunii, story_is_studio,
-    uuid_from_archive,
+    uuid_from_entries,
 };
 
 pub const STORIES_BASEDIR: &str = "str/";
@@ -333,7 +333,7 @@ impl FlamDevice {
             }
         };
 
-        let (_, new_uuid) = uuid_from_archive(contents.first().context("empty archive")?)?;
+        let (_, new_uuid) = uuid_from_entries(&contents)?;
         if let Some(s) = self.stories.get(&new_uuid.to_string()) {
             bail!("'{}' is already loaded, aborting !", s.name());
         }
@@ -384,7 +384,7 @@ impl FlamDevice {
 
         let archive = Archive::open_zip(path)?;
         let names = archive.names();
-        let (_, new_uuid) = uuid_from_archive(names.first().context("empty archive")?)?;
+        let (_, new_uuid) = uuid_from_entries(&names)?;
         self.check_not_loaded(&new_uuid)?;
 
         let output = self.content_dir();
@@ -413,7 +413,7 @@ impl FlamDevice {
         if archive.contains(FILE_STUDIO_JSON) {
             bail!("Corrupted file format. Unable to add this story.");
         }
-        let (uuid_str, new_uuid) = uuid_from_archive(names.first().context("empty archive")?)?;
+        let (uuid_str, new_uuid) = uuid_from_entries(&names)?;
         self.check_not_loaded(&new_uuid)?;
 
         let long_uuid = new_uuid.to_string();

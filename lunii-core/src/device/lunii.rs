@@ -11,7 +11,7 @@ use crate::archive::Archive;
 use crate::constants::*;
 use crate::crypto::{self, hex_spaced, hexlify, reverse_bytes};
 use crate::report::{Context, check_abort};
-use crate::story::{self, Story, StoryList, archive_type, uuid_from_archive};
+use crate::story::{self, Story, StoryList, archive_type, uuid_from_entries};
 
 pub const STORIES_BASEDIR: &str = ".content/";
 pub const HIDDEN_STORIES_BASEDIR: &str = ".content.hidden/";
@@ -644,8 +644,7 @@ impl LuniiDevice {
     fn import_lunii_v2(&mut self, ctx: &Context, path: &Path) -> Result<()> {
         let archive = Archive::open(path)?;
         let names = archive.names();
-        let first = names.first().context("empty archive")?;
-        let (_, new_uuid) = uuid_from_archive(first)?;
+        let (_, new_uuid) = uuid_from_entries(&names)?;
         self.check_not_loaded(&new_uuid)?;
 
         let output = self.content_dir();
@@ -715,7 +714,7 @@ impl LuniiDevice {
 
         let archive = Archive::open_zip(path)?;
         let names = archive.names();
-        let (_, new_uuid) = uuid_from_archive(names.first().context("empty archive")?)?;
+        let (_, new_uuid) = uuid_from_entries(&names)?;
         self.check_not_loaded(&new_uuid)?;
 
         let short = story::short_uuid(&new_uuid);

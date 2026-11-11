@@ -395,3 +395,177 @@ fn abort_cleans_partial_import() {
     assert!(!root.join(".content/000000FF").exists());
     assert!(dev.stories().is_empty());
 }
+
+/// Flam story in plain format: a script, its info and a sound.
+fn flam_plain_story(dir: &Path, uuid: Uuid, title: &str) -> PathBuf {
+    let path = dir.join(format!("{title}.plain.pk"));
+    write_zip(
+        &path,
+        &[
+            ("uuid.bin", uuid.as_bytes().to_vec()),
+            ("main.lua", (0..64u8).collect()),
+            ("info.plain", (0..48u8).map(|i| i * 3).collect()),
+            ("sounds/a.mp3", (0..100u8).collect()),
+            (
+                "_metadata.json",
+                format!(r#"{{"uuid": "{uuid}", "title": "{title}", "description": "d"}}"#)
+                    .into_bytes(),
+            ),
+        ],
+    );
+    path
+}
+
+/// `archive` with a thumbnail added (written in the device's `img/` on a Flam).
+fn with_thumbnail(archive: PathBuf) -> PathBuf {
+    let mut files: Vec<(String, Vec<u8>)> = zip_entries(&archive).into_iter().collect();
+    let mut png = Vec::new();
+    image::RgbImage::from_pixel(8, 8, image::Rgb([200, 100, 50]))
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .unwrap();
+    files.push((FILE_THUMB.to_string(), png));
+    let refs: Vec<(&str, Vec<u8>)> = files.iter().map(|(n, d)| (n.as_str(), d.clone())).collect();
+    write_zip(&archive, &refs);
+    archive
+}
+
+fn write_zip(path: &Path, files: &[(&str, Vec<u8>)]) {
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+    for (name, data) in files {
+        zip.start_file(*name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(data).unwrap();
+    }
+    zip.finish().unwrap();
+}
+
+/// Zip of a story directory, entries under `prefix/`, top level files first
+/// (the UUID is read in the first entry).
+fn zip_story_dir(path: &Path, story_dir: &Path, prefix: &str) {
+    let mut files: Vec<(String, Vec<u8>)> = tree(story_dir)
+        .into_iter()
+        .map(|(rel, data)| (rel.replace('\\', "/"), data))
+        .collect();
+    files.sort_by_key(|(rel, _)| (rel.matches('/').count(), rel.clone()));
+    let files: Vec<(String, Vec<u8>)> = files
+        .into_iter()
+        .map(|(rel, data)| (format!("{prefix}/{rel}"), data))
+        .collect();
+    let refs: Vec<(&str, Vec<u8>)> = files.iter().map(|(n, d)| (n.as_str(), d.clone())).collect();
+    write_zip(path, &refs);
+}
+
+fn zip_entries(path: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+    (0..zip.len())
+        .map(|i| {
+            let mut f = zip.by_index(i).unwrap();
+            let mut data = Vec::new();
+            std::io::Read::read_to_end(&mut f, &mut data).unwrap();
+            (f.name().unwrap().to_string(), data)
+        })
+        .collect()
+}
+
+fn out_dir(dir: &Path, name: &str) -> PathBuf {
+    let out = dir.join(name);
+    std::fs::create_dir_all(&out).unwrap();
+    out
+}
+
+/// A v2 archive (story directory of a Lunii v2, ciphered) imported on
+/// another Lunii v2 and on a Flam: same files, same plain export.
+#[test]
+fn v2_archive_imports_on_lunii_and_flam() {
+    setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let uuid = Uuid::parse_str("12345678-aaaa-4bbb-8ccc-0000000000b2").unwrap();
+    let plain = plain_story(tmp.path(), uuid, "Archive v2");
+    let root = lunii_v2(&tmp.path().join("a"));
+    let mut dev = open_device(&ctx(), &root).unwrap();
+    dev.import_story(&ctx(), &plain).unwrap();
+
+    let v2 = tmp.path().join("Archive.v2.pk");
+    zip_story_dir(&v2, &root.join(".content/000000B2"), &uuid.to_string());
+
+    let root2 = lunii_v2(&tmp.path().join("b"));
+    let mut dev2 = open_device(&ctx(), &root2).unwrap();
+    dev2.import_story(&ctx(), &v2).unwrap();
+    assert_eq!(tree(&root.join(".content")), tree(&root2.join(".content")));
+
+    let root3 = flam(&tmp.path().join("c"));
+    let mut dev3 = open_device(&ctx(), &root3).unwrap();
+    dev3.import_story(&ctx(), &v2).unwrap();
+    let from_lunii = dev
+        .export_story(&ctx(), "000000B2", &out_dir(tmp.path(), "out_a"))
+        .unwrap();
+    let from_flam = dev3
+        .export_story(&ctx(), "000000B2", &out_dir(tmp.path(), "out_c"))
+        .unwrap();
+    // on the Flam, the ciphered files of a Lunii story are padded to 16 bytes
+    let (lunii, flam) = (zip_entries(&from_lunii), zip_entries(&from_flam));
+    assert_eq!(
+        lunii.keys().collect::<Vec<_>>(),
+        flam.keys().collect::<Vec<_>>()
+    );
+    for (name, data) in &lunii {
+        let padded = &flam[name];
+        assert!(padded.starts_with(data), "{name}");
+        assert!(padded[data.len()..].iter().all(|&b| b == 0), "{name}");
+        assert!(padded.len() - data.len() < 16, "{name}");
+    }
+}
+
+/// A Flam story exported in plain, then imported on another Flam.
+#[test]
+fn flam_plain_export_reimport_is_identical() {
+    setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let uuid = Uuid::parse_str("cccccccc-0000-4000-8000-0000000000f1").unwrap();
+    let archive = flam_plain_story(tmp.path(), uuid, "Flam en clair");
+    let root = flam(&tmp.path().join("a"));
+    let mut dev = open_device(&ctx(), &root).unwrap();
+    dev.import_story(&ctx(), &archive).unwrap();
+    let exported = dev
+        .export_story(&ctx(), "000000F1", &out_dir(tmp.path(), "out"))
+        .unwrap();
+    assert!(exported.to_string_lossy().ends_with(".plain.pk"));
+
+    let root2 = flam(&tmp.path().join("b"));
+    let mut dev2 = open_device(&ctx(), &root2).unwrap();
+    dev2.import_story(&ctx(), &exported).unwrap();
+    assert_eq!(tree(&root.join("str")), tree(&root2.join("str")));
+}
+
+/// Backups of official stories on a Flam (a Lunii story, then a Flam story)
+/// put back after their removal: same files.
+#[test]
+fn flam_backups_restore_identically() {
+    setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let official = Uuid::parse_str(OFFICIAL_UUID).unwrap();
+    let root = flam(tmp.path());
+    let mut dev = open_device(&ctx(), &root).unwrap();
+    for (index, archive) in [
+        with_thumbnail(plain_story(tmp.path(), official, "Officielle")),
+        flam_plain_story(tmp.path(), official, "Officielle Flam"),
+    ]
+    .iter()
+    .enumerate()
+    {
+        dev.import_story(&ctx(), archive).unwrap();
+        let before = tree(&root.join("str"));
+        let backup = dev
+            .export_story(
+                &ctx(),
+                "000000AA",
+                &out_dir(tmp.path(), &format!("out{index}")),
+            )
+            .unwrap();
+        dev.remove_story(&ctx(), "000000AA").unwrap();
+        dev.import_story(&ctx(), &backup)
+            .unwrap_or_else(|e| panic!("restore {index}: {e:#}"));
+        assert_eq!(before, tree(&root.join("str")), "restore {index}");
+        dev.remove_story(&ctx(), "000000AA").unwrap();
+    }
+}
