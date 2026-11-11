@@ -10,7 +10,13 @@ use unicode_normalization::UnicodeNormalization;
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 
+use uuid::Uuid;
+
+use super::Device;
+use crate::archive::Archive;
+use crate::constants::{FILE_META, FILE_THUMB, FILE_UUID};
 use crate::report::{Context, check_abort};
+use crate::story::Story;
 
 /// Makes a story title usable as a file name (ASCII only, reserved chars replaced).
 pub fn secure_filename(filename: &str) -> String {
@@ -229,6 +235,171 @@ impl Drop for StoryZip {
             let _ = std::fs::remove_file(&self.path);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Import and export of story archives
+// ---------------------------------------------------------------------------
+
+/// UUID of a plain archive (`uuid.bin`), error if the story is already on
+/// the device.
+pub fn plain_archive_uuid<D: Device + ?Sized>(dev: &D, archive: &Archive) -> Result<Uuid> {
+    if !archive.contains(FILE_UUID) {
+        bail!("No UUID file found in archive. Unable to add this story.");
+    }
+    let uuid = Uuid::from_slice(&archive.read(FILE_UUID)?)?;
+    dev.check_not_loaded(&uuid)?;
+    Ok(uuid)
+}
+
+/// The backup `path` was made from the device `snu`: its name starts with it.
+pub fn is_backup_of(path: &Path, snu: &str) -> bool {
+    path.file_name()
+        .map(|f| f.to_string_lossy().to_lowercase())
+        .unwrap_or_default()
+        .starts_with(&snu.to_lowercase())
+}
+
+/// Writes the entries of an imported archive into `output`, reporting the
+/// progress; on abort, the story is removed. `entry` gives the path (relative
+/// to `output`) and the content of an entry, or `None` to skip it. Returns
+/// whether the story has a night mode file (`nm`).
+pub fn write_entries<D: Device + ?Sized>(
+    dev: &D,
+    ctx: &Context,
+    uuid: &Uuid,
+    output: &Path,
+    entries: &[String],
+    mut entry: impl FnMut(&str) -> Result<Option<(String, Vec<u8>)>>,
+) -> Result<bool> {
+    let short = crate::story::short_uuid(uuid);
+    let mut night_mode = false;
+    for (index, name) in entries.iter().enumerate() {
+        ctx.story_progress(&short, index, entries.len());
+        if ctx.is_aborted() {
+            return Err(dev.abort_cleanup(ctx, uuid));
+        }
+        let Some((target, data)) = entry(name)? else {
+            continue;
+        };
+        night_mode |= name.ends_with("nm");
+        ctx.debug(format!("File {}/{} > {target}", index + 1, entries.len()));
+        write_with_progress(ctx, &output.join(&target), &data)?;
+    }
+    Ok(night_mode)
+}
+
+/// Archive `zip_path` of story files (`(absolute, relative)` paths), each one
+/// added with the name and content given by `entry`, reporting the progress.
+/// To be finished by the caller.
+pub fn zip_story(
+    ctx: &Context,
+    short_uuid: &str,
+    zip_path: &Path,
+    files: &[(PathBuf, String)],
+    mut entry: impl FnMut(&Path, &str) -> Result<(String, Vec<u8>)>,
+) -> Result<StoryZip> {
+    let mut zip = StoryZip::create(zip_path)?;
+    ctx.debug("> Zipping story ...");
+    for item in progress_iter(ctx, short_uuid, files) {
+        let (_, (abs, rel)) = item?;
+        let (name, data) = entry(abs, rel)?;
+        ctx.debug(&name);
+        zip.add(&name, &data)?;
+    }
+    Ok(zip)
+}
+
+/// Path of the plain export of a story: `<title>.<short uuid>.plain.pk`.
+pub fn plain_export_path(out_dir: &Path, story: &Story) -> PathBuf {
+    out_dir.join(format!(
+        "{}.{}.plain.pk",
+        secure_filename(&story.name()),
+        story.short_uuid()
+    ))
+}
+
+/// Adds the UUID of an exported story and, with `metadata` for a third-party
+/// story, its thumbnail and metadata.
+pub fn add_story_info(
+    ctx: &Context,
+    zip: &mut StoryZip,
+    story: &Story,
+    metadata: bool,
+) -> Result<()> {
+    ctx.debug("> Adding UUID ...");
+    zip.add(FILE_UUID, story.uuid.as_bytes())?;
+    if metadata && !story.is_official() {
+        ctx.debug("> Adding thumbnail ...");
+        if let Some(pict) = story.picture(false) {
+            zip.add(FILE_THUMB, &pict)?;
+        }
+        ctx.debug("> Adding metadata ...");
+        if let Some(meta) = story.meta() {
+            zip.add(FILE_META, meta.as_bytes())?;
+        }
+    }
+    Ok(())
+}
+
+/// Backup of a story: its files as they are on the device, under `<uuid>/`,
+/// in `<SNU>.<title>.<short uuid>.zip`.
+pub fn export_backup_story<D: Device + ?Sized>(
+    dev: &D,
+    ctx: &Context,
+    story: &Story,
+    out_dir: &Path,
+) -> Result<PathBuf> {
+    let short = story.short_uuid();
+    ctx.info(format!("🚧 Exporting {short} - {}", story.name()));
+    let zip_path = out_dir.join(format!(
+        "{}.{}.{short}.zip",
+        dev.snu_str(),
+        secure_filename(&story.name())
+    ));
+    let files = walk_files(&dev.story_path(story));
+    let zip = zip_story(ctx, &short, &zip_path, &files, |abs, rel| {
+        Ok((format!("{}/{rel}", story.uuid), std::fs::read(abs)?))
+    })?;
+    zip.finish()
+}
+
+/// Name on a device of a file of a plain Lunii archive: without `.plain`,
+/// `.mp3` and `.bmp`, its base name in upper case from 8 characters.
+/// `studio_ri` / `studio_si`: a STUdio screen / sound, put in `rf/000` /
+/// `sf/000`.
+pub fn lunii_device_name(file: &str, studio_ri: bool, studio_si: bool) -> String {
+    let mut file = remove_suffix(file, ".plain").to_string();
+    if studio_ri {
+        file = format!("rf/000/{file}");
+    }
+    if studio_si {
+        file = format!("sf/000/{file}");
+    }
+    let lower = file.to_lowercase();
+    let lower = remove_suffix(&lower, ".mp3").to_lowercase();
+    let file = remove_suffix(&lower, ".bmp").to_string();
+
+    let (dir, base) = split_path(&file);
+    if base.chars().count() >= 8 {
+        return join_path(dir, &base.to_uppercase());
+    }
+    file
+}
+
+/// Name in a plain archive of a file of a Lunii story (relative to its
+/// directory).
+pub fn lunii_plain_name(rel: &str) -> String {
+    if rel.contains("rf/") || rel.contains("rf\\") {
+        return format!("{rel}.bmp");
+    }
+    if rel.contains("sf/") || rel.contains("sf\\") {
+        return format!("{rel}.mp3");
+    }
+    if rel.ends_with("li") || rel.ends_with("ri") || rel.ends_with("si") {
+        return format!("{rel}.plain");
+    }
+    rel.to_string()
 }
 
 /// Iterates over a list, reporting story progress and checking abort requests.

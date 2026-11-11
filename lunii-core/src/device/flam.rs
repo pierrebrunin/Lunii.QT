@@ -6,15 +6,15 @@ use anyhow::{Context as _, Result, bail};
 use uuid::Uuid;
 
 use super::Device;
-use super::common::{self, StoryZip, join_path, remove_suffix, split_path};
+use super::common::{self, remove_suffix, split_path};
 use crate::album;
 use crate::archive::Archive;
 use crate::constants::*;
 use crate::convert::image;
 use crate::crypto::{self, hex_spaced, hexlify, reverse_bytes};
-use crate::report::{Context, check_abort};
+use crate::report::Context;
 use crate::story::{
-    self, Story, StoryList, archive_type, story_is_flam, story_is_lunii, story_is_studio,
+    Story, StoryList, archive_type, story_is_flam, story_is_lunii, story_is_studio,
     uuid_from_entries,
 };
 
@@ -183,23 +183,9 @@ impl FlamDevice {
         }
     }
 
+    /// Name on the Flam of a file of a plain Lunii archive.
     pub fn lunii_ciphered_name(file: &str, studio_ri: bool, studio_si: bool) -> String {
-        let mut file = remove_suffix(file, ".plain").to_string();
-        if studio_ri {
-            file = format!("rf/000/{file}");
-        }
-        if studio_si {
-            file = format!("sf/000/{file}");
-        }
-        let lower = file.to_lowercase();
-        let lower = remove_suffix(&lower, ".mp3").to_lowercase();
-        let file = remove_suffix(&lower, ".bmp").to_string();
-
-        let (dir, base) = split_path(&file);
-        if base.chars().count() >= 8 {
-            return join_path(dir, &base.to_uppercase());
-        }
-        file
+        common::lunii_device_name(file, studio_ri, studio_si)
     }
 
     fn write_keyfile(&self, ctx: &Context, story_dir: &Path) -> Result<()> {
@@ -230,79 +216,48 @@ impl FlamDevice {
         self.update_pack_index()
     }
 
+    /// Ends the import of a Lunii story: authorization, info and thumbnail
+    /// files.
+    fn finish_lunii_import(&mut self, ctx: &Context, story_dir: &Path, story: Story) -> Result<()> {
+        self.write_keyfile(ctx, story_dir)?;
+        self.write_info(&story, story_dir)?;
+        self.write_thumbnail(ctx, &story, story_dir)?;
+        self.finish_import(story)
+    }
+
     fn import_lunii_plain(&mut self, ctx: &Context, path: &Path) -> Result<()> {
         let archive = Archive::open_zip(path)?;
-        let contents = archive.names();
-        if !archive.contains(FILE_UUID) {
-            bail!("No UUID file found in archive. Unable to add this story.");
-        }
-        let new_uuid = Uuid::from_slice(&archive.read(FILE_UUID)?)?;
-        self.check_not_loaded(&new_uuid)?;
+        let new_uuid = common::plain_archive_uuid(self, &archive)?;
         common::import_plain_metadata(&archive, &new_uuid)?;
 
-        let short = story::short_uuid(&new_uuid);
         let output = self.content_dir().join(new_uuid.to_string());
         std::fs::create_dir_all(&output)?;
-
-        for (index, file) in contents.iter().enumerate() {
-            ctx.story_progress(&short, index, contents.len());
-            if ctx.is_aborted() {
-                return Err(self.abort_cleanup(ctx, &new_uuid));
-            }
-            if [FILE_UUID, FILE_META, FILE_THUMB].contains(&file.as_str())
+        common::write_entries(self, ctx, &new_uuid, &output, &archive.names(), |file| {
+            if [FILE_UUID, FILE_META, FILE_THUMB].contains(&file)
                 || file.ends_with("bt")
                 || archive.is_dir(file)
             {
-                continue;
+                return Ok(None);
             }
             let data = self.ciphered_data(file, &archive.read(file)?, false, false)?;
-            let new_name = Self::lunii_ciphered_name(file, false, false);
-            ctx.debug(format!(
-                "File {}/{} > {new_name}",
-                index + 1,
-                contents.len()
-            ));
-            common::write_with_progress(ctx, &output.join(&new_name), &data)?;
-        }
-
-        self.write_keyfile(ctx, &output)?;
-        let story = Story::new(new_uuid);
-        self.write_info(&story, &output)?;
-        self.write_thumbnail(ctx, &story, &output)?;
-        self.finish_import(story)
+            Ok(Some((Self::lunii_ciphered_name(file, false, false), data)))
+        })?;
+        self.finish_lunii_import(ctx, &output, Story::new(new_uuid))
     }
 
     fn import_flam_plain(&mut self, ctx: &Context, path: &Path) -> Result<()> {
         let archive = Archive::open_zip(path)?;
-        let contents = archive.names();
-        if !archive.contains(FILE_UUID) {
-            bail!("No UUID file found in archive. Unable to add this story.");
-        }
-        let new_uuid = Uuid::from_slice(&archive.read(FILE_UUID)?)?;
-        self.check_not_loaded(&new_uuid)?;
+        let new_uuid = common::plain_archive_uuid(self, &archive)?;
 
-        let short = story::short_uuid(&new_uuid);
         let output = self.content_dir().join(new_uuid.to_string());
         std::fs::create_dir_all(&output)?;
-
-        for (index, file) in contents.iter().enumerate() {
-            ctx.story_progress(&short, index, contents.len());
-            if ctx.is_aborted() {
-                return Err(self.abort_cleanup(ctx, &new_uuid));
-            }
-            if [FILE_UUID, FILE_META, FILE_THUMB].contains(&file.as_str()) || archive.is_dir(file) {
-                continue;
+        common::write_entries(self, ctx, &new_uuid, &output, &archive.names(), |file| {
+            if [FILE_UUID, FILE_META, FILE_THUMB].contains(&file) || archive.is_dir(file) {
+                return Ok(None);
             }
             let data = self.ciphered_data(file, &archive.read(file)?, true, false)?;
-            let new_name = Self::flam_ciphered_name(file);
-            ctx.debug(format!(
-                "File {}/{} > {new_name}",
-                index + 1,
-                contents.len()
-            ));
-            common::write_with_progress(ctx, &output.join(&new_name), &data)?;
-        }
-
+            Ok(Some((Self::flam_ciphered_name(file), data)))
+        })?;
         self.write_keyfile(ctx, &output)?;
         self.finish_import(Story::new(new_uuid))
     }
@@ -334,35 +289,31 @@ impl FlamDevice {
         };
 
         let (_, new_uuid) = uuid_from_entries(&contents)?;
-        if let Some(s) = self.stories.get(&new_uuid.to_string()) {
-            bail!("'{}' is already loaded, aborting !", s.name());
-        }
+        self.check_not_loaded(&new_uuid)?;
 
-        let short = story::short_uuid(&new_uuid);
         let output = self.content_dir();
         std::fs::create_dir_all(&output)?;
         if crate::archive::is_7z(path) {
             ctx.info("Reading 7zip archive... (takes time)");
         }
-
-        let files = archive.file_names();
-        for (index, file) in files.iter().enumerate() {
-            if ctx.is_aborted() {
-                return Err(self.abort_cleanup(ctx, &new_uuid));
-            }
-            ctx.story_progress(&short, index, files.len());
-            ctx.debug(format!("File {}/{} > {file}", index + 1, files.len()));
-            let mut data = archive.read(file)?;
-
-            if let Some((key, iv)) = &story_keys
-                && (file.ends_with(".lsf") || file.ends_with("info"))
-            {
-                ctx.debug(format!("Transciphering file {file}"));
-                let plain = crypto::aes_decipher(&data, key, iv, data.len())?;
-                data = self.ciphered_data(file, &plain, true, true)?;
-            }
-            common::write_with_progress(ctx, &output.join(file), &data)?;
-        }
+        common::write_entries(
+            self,
+            ctx,
+            &new_uuid,
+            &output,
+            &archive.file_names(),
+            |file| {
+                let mut data = archive.read(file)?;
+                if let Some((key, iv)) = &story_keys
+                    && (file.ends_with(".lsf") || file.ends_with("info"))
+                {
+                    ctx.debug(format!("Transciphering file {file}"));
+                    let plain = crypto::aes_decipher(&data, key, iv, data.len())?;
+                    data = self.ciphered_data(file, &plain, true, true)?;
+                }
+                Ok(Some((file.to_string(), data)))
+            },
+        )?;
 
         if story_keys.is_some() {
             self.write_keyfile(ctx, &output.join(new_uuid.to_string()))?;
@@ -371,11 +322,7 @@ impl FlamDevice {
     }
 
     fn import_lunii_flam_zip(&mut self, ctx: &Context, path: &Path) -> Result<()> {
-        let filename = path
-            .file_name()
-            .map(|f| f.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
-        if !filename.starts_with(&self.snu_str().to_lowercase()) {
+        if !common::is_backup_of(path, &self.snu_str()) {
             bail!(
                 "Lunii story from Flam personnal backup can't be imported on this device (SNU mismatch)."
             );
@@ -383,27 +330,19 @@ impl FlamDevice {
         ctx.info("Restoring Lunii story from Flam personnal backup...");
 
         let archive = Archive::open_zip(path)?;
-        let names = archive.names();
-        let (_, new_uuid) = uuid_from_entries(&names)?;
+        let (_, new_uuid) = uuid_from_entries(&archive.names())?;
         self.check_not_loaded(&new_uuid)?;
 
         let output = self.content_dir();
         std::fs::create_dir_all(&output)?;
-        let short = story::short_uuid(&new_uuid);
-
-        let files = archive.file_names();
-        let mut night_mode = false;
-        for (index, file) in files.iter().enumerate() {
-            ctx.story_progress(&short, index, files.len());
-            if ctx.is_aborted() {
-                return Err(self.abort_cleanup(ctx, &new_uuid));
-            }
-            if file.ends_with("nm") {
-                night_mode = true;
-            }
-            ctx.debug(format!("File {}/{} > {file}", index + 1, files.len()));
-            common::write_with_progress(ctx, &output.join(file), &archive.read(file)?)?;
-        }
+        let night_mode = common::write_entries(
+            self,
+            ctx,
+            &new_uuid,
+            &output,
+            &archive.file_names(),
+            |file| Ok(Some((file.to_string(), archive.read(file)?))),
+        )?;
         self.finish_import(Story::with_flags(new_uuid, false, night_mode))
     }
 
@@ -417,66 +356,35 @@ impl FlamDevice {
         self.check_not_loaded(&new_uuid)?;
 
         let long_uuid = new_uuid.to_string();
-        let short = story::short_uuid(&new_uuid);
         let output = self.content_dir();
         std::fs::create_dir_all(&output)?;
-
-        let files = archive.file_names();
-        let mut night_mode = false;
-        for (index, file) in files.iter().enumerate() {
-            ctx.story_progress(&short, index, files.len());
-            if ctx.is_aborted() {
-                return Err(self.abort_cleanup(ctx, &new_uuid));
-            }
-            if file == FILE_UUID || file.ends_with("bt") {
-                continue;
-            }
-            if file.ends_with("nm") {
-                night_mode = true;
-            }
-
-            let data_v2 = archive.read(file)?;
-            let plain = if file.ends_with("ni") || file.ends_with("nm") {
-                data_v2
-            } else {
-                crypto::xxtea_decipher(&data_v2, &lunii_generic_key(), 512)?
-            };
-            let data = self.ciphered_data(file, &plain, false, false)?;
-            let new_name =
-                Self::lunii_ciphered_name(&file.replace(&uuid_str, &long_uuid), false, false);
-            ctx.debug(format!("File {}/{} > {new_name}", index + 1, files.len()));
-            common::write_with_progress(ctx, &output.join(&new_name), &data)?;
-        }
-
-        let story_dir = output.join(&long_uuid);
-        self.write_keyfile(ctx, &story_dir)?;
-        let story = Story::with_flags(new_uuid, false, night_mode);
-        self.write_info(&story, &story_dir)?;
-        self.write_thumbnail(ctx, &story, &story_dir)?;
-        self.finish_import(story)
-    }
-
-    fn export_backup_story(&self, ctx: &Context, story: &Story, out_dir: &Path) -> Result<PathBuf> {
-        let story_path = self.story_path(story);
-        let short = story.short_uuid();
-        ctx.info(format!("🚧 Exporting {short} - {}", story.name()));
-
-        let zip_path = out_dir.join(format!(
-            "{}.{}.{short}.zip",
-            self.snu_str(),
-            common::secure_filename(&story.name())
-        ));
-        let files = common::walk_files(&story_path);
-        let mut zip = StoryZip::create(&zip_path)?;
-        ctx.debug("> Zipping story ...");
-        for (index, (abs, rel)) in files.iter().enumerate() {
-            check_abort(ctx)?;
-            ctx.story_progress(&short, index, files.len());
-            let arcname = format!("{}/{rel}", story.uuid);
-            ctx.debug(&arcname);
-            zip.add(&arcname, &std::fs::read(abs)?)?;
-        }
-        zip.finish()
+        let night_mode = common::write_entries(
+            self,
+            ctx,
+            &new_uuid,
+            &output,
+            &archive.file_names(),
+            |file| {
+                if file == FILE_UUID || file.ends_with("bt") {
+                    return Ok(None);
+                }
+                let data_v2 = archive.read(file)?;
+                let plain = if file.ends_with("ni") || file.ends_with("nm") {
+                    data_v2
+                } else {
+                    crypto::xxtea_decipher(&data_v2, &lunii_generic_key(), 512)?
+                };
+                let data = self.ciphered_data(file, &plain, false, false)?;
+                let name =
+                    Self::lunii_ciphered_name(&file.replace(&uuid_str, &long_uuid), false, false);
+                Ok(Some((name, data)))
+            },
+        )?;
+        self.finish_lunii_import(
+            ctx,
+            &output.join(&long_uuid),
+            Story::with_flags(new_uuid, false, night_mode),
+        )
     }
 
     fn export_flam_plain(
@@ -487,15 +395,8 @@ impl FlamDevice {
         key: &[u8],
         iv: &[u8],
     ) -> Result<PathBuf> {
-        let story_path = self.story_path(story);
-        let short = story.short_uuid();
         ctx.info(format!("🚧 Exporting {} - {}", story.uuid, story.name()));
-
-        let zip_path = out_dir.join(format!(
-            "{}.{short}.plain.pk",
-            common::secure_filename(&story.name())
-        ));
-        let files: Vec<_> = common::walk_files(&story_path)
+        let files: Vec<_> = common::walk_files(&self.story_path(story))
             .into_iter()
             .filter(|(abs, _)| {
                 !matches!(
@@ -504,29 +405,23 @@ impl FlamDevice {
                 )
             })
             .collect();
-
-        let mut zip = StoryZip::create(&zip_path)?;
-        ctx.debug("> Zipping story ...");
-        for (index, (abs, rel)) in files.iter().enumerate() {
-            ctx.story_progress(&short, index, files.len());
-            check_abort(ctx)?;
-
-            let mut target = rel.clone();
-            if target.ends_with(".lsf") {
-                target = target.replace(".lsf", ".lua");
-            }
-            if target.ends_with("info") {
-                target += ".plain";
-            }
-
-            let mut data = std::fs::read(abs)?;
-            if rel.ends_with(".lsf") || rel.ends_with("info") {
-                data = crypto::aes_decipher(&data, key, iv, data.len())?;
-            }
-            zip.add(&target, &data)?;
-        }
-        ctx.debug("> Adding UUID ...");
-        zip.add(FILE_UUID, story.uuid.as_bytes())?;
+        let zip_path = common::plain_export_path(out_dir, story);
+        let mut zip =
+            common::zip_story(ctx, &story.short_uuid(), &zip_path, &files, |abs, rel| {
+                let mut data = std::fs::read(abs)?;
+                if rel.ends_with(".lsf") || rel.ends_with("info") {
+                    data = crypto::aes_decipher(&data, key, iv, data.len())?;
+                }
+                let mut target = rel.to_string();
+                if target.ends_with(".lsf") {
+                    target = target.replace(".lsf", ".lua");
+                }
+                if target.ends_with("info") {
+                    target += ".plain";
+                }
+                Ok((target, data))
+            })?;
+        common::add_story_info(ctx, &mut zip, story, false)?;
         zip.finish()
     }
 
@@ -538,15 +433,8 @@ impl FlamDevice {
         key: &[u8],
         iv: &[u8],
     ) -> Result<PathBuf> {
-        let story_path = self.story_path(story);
-        let short = story.short_uuid();
         ctx.info(format!("🚧 Exporting {} - {}", story.uuid, story.name()));
-
-        let zip_path = out_dir.join(format!(
-            "{}.{short}.plain.pk",
-            common::secure_filename(&story.name())
-        ));
-        let files: Vec<_> = common::walk_files(&story_path)
+        let files: Vec<_> = common::walk_files(&self.story_path(story))
             .into_iter()
             .filter(|(abs, rel)| {
                 let (dir, _) = split_path(rel);
@@ -557,43 +445,20 @@ impl FlamDevice {
                     )
             })
             .collect();
-
-        let mut zip = StoryZip::create(&zip_path)?;
-        ctx.debug("> Zipping story ...");
-        for (index, (abs, rel)) in files.iter().enumerate() {
-            ctx.story_progress(&short, index, files.len());
-            check_abort(ctx)?;
-
-            let mut target = rel.clone();
-            if target.contains("rf/") {
-                target += ".bmp";
-            }
-            if target.contains("sf/") {
-                target += ".mp3";
-            }
-            if target.ends_with("li") || target.ends_with("ri") || target.ends_with("si") {
-                target += ".plain";
-            }
-
-            let mut data = std::fs::read(abs)?;
-            if target.ends_with(".mp3") || target.ends_with(".bmp") || target.ends_with(".plain") {
-                data = crypto::aes_decipher(&data, key, iv, 0x200)?;
-            }
-            zip.add(&target, &data)?;
-        }
-
-        ctx.debug("> Adding UUID ...");
-        zip.add(FILE_UUID, story.uuid.as_bytes())?;
-        if !story.is_official() {
-            ctx.debug("> Adding thumbnail ...");
-            if let Some(pict) = story.picture(false) {
-                zip.add(FILE_THUMB, &pict)?;
-            }
-            ctx.debug("> Adding metadata ...");
-            if let Some(meta) = story.meta() {
-                zip.add(FILE_META, meta.as_bytes())?;
-            }
-        }
+        let zip_path = common::plain_export_path(out_dir, story);
+        let mut zip =
+            common::zip_story(ctx, &story.short_uuid(), &zip_path, &files, |abs, rel| {
+                let target = common::lunii_plain_name(rel);
+                let mut data = std::fs::read(abs)?;
+                if target.ends_with(".mp3")
+                    || target.ends_with(".bmp")
+                    || target.ends_with(".plain")
+                {
+                    data = crypto::aes_decipher(&data, key, iv, 0x200)?;
+                }
+                Ok((target, data))
+            })?;
+        common::add_story_info(ctx, &mut zip, story, true)?;
         zip.finish()
     }
 }
@@ -708,7 +573,7 @@ impl Device for FlamDevice {
         // official stories are never deciphered (piracy): backup only,
         // to put them back on a device
         if story.is_official() {
-            return self.export_backup_story(ctx, &story, out_dir);
+            return common::export_backup_story(self, ctx, &story, out_dir);
         }
 
         let story_files: Vec<String> = common::walk_files(&story_path)
@@ -733,7 +598,7 @@ impl Device for FlamDevice {
         }
 
         let Some((key, iv)) = keys else {
-            return self.export_backup_story(ctx, &story, out_dir);
+            return common::export_backup_story(self, ctx, &story, out_dir);
         };
         if story_is_flam(&story_files) {
             self.export_flam_plain(ctx, &story, out_dir, &key, &iv)

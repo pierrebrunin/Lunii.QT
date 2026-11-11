@@ -105,9 +105,6 @@ msgstr "L'archive ne contient pas le dossier UUID !"
 msgid "Archive seems to be made of Lunii story (Flam story expected)"
 msgstr "Cette archive semble être une histoire Lunii (attendu une histoire Flam)"
 
-msgid "'{}' is already loaded, aborting !"
-msgstr "'{}' est déjà chargée, annulation !"
-
 msgid "Transciphering file {}"
 msgstr "Transchiffrement du ficiher {}"
 
