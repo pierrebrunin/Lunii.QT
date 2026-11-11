@@ -416,6 +416,46 @@ pub fn prepare_tracks(
     Ok(out)
 }
 
+/// MP3 album turned into a temporary STUdio archive (see [`prepare_album`]),
+/// removed on drop.
+pub struct PreparedAlbum {
+    pub title: String,
+    pub tracks: usize,
+    zip: PathBuf,
+}
+
+impl PreparedAlbum {
+    /// The STUdio archive, to import.
+    pub fn path(&self) -> &Path {
+        &self.zip
+    }
+}
+
+impl Drop for PreparedAlbum {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.zip);
+    }
+}
+
+/// A folder of MP3 files turned into a temporary STUdio archive, its tracks
+/// processed as `opts` requires (see [`prepare_tracks`]).
+pub fn prepare_album(ctx: &Context, dir: &Path, opts: AudioOptions) -> Result<PreparedAlbum> {
+    let mut album = scan(dir)?;
+    let temp = std::env::temp_dir();
+    let prepared = PreparedAlbum {
+        title: album.title.clone(),
+        tracks: album.tracks.len(),
+        zip: temp.join(format!("lunii-album-{}.zip", album.uuid())),
+    };
+    let work = temp.join(format!("lunii-album-{}", album.uuid()));
+    let written = prepare_tracks(ctx, &album.tracks, opts, &work).and_then(|tracks| {
+        album.tracks = tracks;
+        album.write_studio_zip(&prepared.zip)
+    });
+    let _ = std::fs::remove_dir_all(&work);
+    written.map(|()| prepared)
+}
+
 /// Number of tracks of an album story created by Lunii, from its files on
 /// the device (`sf/000/SNDCOVER`, `sf/000/TRK00001`...). `None` for other
 /// stories, and for the albums made of chapters (`rf/000/CHP00001`): tracks

@@ -635,3 +635,30 @@ fn podcast_new_episodes() {
             .any(|s| s.feed_url == url2)
     );
 }
+
+/// A folder of MP3 files prepared for the import (temporary STUdio archive),
+/// imported on a Lunii v2; the archive is removed once dropped.
+#[test]
+fn prepared_album_on_lunii() {
+    let _cfg = setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("Album préparé");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("1.mp3"), with_tags("Un", 1, mp3(30))).unwrap();
+    std::fs::write(dir.join("2.mp3"), with_tags("Deux", 2, mp3(30))).unwrap();
+
+    let ctx = Context::default();
+    let prepared = album::prepare_album(&ctx, &dir, Default::default()).unwrap();
+    assert_eq!(
+        (prepared.title.as_str(), prepared.tracks),
+        ("Album test", 2)
+    );
+    let zip = prepared.path().to_path_buf();
+    assert!(zip.is_file());
+
+    let mut dev = open_device(&ctx, &fake_lunii_v2(tmp.path())).unwrap();
+    dev.import_story(&ctx, &zip).unwrap();
+    assert_eq!(dev.stories().len(), 1);
+    drop(prepared);
+    assert!(!zip.exists());
+}

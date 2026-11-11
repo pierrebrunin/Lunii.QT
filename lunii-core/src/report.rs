@@ -141,3 +141,73 @@ pub fn check_abort(ctx: &Context) -> Result<(), Aborted> {
         Ok(())
     }
 }
+
+/// Runs `f` on each item in turn (with its index), stopping on abort. The
+/// error of an item is reported, then `failed` is called and the batch goes
+/// on. Returns the number of items processed without error.
+pub fn batch<T>(
+    ctx: &Context,
+    items: &[T],
+    mut f: impl FnMut(usize, &T) -> anyhow::Result<()>,
+    mut failed: impl FnMut(&T),
+) -> anyhow::Result<usize> {
+    let mut success = 0;
+    for (index, item) in items.iter().enumerate() {
+        check_abort(ctx)?;
+        match f(index, item) {
+            Ok(()) => success += 1,
+            Err(e) if e.is::<Aborted>() => return Err(e),
+            Err(e) => {
+                ctx.error(format!("{e:#}"));
+                failed(item);
+            }
+        }
+    }
+    Ok(success)
+}
+
+/// A duration for the messages: `95 s`, `3 min 20 s` (from 2 minutes).
+pub fn format_secs(secs: u64) -> String {
+    if secs > 120 {
+        format!("{} min {} s", secs / 60, secs % 60)
+    } else {
+        format!("{secs} s")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn batch_goes_on_after_an_error_and_stops_on_abort() {
+        let ctx = Context::default();
+        let mut failed = Vec::new();
+        let done = batch(
+            &ctx,
+            &[1, 2, 3],
+            |_, &n| if n == 2 { anyhow::bail!("no") } else { Ok(()) },
+            |&n| failed.push(n),
+        )
+        .unwrap();
+        assert_eq!((done, failed), (2, vec![2]));
+
+        let err = batch(
+            &ctx,
+            &[1, 2],
+            |_, _| {
+                ctx.request_abort();
+                Ok(())
+            },
+            |_| {},
+        )
+        .unwrap_err();
+        assert!(err.is::<Aborted>());
+    }
+
+    #[test]
+    fn durations() {
+        assert_eq!(format_secs(95), "95 s");
+        assert_eq!(format_secs(200), "3 min 20 s");
+    }
+}

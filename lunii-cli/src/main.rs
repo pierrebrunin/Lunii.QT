@@ -10,7 +10,7 @@ use std::time::Instant;
 use anyhow::{Context as _, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use lunii_core::constants::*;
-use lunii_core::{Aborted, Context, Device, Level, Reporter, db, device, firmware, tools};
+use lunii_core::{Aborted, Context, Device, Level, Reporter, db, device, firmware, report, tools};
 use uuid::Uuid;
 
 #[derive(Parser)]
@@ -271,31 +271,6 @@ fn collect_archives(paths: &[PathBuf], extensions: &[&str]) -> Vec<PathBuf> {
     out
 }
 
-fn duration(start: Instant) -> String {
-    let d = start.elapsed().as_secs();
-    if d > 120 {
-        format!("{} min {} s", d / 60, d % 60)
-    } else {
-        format!("{d} s")
-    }
-}
-
-/// Runs a batch, stopping on abort, and reports the summary.
-fn batch<T>(ctx: &Context, items: &[T], mut f: impl FnMut(&T) -> Result<()>) -> Result<usize> {
-    let mut success = 0;
-    for item in items {
-        if ctx.is_aborted() {
-            return Err(Aborted.into());
-        }
-        match f(item) {
-            Ok(()) => success += 1,
-            Err(e) if e.is::<Aborted>() => return Err(e),
-            Err(e) => ctx.error(format!("{e:#}")),
-        }
-    }
-    Ok(success)
-}
-
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
@@ -416,17 +391,23 @@ fn import(ctx: &Context, device: Option<&Path>, paths: &[PathBuf]) -> Result<()>
     }
     ctx.info(format!("Importing {} archives...", archives.len()));
     let total = archives.len();
-    let success = batch(ctx, &archives, |file| {
-        let start = Instant::now();
-        match dev.import_story(ctx, file) {
-            Ok(()) => {
-                ctx.info(format!("Time to import : {}", duration(start)));
-                ctx.info(format!("👍 New story imported : '{}'", file.display()));
-                Ok(())
+    let success = report::batch(
+        ctx,
+        &archives,
+        |_, file| {
+            let start = Instant::now();
+            match dev.import_story(ctx, file) {
+                Ok(()) => {
+                    let time = report::format_secs(start.elapsed().as_secs());
+                    ctx.info(format!("Time to import : {time}"));
+                    ctx.info(format!("👍 New story imported : '{}'", file.display()));
+                    Ok(())
+                }
+                Err(e) => Err(e.context(format!("🛑 Failed to import : '{}'", file.display()))),
             }
-            Err(e) => Err(e.context(format!("🛑 Failed to import : '{}'", file.display()))),
-        }
-    })?;
+        },
+        |_| {},
+    )?;
     ctx.info(format!("✅ Import done : {success}/{total}"));
 
     Ok(())
@@ -450,16 +431,21 @@ fn export(
         uuids
     };
     let total = targets.len();
-    let success = batch(ctx, &targets, |uuid| {
-        let story = dev.find_story(uuid)?;
-        match dev.export_story(ctx, uuid, out) {
-            Ok(path) => {
-                ctx.info(format!("👍 Story exported to '{}'", path.display()));
-                Ok(())
+    let success = report::batch(
+        ctx,
+        &targets,
+        |_, uuid| {
+            let story = dev.find_story(uuid)?;
+            match dev.export_story(ctx, uuid, out) {
+                Ok(path) => {
+                    ctx.info(format!("👍 Story exported to '{}'", path.display()));
+                    Ok(())
+                }
+                Err(e) => Err(e.context(format!("🛑 Failed to export : '{}'", story.name()))),
             }
-            Err(e) => Err(e.context(format!("🛑 Failed to export : '{}'", story.name()))),
-        }
-    })?;
+        },
+        |_| {},
+    )?;
     ctx.info(format!("✅ Export done : {success}/{total}"));
 
     Ok(())
@@ -479,11 +465,16 @@ fn remove(ctx: &Context, device: Option<&Path>, uuids: &[String], yes: bool) -> 
     if !yes && !confirm("Do you want to proceed ?")? {
         return Ok(());
     }
-    let success = batch(ctx, &stories, |s| {
-        dev.remove_story(ctx, &s.str_uuid())?;
-        ctx.info(format!("👍 Story removed: '{}'", s.name()));
-        Ok(())
-    })?;
+    let success = report::batch(
+        ctx,
+        &stories,
+        |_, s| {
+            dev.remove_story(ctx, &s.str_uuid())?;
+            ctx.info(format!("👍 Story removed: '{}'", s.name()));
+            Ok(())
+        },
+        |_| {},
+    )?;
     ctx.info(format!("✅ {success} stories removed"));
 
     Ok(())

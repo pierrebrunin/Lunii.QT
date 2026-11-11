@@ -12,7 +12,7 @@ use lunii_core::constants::DeviceVersion;
 use lunii_core::convert::audio::AudioOptions;
 use lunii_core::firmware::{self, AuthToken};
 use lunii_core::podcast::{self, Episode, ImportMode, ImportPlan, Podcast, SearchResult};
-use lunii_core::{Aborted, Context, Device, Level, Reporter, album, db, tools};
+use lunii_core::{Aborted, Context, Device, Level, Reporter, album, db, report, tools};
 use uuid::Uuid;
 
 use crate::i18n::{tr, trf};
@@ -54,34 +54,12 @@ fn append_expected<'a>(files: impl Iterator<Item = &'a Path>) -> u64 {
         .sum()
 }
 
-fn format_secs(d: u64) -> String {
-    if d > 120 {
-        format!("{} min {} s", d / 60, d % 60)
-    } else {
-        format!("{d} s")
-    }
-}
-
 /// Removes a temporary directory on drop (abort included).
 struct TempDir(PathBuf);
 
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
-/// Files to import: (requested file, archive to import + `true` if temporary).
-/// The temporary archives are removed on drop, abort included.
-struct PreparedFiles<'a>(Vec<(&'a PathBuf, anyhow::Result<(PathBuf, bool)>)>);
-
-impl Drop for PreparedFiles<'_> {
-    fn drop(&mut self) {
-        for (_, r) in &self.0 {
-            if let Ok((archive, true)) = r {
-                let _ = std::fs::remove_file(archive);
-            }
-        }
     }
 }
 
@@ -301,58 +279,59 @@ impl Runner {
 
         // MP3 albums are turned into STUdio archives first: the remaining time
         // estimation needs their real size (screens...)
-        let prepared = PreparedFiles(
-            files
-                .iter()
-                .map(|file| {
-                    if album::is_album_dir(file) {
-                        (file, self.prepare_album(file).map(|zip| (zip, true)))
-                    } else {
-                        (file, Ok((file.clone(), false)))
-                    }
-                })
-                .collect(),
-        );
+        let prepared: Vec<(&PathBuf, anyhow::Result<Option<album::PreparedAlbum>>)> = files
+            .iter()
+            .map(|file| {
+                let album = album::is_album_dir(file)
+                    .then(|| self.prepare_album(file))
+                    .transpose();
+                (file, album)
+            })
+            .collect();
+        let archive = |file: &PathBuf, album: &Option<album::PreparedAlbum>| {
+            album
+                .as_ref()
+                .map_or(file.clone(), |a| a.path().to_path_buf())
+        };
         self.emit(Event::ImportPlan(
             prepared
-                .0
                 .iter()
-                .filter_map(|(_, r)| r.as_ref().ok())
-                .map(|(archive, _)| expected_size(archive))
+                .filter_map(|(file, r)| r.as_ref().ok().map(|a| expected_size(&archive(file, a))))
                 .sum(),
         ));
 
-        let mut success = 0;
-        for (index, (file, archive)) in prepared.0.iter().enumerate() {
-            lunii_core::report::check_abort(&self.ctx)?;
-            self.emit(Event::Total(index, files.len()));
-            let start = Instant::now();
-            let result = match archive {
-                Ok((archive, _)) => self.on_device(|d| d.import_story(&self.ctx, archive)),
-                Err(e) => Err(anyhow::anyhow!("{e:#}")),
-            };
-            let name = file.display().to_string();
-            match result {
-                Ok(()) => {
-                    let d = start.elapsed().as_secs();
-                    let time = if d > 120 {
-                        format!("{} min {} s", d / 60, d % 60)
-                    } else {
-                        format!("{d} s")
-                    };
+        let success = report::batch(
+            &self.ctx,
+            &prepared,
+            |index, (file, album)| {
+                self.emit(Event::Total(index, files.len()));
+                let start = Instant::now();
+                let result = match album {
+                    Ok(album) => {
+                        let archive = archive(file, album);
+                        self.on_device(|d| d.import_story(&self.ctx, &archive))
+                    }
+                    Err(e) => Err(anyhow::anyhow!("{e:#}")),
+                };
+                if result.is_ok() {
+                    let time = report::format_secs(start.elapsed().as_secs());
                     self.message(trf("Time to import : {}", &[&time]));
-                    self.message(trf("👍 New story imported : '{}'", &[&name]));
-                    success += 1;
+                    self.message(trf(
+                        "👍 New story imported : '{}'",
+                        &[&file.display().to_string()],
+                    ));
                 }
-                Err(e) if e.is::<Aborted>() => return Err(e),
-                Err(e) => {
-                    self.emit(Event::Log(Level::Error, format!("{e:#}")));
-                    self.emit(Event::ShowLog);
-                    self.message(trf("🛑 Failed to import : '{}'", &[&name]));
-                }
-            }
-            self.refresh();
-        }
+                self.refresh();
+                result
+            },
+            |(file, _)| {
+                self.emit(Event::ShowLog);
+                self.message(trf(
+                    "🛑 Failed to import : '{}'",
+                    &[&file.display().to_string()],
+                ));
+            },
+        )?;
         if update_size {
             self.on_device(|d| d.compute_sizes(&self.ctx))?;
             self.refresh();
@@ -562,60 +541,40 @@ impl Runner {
             &[
                 &episodes.len().to_string(),
                 &podcast.title,
-                &format_secs(start.elapsed().as_secs()),
+                &report::format_secs(start.elapsed().as_secs()),
             ],
         ));
         Ok(())
     }
 
     /// A folder of MP3 files, turned into a temporary STUdio archive.
-    fn prepare_album(&self, dir: &Path) -> anyhow::Result<PathBuf> {
-        let mut album = album::scan(dir)?;
+    fn prepare_album(&self, dir: &Path) -> anyhow::Result<album::PreparedAlbum> {
+        let album = album::prepare_album(&self.ctx, dir, self.audio)?;
         self.message(trf(
             "🎵 MP3 album '{}' : {} tracks",
-            &[&album.title, &album.tracks.len().to_string()],
+            &[&album.title, &album.tracks.to_string()],
         ));
-        let work = TempDir(std::env::temp_dir().join(format!("lunii-album-{}", album.uuid())));
-        album.tracks = album::prepare_tracks(&self.ctx, &album.tracks, self.audio, &work.0)?;
-        let zip = std::env::temp_dir().join(format!("lunii-album-{}.zip", album.uuid()));
-        if let Err(e) = album.write_studio_zip(&zip) {
-            let _ = std::fs::remove_file(&zip);
-            return Err(e);
-        }
-        Ok(zip)
+        Ok(album)
     }
 
     fn export(&self, uuids: &[String], out: &std::path::Path) -> anyhow::Result<()> {
-        let mut success = 0;
-        for (index, uuid) in uuids.iter().enumerate() {
-            lunii_core::report::check_abort(&self.ctx)?;
-            self.emit(Event::Total(index, uuids.len()));
-            let (name, result) = self
-                .with_device(|d| {
-                    let name = d
-                        .find_story(uuid)
-                        .map(|s| s.name())
-                        .unwrap_or_else(|_| uuid.clone());
-                    (name, d.export_story(&self.ctx, uuid, out))
-                })
-                .unwrap_or_else(|| (uuid.clone(), Err(anyhow::anyhow!("No device selected"))));
-            match result {
-                Ok(path) => {
+        let success = report::batch(
+            &self.ctx,
+            uuids,
+            |index, uuid| {
+                self.emit(Event::Total(index, uuids.len()));
+                let result = self.on_device(|d| d.export_story(&self.ctx, uuid, out));
+                if let Ok(path) = &result {
                     self.message(trf(
                         "👍 Story exported to '{}'",
                         &[&path.display().to_string()],
                     ));
-                    success += 1;
                 }
-                Err(e) if e.is::<Aborted>() => return Err(e),
-                Err(e) => {
-                    self.emit(Event::Log(Level::Error, format!("{e:#}")));
-                    self.emit(Event::ShowLog);
-                    self.message(trf("🛑 Failed to export : '{}'", &[&name]));
-                }
-            }
-            self.refresh();
-        }
+                self.refresh();
+                result.map(|_| ())
+            },
+            |uuid| self.failed(uuid, |name| trf("🛑 Failed to export : '{}'", &[name])),
+        )?;
         self.message(trf(
             "✅ Export done : {}/{}",
             &[&success.to_string(), &uuids.len().to_string()],
@@ -623,33 +582,36 @@ impl Runner {
         Ok(())
     }
 
+    /// After the failure on a story: the log, and the message made with its
+    /// name.
+    fn failed(&self, uuid: &str, message: impl FnOnce(&str) -> String) {
+        let name = self
+            .with_device(|d| d.find_story(uuid).map(|s| s.name()).ok())
+            .flatten()
+            .unwrap_or_else(|| uuid.to_string());
+        self.emit(Event::ShowLog);
+        self.message(message(&name));
+    }
+
     fn remove(&self, uuids: &[String]) -> anyhow::Result<()> {
-        let mut success = 0;
-        for (index, uuid) in uuids.iter().enumerate() {
-            lunii_core::report::check_abort(&self.ctx)?;
-            self.emit(Event::Total(index, uuids.len()));
-            let (name, result) = self
-                .with_device(|d| {
-                    let name = d
-                        .find_story(uuid)
-                        .map(|s| s.name())
-                        .unwrap_or_else(|_| uuid.clone());
-                    (name, d.remove_story(&self.ctx, uuid))
-                })
-                .unwrap_or_else(|| (uuid.clone(), Err(anyhow::anyhow!("No device selected"))));
-            match result {
-                Ok(()) => {
+        let success = report::batch(
+            &self.ctx,
+            uuids,
+            |index, uuid| {
+                self.emit(Event::Total(index, uuids.len()));
+                let name = self
+                    .with_device(|d| d.find_story(uuid).map(|s| s.name()).ok())
+                    .flatten()
+                    .unwrap_or_else(|| uuid.clone());
+                let result = self.on_device(|d| d.remove_story(&self.ctx, uuid));
+                if result.is_ok() {
                     self.message(trf("👍 Story removed: '{}'", &[&name]));
-                    success += 1;
                 }
-                Err(e) => {
-                    self.emit(Event::Log(Level::Error, format!("{e:#}")));
-                    self.emit(Event::ShowLog);
-                    self.message(trf("🛑 Failed to remove : '{}'", &[&name]));
-                }
-            }
-            self.refresh();
-        }
+                self.refresh();
+                result
+            },
+            |uuid| self.failed(uuid, |name| trf("🛑 Failed to remove : '{}'", &[name])),
+        )?;
         self.message(trf("✅ {} stories removed", &[&success.to_string()]));
         Ok(())
     }
