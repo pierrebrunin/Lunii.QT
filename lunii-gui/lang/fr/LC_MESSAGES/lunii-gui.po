@@ -827,9 +827,6 @@ msgstr "Chargement..."
 msgid "Load"
 msgstr "Charger"
 
-msgid "(Episode filter text)"
-msgstr "(filtrer les épisodes)"
-
 msgid "All"
 msgstr "Tous"
 

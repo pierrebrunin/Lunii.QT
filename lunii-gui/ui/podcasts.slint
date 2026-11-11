@@ -1,7 +1,7 @@
 // Podcasts view: the followed podcasts on the left, the episodes of the
 // selected one on the right, to import on the device.
 
-import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, ListView, Palette } from "std-widgets.slint";
 import { Theme, EpisodeRow, FollowedRow } from "common.slint";
 
 // Column header: a click sorts by it, again reverses the order.
@@ -47,7 +47,6 @@ export component PodcastsView inherits HorizontalLayout {
     // 0: title, 1: duration, 2: date, 3: on the device
     in-out property <int> sort-column: 2;
     in-out property <bool> sort-ascending: false;
-    in-out property <string> filter;
     // 0: one album (a menu to choose the episode), 1: one story per episode
     in-out property <int> mode;
     // a device that stories can be imported to, and no task running
@@ -65,7 +64,6 @@ export component PodcastsView inherits HorizontalLayout {
     callback mode-changed();
     callback toggle(index: int);
     callback select-all(all: bool);
-    callback filter-edited();
     callback import();
     callback sort-changed();
 
@@ -213,7 +211,7 @@ export component PodcastsView inherits HorizontalLayout {
                 }
             }
         }
-        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
+        if root.rows.length > 0: HorizontalLayout {
             spacing: 6px;
             Text {
                 text: @tr("Import as:");
@@ -225,19 +223,10 @@ export component PodcastsView inherits HorizontalLayout {
                 selected => { root.mode-changed(); }
                 horizontal-stretch: 1;
             }
-        }
-        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
-            spacing: 6px;
-            LineEdit {
-                text <=> root.filter;
-                placeholder-text: @tr("(Episode filter text)");
-                edited => { root.filter-edited(); }
-                horizontal-stretch: 1;
-            }
             Button { text: @tr("All"); clicked => { root.select-all(true); } }
             Button { text: @tr("None"); clicked => { root.select-all(false); } }
         }
-        if root.rows.length > 0 || root.filter != "": Rectangle {
+        if root.rows.length > 0: Rectangle {
             vertical-stretch: 1;
             border-width: 1px;
             border-color: Palette.border;
@@ -356,10 +345,10 @@ export component PodcastsView inherits HorizontalLayout {
                 }
             }
         }
-        if (root.current >= 0 || root.header != "") && root.rows.length == 0 && root.filter == "": Rectangle {
+        if (root.current >= 0 || root.header != "") && root.rows.length == 0: Rectangle {
             vertical-stretch: 1;
         }
-        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
+        if root.rows.length > 0: HorizontalLayout {
             spacing: 6px;
             Rectangle { horizontal-stretch: 1; }
             Text {

@@ -135,7 +135,7 @@ A podcast whose album is on the connected device is followed automatically (albu
 2. Choose the import mode, **Import as:**
    * **an album** (default): a single story, one episode per track in chronological order, with a menu to choose the episode. If the album is already on the device, the chosen episodes are **appended** to it;
    * **one story per episode**: each episode shows up as a story of its own in the device list.
-3. Check the episodes you want with their box (**to import**); a click elsewhere on the row only selects it. The filter field and the **All** / **None** buttons help choosing; clicking a column header sorts the list (title, duration, publication date, on the device).
+3. Check the episodes you want with their box (**to import**); a click elsewhere on the row only selects it. The **All** / **None** buttons check or uncheck them all; clicking a column header sorts the list (title, duration, publication date, on the device).
 4. Click **Import (n)**. The log shows the progress.
 
 The episodes already on the device are checked in the **On the device** column. Episodes that are not MP3 are converted, and the Stories / **Normalize volume (albums, podcasts)** option brings all the tracks to the same loudness.

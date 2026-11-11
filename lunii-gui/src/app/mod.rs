@@ -316,7 +316,6 @@ impl App {
                 app.podcast_select(index);
             }
         });
-        ui.on_podcast_filter_edited(with(|app| app.rebuild_podcast_rows()));
         ui.on_podcast_mode_changed(with(|app| app.podcast_mode_changed()));
         ui.on_podcast_accepted(with(|app| app.podcast_apply()));
         ui.on_podcast_sort_changed(with(|app| app.rebuild_podcast_rows()));
