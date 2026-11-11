@@ -17,8 +17,6 @@ use crate::{DialogKind, EpisodeRow, FollowedRow, PodcastResult};
 /// The podcast displayed, with what is already on the device.
 pub struct PodcastView {
     pub podcast: Podcast,
-    /// its album is on the device: the episodes will be appended
-    pub on_device: bool,
     /// episodes already in the album
     pub imported: HashSet<String>,
     /// episodes already on the device as stories of their own
@@ -311,7 +309,6 @@ impl App {
         };
         PodcastView {
             imported,
-            on_device,
             stories,
             album_removable,
             removed: HashSet::new(),
@@ -681,27 +678,27 @@ impl App {
             return;
         };
         let p = &view.podcast;
-        let mut header = trf(
-            "{} : {} episodes",
-            &[&p.title, &p.episodes.len().to_string()],
-        );
-        if ui.get_podcast_mode() == 1 {
-            if !view.stories.is_empty() {
-                header.push_str(" · ");
-                header.push_str(&trf(
-                    "{} episode(s) already on the device",
-                    &[&view.stories.len().to_string()],
-                ));
-            }
-        } else if view.on_device {
-            header.push_str(" · ");
-            header.push_str(&trf(
-                "album on the device, the episodes will be appended ({} already imported)",
-                &[&view.imported.len().to_string()],
-            ));
-        }
-        ui.set_podcast_header(header.into());
+        ui.set_podcast_header(p.title.as_str().into());
         ui.set_podcast_page(p.page_url.clone().unwrap_or_default().into());
+        // on the device, for the import mode chosen
+        let present = self.podcast_present(view).len();
+        ui.set_podcast_count(
+            trf(
+                "{} / {} episodes imported",
+                &[&present.to_string(), &p.episodes.len().to_string()],
+            )
+            .into(),
+        );
+    }
+
+    /// The address of the page of the podcast copied to the clipboard.
+    pub(super) fn podcast_copy_page(&self) {
+        let page = self.ui().get_podcast_page();
+        if let Ok(mut clipboard) = arboard::Clipboard::new() {
+            let _ = clipboard.set_text(page.as_str());
+            self.ui()
+                .set_status(tr("Address sent to clipboard.").into());
+        }
     }
 
     /// Episodes already on the device, for the import mode chosen.

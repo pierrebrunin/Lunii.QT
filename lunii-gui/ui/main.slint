@@ -204,6 +204,7 @@ export component MainWindow inherits Window {
     in property <bool> podcast-loading;
     in property <string> podcast-header;
     in property <string> podcast-page;
+    in property <string> podcast-count;
     in property <[EpisodeRow]> podcast-rows;
     in property <int> podcast-selected-count;
     in property <int> podcast-remove-count;
@@ -215,6 +216,7 @@ export component MainWindow inherits Window {
     callback podcast-add();
     callback podcast-select(index: int);
     callback podcast-refresh();
+    callback podcast-copy-page();
     callback podcast-unfollow();
     // the podcast unfollowed, its album or stories removed from the device or not
     callback podcast-unfollow-accepted(remove: bool);
@@ -519,6 +521,7 @@ export component MainWindow inherits Window {
                 current <=> root.podcast-current;
                 header: root.podcast-header;
                 page: root.podcast-page;
+                count: root.podcast-count;
                 loading: root.podcast-loading;
                 rows: root.podcast-rows;
                 selected-count: root.podcast-selected-count;
@@ -533,6 +536,7 @@ export component MainWindow inherits Window {
                 select(index) => { root.podcast-select(index); }
                 refresh => { root.podcast-refresh(); }
                 open-page => { root.open-url(root.podcast-page); }
+                copy-page => { root.podcast-copy-page(); }
                 unfollow => { root.podcast-unfollow(); }
                 mode-changed => { root.podcast-mode-changed(); }
                 toggle(index) => { root.podcast-toggle(index); }

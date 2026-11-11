@@ -842,9 +842,6 @@ msgstr "Importer ({})"
 msgid "{} : {} episodes"
 msgstr "{} : {} épisodes"
 
-msgid "album on the device, the episodes will be appended ({} already imported)"
-msgstr "album présent sur l'appareil, les épisodes y seront ajoutés ({} déjà importés)"
-
 msgid "Importing podcast..."
 msgstr "Import du podcast..."
 
@@ -880,9 +877,6 @@ msgstr "un album (un menu pour choisir l'épisode)"
 
 msgid "one story per episode"
 msgstr "une histoire par épisode"
-
-msgid "{} episode(s) already on the device"
-msgstr "{} épisode(s) déjà sur l'appareil"
 
 msgid "Normalize volume (albums, podcasts)"
 msgstr "Égaliser le volume (albums, podcasts)"
@@ -1219,3 +1213,9 @@ msgstr "Podcast trouvé sur l'appareil, maintenant suivi : {}"
 
 msgid "File outside the story directory, ignored : {}"
 msgstr "Fichier hors du dossier de l'histoire, ignoré : {}"
+
+msgid "{} / {} episodes imported"
+msgstr "{} / {} épisodes importés"
+
+msgid "Address sent to clipboard."
+msgstr "Adresse copiée dans le presse-papiers."

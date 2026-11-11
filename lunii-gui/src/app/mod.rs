@@ -302,6 +302,7 @@ impl App {
             }
         });
         ui.on_podcast_refresh(with(|app| app.podcast_refresh()));
+        ui.on_podcast_copy_page(with(|app| app.podcast_copy_page()));
         ui.on_podcast_unfollow(with(|app| app.podcast_unfollow()));
         let w = Rc::downgrade(self);
         ui.on_podcast_unfollow_accepted(move |remove| {
