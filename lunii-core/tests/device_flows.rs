@@ -6,8 +6,11 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use lunii_core::constants::*;
-use lunii_core::{Context, Device, crypto, db, open_device};
+use lunii_core::{Context, Device, db, open_device};
 use uuid::Uuid;
+
+mod common;
+use common::{flam, lunii_v2};
 
 /// Shared configuration directory for the whole test binary.
 fn setup() -> &'static Path {
@@ -30,23 +33,6 @@ const OFFICIAL_DB: &str = r#"{"x": {"uuid": "0ff1c1a1-0000-4000-8000-0000000000a
 
 fn ctx() -> Context {
     Context::default()
-}
-
-fn lunii_v2(dir: &Path) -> PathBuf {
-    let mut md = vec![0u8; 512];
-    md[0..2].copy_from_slice(&3u16.to_le_bytes());
-    md[6..8].copy_from_slice(&2u16.to_le_bytes());
-    md[8..10].copy_from_slice(&22u16.to_le_bytes());
-    md[10..18].copy_from_slice(&[0, 0, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]);
-    md[18..20].copy_from_slice(&0x0483u16.to_le_bytes());
-    md[20..22].copy_from_slice(&0xA341u16.to_le_bytes());
-    let devkey: Vec<u8> = (0..=255u8).collect();
-    md[0x100..0x200]
-        .copy_from_slice(&crypto::xxtea_encrypt(&devkey, &lunii_generic_key()).unwrap());
-    let root = dir.join("lunii_v2");
-    std::fs::create_dir_all(root.join(".content")).unwrap();
-    std::fs::write(root.join(".md"), md).unwrap();
-    root
 }
 
 fn lunii_v3(dir: &Path, name: &str) -> PathBuf {
@@ -329,23 +315,6 @@ fn official_stories_cannot_be_exported_from_lunii_v2() {
     std::fs::create_dir_all(&out).unwrap();
     assert!(dev.export_story(&ctx(), "000000AA", &out).is_err());
     assert_eq!(std::fs::read_dir(&out).unwrap().count(), 0);
-}
-
-fn flam(dir: &Path) -> PathBuf {
-    let root = dir.join("flam");
-    std::fs::create_dir_all(root.join("str")).unwrap();
-    std::fs::create_dir_all(root.join("etc/library")).unwrap();
-    let mut mdf = vec![0u8; 0x80];
-    let fw = b"main: 2.0.0-1\ncomm: 2.0.0-1";
-    mdf[2..2 + fw.len()].copy_from_slice(fw);
-    mdf[50..74].copy_from_slice(b"303A819E0123456789ABCDEF");
-    mdf[74..76].copy_from_slice(&0x303Au16.to_le_bytes());
-    mdf[76..78].copy_from_slice(&0x819Eu16.to_le_bytes());
-    for (i, b) in mdf[0x4E..0x6E].iter_mut().enumerate() {
-        *b = i as u8 * 3;
-    }
-    std::fs::write(root.join(".mdf"), mdf).unwrap();
-    root
 }
 
 #[test]

@@ -1,10 +1,13 @@
 //! MP3 album import on a fake Flam (no network, no conversion: the MP3 files are
 //! already mono 44.1 kHz).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use lunii_core::constants::*;
-use lunii_core::{Context, album, crypto, db, open_device};
+use lunii_core::{Context, album, db, open_device};
+
+mod common;
+use common::{flam, lunii_v2};
 
 /// Configuration directory shared by the tests of this binary (it is global).
 fn setup() -> &'static Path {
@@ -18,23 +21,6 @@ fn setup() -> &'static Path {
         dir
     })
     .path()
-}
-
-fn fake_flam(dir: &Path) -> PathBuf {
-    let root = dir.join("flam");
-    std::fs::create_dir_all(root.join("str")).unwrap();
-    std::fs::create_dir_all(root.join("etc/library")).unwrap();
-    let mut mdf = vec![0u8; 0x80];
-    let fw = b"main: 2.0.0-1\ncomm: 2.0.0-1";
-    mdf[2..2 + fw.len()].copy_from_slice(fw);
-    mdf[50..74].copy_from_slice(b"303A819E0123456789ABCDEF");
-    mdf[74..76].copy_from_slice(&0x303Au16.to_le_bytes());
-    mdf[76..78].copy_from_slice(&0x819Eu16.to_le_bytes());
-    for (i, b) in mdf[0x4E..0x6E].iter_mut().enumerate() {
-        *b = i as u8 * 3;
-    }
-    std::fs::write(root.join(".mdf"), mdf).unwrap();
-    root
 }
 
 /// `frames` MPEG-1 layer III frames, 128 kbps, 44.1 kHz, mono.
@@ -93,7 +79,7 @@ fn mp3_album_on_flam() {
     album.write_studio_zip(&zip).unwrap();
 
     let ctx = Context::default();
-    let root = fake_flam(tmp.path());
+    let root = flam(tmp.path());
     let mut dev = open_device(&ctx, &root).unwrap();
     assert_eq!(dev.version(), DeviceVersion::FlamV1);
     dev.import_story(&ctx, &zip).unwrap();
@@ -162,23 +148,6 @@ fn mp3_album_on_flam() {
     assert!(dev.add_album_tracks(&ctx, &uuid, &extra_tracks).is_err());
 }
 
-fn fake_lunii_v2(dir: &Path) -> PathBuf {
-    let mut md = vec![0u8; 512];
-    md[0..2].copy_from_slice(&3u16.to_le_bytes());
-    md[6..8].copy_from_slice(&2u16.to_le_bytes());
-    md[8..10].copy_from_slice(&22u16.to_le_bytes());
-    md[10..18].copy_from_slice(&[0, 0, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]);
-    md[18..20].copy_from_slice(&0x0483u16.to_le_bytes());
-    md[20..22].copy_from_slice(&0xA341u16.to_le_bytes());
-    let devkey: Vec<u8> = (0..=255u8).collect();
-    md[0x100..0x200]
-        .copy_from_slice(&crypto::xxtea_encrypt(&devkey, &lunii_generic_key()).unwrap());
-    let root = dir.join("lunii_v2");
-    std::fs::create_dir_all(root.join(".content")).unwrap();
-    std::fs::write(root.join(".md"), md).unwrap();
-    root
-}
-
 /// A podcast episode as a story of its own, on a Lunii v2 and on a Flam.
 #[test]
 fn episode_story_on_lunii_and_flam() {
@@ -200,7 +169,7 @@ fn episode_story_on_lunii_and_flam() {
     story.write_studio_zip(&zip).unwrap();
 
     let ctx = Context::default();
-    for root in [fake_lunii_v2(tmp.path()), fake_flam(tmp.path())] {
+    for root in [lunii_v2(tmp.path()), flam(tmp.path())] {
         let mut dev = open_device(&ctx, &root).unwrap();
         dev.import_story(&ctx, &zip).unwrap();
         let s = dev
@@ -234,7 +203,7 @@ fn mp3_album_append_on_lunii() {
     album.write_studio_zip(&zip).unwrap();
 
     let ctx = Context::default();
-    let root = fake_lunii_v2(tmp.path());
+    let root = lunii_v2(tmp.path());
     let mut dev = open_device(&ctx, &root).unwrap();
     dev.import_story(&ctx, &zip).unwrap();
     let uuid = album.uuid();
@@ -293,7 +262,7 @@ fn mp3_album_edit() {
     let uuid = album.uuid();
     let ctx = Context::default();
 
-    for root in [fake_lunii_v2(tmp.path()), fake_flam(tmp.path())] {
+    for root in [lunii_v2(tmp.path()), flam(tmp.path())] {
         let mut dev = open_device(&ctx, &root).unwrap();
         dev.import_story(&ctx, &zip).unwrap();
         let story = dev.stories().get(&uuid.to_string()).unwrap().clone();
@@ -398,7 +367,7 @@ fn chapters_album_on_flam() {
     let zip = tmp.path().join("album.zip");
     album.write_studio_zip(&zip).unwrap();
     let ctx = Context::default();
-    let root = fake_flam(tmp.path());
+    let root = flam(tmp.path());
     let mut dev = open_device(&ctx, &root).unwrap();
     dev.import_story(&ctx, &zip).unwrap();
     let story = dev
@@ -461,7 +430,7 @@ fn podcast_album_on_device() {
     let _cfg = setup();
     let tmp = tempfile::tempdir().unwrap();
     let ctx = Context::default();
-    let root = fake_flam(tmp.path());
+    let root = flam(tmp.path());
     let mut dev = open_device(&ctx, &root).unwrap();
 
     let url = "https://example.org/device-test.xml";
@@ -546,7 +515,7 @@ fn podcast_album_imported_before() {
     let _cfg = setup();
     let tmp = tempfile::tempdir().unwrap();
     let ctx = Context::default();
-    let root = fake_flam(tmp.path());
+    let root = flam(tmp.path());
     let mut dev = open_device(&ctx, &root).unwrap();
 
     let url = "https://example.org/legacy-test.xml";
@@ -656,7 +625,7 @@ fn prepared_album_on_lunii() {
     let zip = prepared.path().to_path_buf();
     assert!(zip.is_file());
 
-    let mut dev = open_device(&ctx, &fake_lunii_v2(tmp.path())).unwrap();
+    let mut dev = open_device(&ctx, &lunii_v2(tmp.path())).unwrap();
     dev.import_story(&ctx, &zip).unwrap();
     assert_eq!(dev.stories().len(), 1);
     drop(prepared);
