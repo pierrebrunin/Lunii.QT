@@ -261,8 +261,10 @@ directement la fenêtre d'ajout) :
   `og:image`). Aucun site n'est traité à part : c'est ainsi que fonctionnent,
   par exemple, les séries et sélections de radiofrance.fr.
   Les flux des podcasts suivis sont chargés en arrière-plan,
-  sans bloquer l'application. Sous chaque podcast : ses nouveaux épisodes si
-  son album est sur l'appareil, son nombre d'épisodes sinon. Ils sont
+  sans bloquer l'application. Sous chaque podcast : combien de ses épisodes
+  sont sur l'appareil (album ou histoires), et son nombre d'épisodes. Les
+  flux publient aussi des annonces ou d'autres émissions : l'application ne
+  tente pas de deviner les « nouveaux » épisodes. Ils sont
   enregistrés dans `~/.lunii/podcasts.json`, comme les épisodes importés ;
 - **à droite, les épisodes** du podcast sélectionné, à cocher (filtre, Tous /
   Aucun), le mode d'import, puis **Importer (n)**. ↻ recharge le flux, **Ne plus

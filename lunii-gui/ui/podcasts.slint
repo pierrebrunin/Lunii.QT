@@ -122,14 +122,13 @@ export component PodcastsView inherits HorizontalLayout {
                         Text {
                             text: row.title;
                             overflow: elide;
-                            font-weight: row.news ? 700 : 400;
                             color: i == root.current ? #fff : Palette.foreground;
                         }
                         Text {
                             text: row.info;
                             font-size: 11px;
                             overflow: elide;
-                            color: i == root.current ? #fff : row.news ? Theme.selection : Theme.hidden-text;
+                            color: i == root.current ? #fff : Theme.hidden-text;
                         }
                     }
                 }

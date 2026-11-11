@@ -389,10 +389,13 @@ fn chapters_album_on_flam() {
     assert_eq!(info.chapters, album.chapters);
 }
 
-/// New episodes of a podcast, after those this computer remembers.
-fn new_episodes(p: &lunii_core::podcast::Podcast) -> Vec<lunii_core::podcast::Episode> {
-    let imported = lunii_core::podcast::imported_episodes(&p.album_uuid());
-    lunii_core::podcast::new_episodes(p, &imported)
+/// Episodes of a podcast this computer remembers as imported, sorted.
+fn imported(p: &lunii_core::podcast::Podcast) -> Vec<String> {
+    let mut guids: Vec<_> = lunii_core::podcast::imported_episodes(&p.album_uuid())
+        .into_iter()
+        .collect();
+    guids.sort();
+    guids
 }
 
 /// RSS feed of the episodes `items` (newest first), titled `Episode <guid>`.
@@ -463,16 +466,8 @@ fn podcast_album_on_device() {
     };
     assert_eq!(episodes(&info_of(dev.as_ref())), ["a", "b"]);
     assert_eq!(info_of(dev.as_ref()).podcast.unwrap().feed, url);
-    // new episodes: from the device, not this computer (nothing recorded here)
+    // recorded on the device, not on this computer
     assert!(podcast::imported_episodes(&uuid).is_empty());
-    let new: Vec<_> = podcast::new_episodes(
-        &p,
-        &podcast::album_episodes(&info_of(dev.as_ref())).unwrap(),
-    )
-    .into_iter()
-    .map(|e| e.guid)
-    .collect();
-    assert_eq!(new, ["c"]);
 
     // an episode appended
     dev.add_album_tracks(&ctx, &uuid, &tracks(&p.episodes[2..]))
@@ -553,9 +548,9 @@ fn podcast_album_imported_before() {
     assert_eq!(dev.album_info(&story).unwrap().episodes, ["a", "b"]);
 }
 
-/// Podcast update: the albums are remembered, the new episodes found.
+/// Followed podcasts and the episodes imported, remembered by this computer.
 #[test]
-fn podcast_new_episodes() {
+fn podcast_followed_and_imported() {
     let _cfg = setup();
     let feed = |items: &[&str]| {
         let items: String = items
@@ -577,12 +572,12 @@ fn podcast_new_episodes() {
     assert_eq!(entry.title, "Mon podcast");
 
     let p = lunii_core::podcast::parse_feed(url, &feed(&["d", "c", "b", "a"])).unwrap();
-    let new: Vec<_> = new_episodes(&p).into_iter().map(|e| e.guid).collect();
-    assert_eq!(new, ["c", "d"]);
-    // an older episode left out is not new
+    assert_eq!(imported(&p), ["a", "b"]);
+    // appended, then a new album
     lunii_core::podcast::record_imported(&p, &["d".into()], false).unwrap();
-    assert!(new_episodes(&p).is_empty());
+    assert_eq!(imported(&p), ["a", "b", "d"]);
     lunii_core::podcast::record_imported(&p, &["a".into(), "b".into()], true).unwrap();
+    assert_eq!(imported(&p), ["a", "b"]);
 
     // followed without import, then no longer followed
     let url2 = "https://example.org/follow-test.xml";
@@ -593,10 +588,10 @@ fn podcast_new_episodes() {
             .iter()
             .any(|s| s.feed_url == url2)
     );
-    assert_eq!(new_episodes(&p2).len(), 1);
+    assert!(imported(&p2).is_empty());
     // following again keeps the imported episodes
     lunii_core::podcast::follow(&p).unwrap();
-    assert_eq!(new_episodes(&p).len(), 2);
+    assert_eq!(imported(&p), ["a", "b"]);
     lunii_core::podcast::unfollow(&p2.album_uuid()).unwrap();
     assert!(
         !lunii_core::podcast::saved_podcasts()

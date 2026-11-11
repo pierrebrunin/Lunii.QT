@@ -64,23 +64,6 @@ fn unfollowed(entry: &Value) -> bool {
     entry.get("unfollowed").and_then(Value::as_bool) == Some(true)
 }
 
-/// Episodes of `podcast` published after the latest one `imported` in its
-/// album, oldest first (the older ones were left out on purpose). All of
-/// them if none was imported.
-pub fn new_episodes(podcast: &Podcast, imported: &HashSet<String>) -> Vec<Episode> {
-    // episodes are oldest first: after the last imported one
-    let start = podcast
-        .episodes
-        .iter()
-        .rposition(|e| imported.contains(&e.guid))
-        .map_or(0, |i| i + 1);
-    podcast.episodes[start..]
-        .iter()
-        .filter(|e| !imported.contains(&e.guid))
-        .cloned()
-        .collect()
-}
-
 /// Feed address of the followed podcast that `podcast` is, if it is followed
 /// under another address (a feed reached through a page, Apple Podcasts or a
 /// redirect): the addresses declared by the feeds, or for a podcast followed

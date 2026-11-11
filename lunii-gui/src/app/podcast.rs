@@ -188,15 +188,14 @@ impl App {
                 .followed
                 .iter()
                 .map(|f| {
-                    let (info, news) = match st.podcasts.feeds.get(&f.feed_url) {
+                    let info = match st.podcasts.feeds.get(&f.feed_url) {
                         Some(Some(Ok(p))) => self.feed_info(p),
-                        Some(Some(Err(_))) => (format!("⚠ {}", tr("Unavailable")), false),
-                        _ => (tr("Loading..."), false),
+                        Some(Some(Err(_))) => format!("⚠ {}", tr("Unavailable")),
+                        _ => tr("Loading..."),
                     };
                     FollowedRow {
                         title: f.title.as_str().into(),
                         info: info.into(),
-                        news,
                     }
                 })
                 .collect()
@@ -205,15 +204,26 @@ impl App {
             .set_podcast_followed(ModelRc::new(slint::VecModel::from(rows)));
     }
 
-    /// Line under a followed podcast: its new episodes if its album is on
-    /// the device, its number of episodes otherwise.
-    fn feed_info(&self, p: &Podcast) -> (String, bool) {
-        if !self.album_on_device(&p.album_uuid()) {
-            return (trf("{} episodes", &[&p.episodes.len().to_string()]), false);
-        }
-        match podcast::new_episodes(p, &self.imported_in_album(p)).len() {
-            0 => (tr("Up to date"), false),
-            n => (trf("{} new episode(s)", &[&n.to_string()]), true),
+    /// Line under a followed podcast: its number of episodes, and how many
+    /// are on the device (in its album, or as stories).
+    fn feed_info(&self, p: &Podcast) -> String {
+        let count = trf("{} episodes", &[&p.episodes.len().to_string()]);
+        let in_album = if self.album_on_device(&p.album_uuid()) {
+            self.imported_in_album(p).len()
+        } else {
+            0
+        };
+        let as_stories = {
+            let st = self.state.borrow();
+            let stories: HashSet<Uuid> = st.list.stories.iter().map(|s| s.uuid).collect();
+            p.episodes
+                .iter()
+                .filter(|e| stories.contains(&p.episode_uuid(e)))
+                .count()
+        };
+        match in_album + as_stories {
+            0 => count,
+            n => format!("{} · {count}", trf("{} on the device", &[&n.to_string()])),
         }
     }
 

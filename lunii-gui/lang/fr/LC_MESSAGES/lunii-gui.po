@@ -1109,11 +1109,8 @@ msgstr "Indisponible"
 msgid "{} episodes"
 msgstr "{} épisodes"
 
-msgid "Up to date"
-msgstr "À jour"
-
-msgid "{} new episode(s)"
-msgstr "{} nouvel(s) épisode(s)"
+msgid "{} on the device"
+msgstr "{} sur l'appareil"
 
 msgid "'{}' is no longer followed"
 msgstr "« {} » n'est plus suivi"
