@@ -33,19 +33,6 @@ pub fn secure_filename(filename: &str) -> String {
         .collect()
 }
 
-/// Thousands separator: `1234567` → `1,234,567`.
-pub fn group_thousands(n: u64) -> String {
-    let s = n.to_string();
-    let mut out = String::with_capacity(s.len() + s.len() / 3);
-    for (i, c) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    out
-}
-
 /// Writes `data` in 10KB chunks, reporting speed and progress every 250ms.
 pub fn write_with_progress(ctx: &Context, target: &Path, data: &[u8]) -> Result<()> {
     const TIME_SPAN_S: f64 = 0.250;
@@ -77,12 +64,16 @@ pub fn write_with_progress(ctx: &Context, target: &Path, data: &[u8]) -> Result<
             } else {
                 0
             };
-            ctx.file_progress(&format!("{} KB/s", group_thousands(speed)), written, total);
+            ctx.file_progress(
+                &format!("{} KB/s", crate::format::group_thousands(speed)),
+                written,
+                total,
+            );
             ctx.debug(format!(
                 "Progress on {fname} - {} / {} Bytes ( {} KB/s )",
-                group_thousands(written),
-                group_thousands(total),
-                group_thousands(speed)
+                crate::format::group_thousands(written),
+                crate::format::group_thousands(total),
+                crate::format::group_thousands(speed)
             ));
             last_emit = Instant::now();
             last_written = written;
@@ -980,13 +971,6 @@ mod tests {
             "Le Chateau_ ete _ hiver_"
         );
         assert_eq!(secure_filename("Łódź"), "Lodz");
-    }
-
-    #[test]
-    fn thousands() {
-        assert_eq!(group_thousands(0), "0");
-        assert_eq!(group_thousands(1234567), "1,234,567");
-        assert_eq!(group_thousands(123), "123");
     }
 
     #[test]

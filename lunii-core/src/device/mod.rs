@@ -303,7 +303,7 @@ pub trait Device: Send {
                 }
             }
         }
-        Ok((removed, recovered_size / 1024 / 1024))
+        Ok((removed, crate::format::megabytes(recovered_size)))
     }
 
     /// Computes the size of the stories not computed yet.

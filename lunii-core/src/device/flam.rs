@@ -536,7 +536,7 @@ impl Device for FlamDevice {
         if archive_size >= free {
             bail!(
                 "Not enough space left on Flam (only {}MB)",
-                free / 1024 / 1024
+                crate::format::megabytes(free)
             );
         }
 

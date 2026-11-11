@@ -12,7 +12,7 @@ use clap::{Args, Parser, Subcommand};
 use lunii_core::constants::*;
 use lunii_core::convert::audio::AudioOptions;
 use lunii_core::{
-    Aborted, Context, Device, Level, Reporter, album, db, device, firmware, report, tools,
+    Aborted, Context, Device, Level, Reporter, album, db, device, firmware, format, report, tools,
 };
 use uuid::Uuid;
 
@@ -249,10 +249,6 @@ fn resolve(dev: &dyn Device, uuids: &[String]) -> Result<Vec<Uuid>> {
         .collect()
 }
 
-fn human_size(size: u64) -> String {
-    format!("{:.1} MB", size as f64 / 1024.0 / 1024.0)
-}
-
 /// Archives to import, in the given order: files and MP3 albums as given,
 /// other directories scanned recursively (sorted by name). Duplicates are
 /// dropped.
@@ -336,7 +332,7 @@ fn list_stories(ctx: &Context, device: Option<&Path>, sizes: bool) -> Result<()>
             if s.hidden { "H" } else { "-" },
             if s.nm { "N" } else { "-" }
         );
-        let size = s.size.map(human_size).unwrap_or_default();
+        let size = s.size.map(format::size).unwrap_or_default();
         println!(
             "{:>3}  {}  {flags}  {:<50} {size}",
             i + 1,
@@ -421,7 +417,7 @@ fn import(
             let archive = album.as_ref().map_or(file.as_path(), |a| a.path());
             match dev.import_story(ctx, archive) {
                 Ok(()) => {
-                    let time = report::format_secs(start.elapsed().as_secs());
+                    let time = format::secs(start.elapsed().as_secs());
                     ctx.info(format!("Time to import : {time}"));
                     ctx.info(format!("👍 New story imported : '{}'", file.display()));
                     Ok(())

@@ -850,7 +850,7 @@ impl Device for LuniiDevice {
         if archive_size >= free {
             bail!(
                 "Not enough space left on Lunii (only {}MB)",
-                free / 1024 / 1024
+                crate::format::megabytes(free)
             );
         }
 

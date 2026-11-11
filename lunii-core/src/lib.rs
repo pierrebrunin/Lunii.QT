@@ -16,6 +16,7 @@ pub mod crypto;
 pub mod db;
 pub mod device;
 pub mod firmware;
+pub mod format;
 mod http;
 pub mod mp3;
 pub mod podcast;

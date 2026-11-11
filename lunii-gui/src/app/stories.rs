@@ -110,7 +110,7 @@ impl App {
                         uuid: s.str_uuid.clone().into(),
                         size: s
                             .size
-                            .map(|b| format!("{:.1}MB", b as f64 / 1024.0 / 1024.0))
+                            .map(lunii_core::format::size)
                             .unwrap_or_default()
                             .into(),
                         duration: s

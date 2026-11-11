@@ -95,7 +95,7 @@ impl App {
         };
         ui.set_snu(dev.snu.clone().into());
         ui.set_hw_version(dev.hw_text.clone().into());
-        let free = free_space(&dev.mount).unwrap_or(0) / 1024 / 1024;
+        let free = lunii_core::format::megabytes(free_space(&dev.mount).unwrap_or(0));
         ui.set_free_space(format!("{free} MB").into());
         ui.set_low_space(free < 500);
         let count = st.visible.len();
@@ -116,7 +116,7 @@ impl App {
             .as_ref()
             .and_then(|d| Self::lock_device(d).ok().map(|d| d.info()))
             .unwrap_or_else(|| dev.info.clone());
-        let mb = |bytes: u64| (bytes / 1024 / 1024).to_string();
+        let mb = |bytes: u64| lunii_core::format::megabytes(bytes).to_string();
         let space = match (free_space(&dev.mount), total_space(&dev.mount)) {
             (Ok(free), Ok(total)) => trf("{} MB free of {} MB", &[&mb(free), &mb(total)]),
             (Ok(free), Err(_)) => format!("{} MB", mb(free)),

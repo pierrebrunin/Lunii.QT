@@ -166,15 +166,6 @@ pub fn batch<T>(
     Ok(success)
 }
 
-/// A duration for the messages: `95 s`, `3 min 20 s` (from 2 minutes).
-pub fn format_secs(secs: u64) -> String {
-    if secs > 120 {
-        format!("{} min {} s", secs / 60, secs % 60)
-    } else {
-        format!("{secs} s")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,11 +194,5 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.is::<Aborted>());
-    }
-
-    #[test]
-    fn durations() {
-        assert_eq!(format_secs(95), "95 s");
-        assert_eq!(format_secs(200), "3 min 20 s");
     }
 }

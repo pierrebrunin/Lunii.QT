@@ -314,7 +314,7 @@ impl Runner {
                     Err(e) => Err(anyhow::anyhow!("{e:#}")),
                 };
                 if result.is_ok() {
-                    let time = report::format_secs(start.elapsed().as_secs());
+                    let time = lunii_core::format::secs(start.elapsed().as_secs());
                     self.message(trf("Time to import : {}", &[&time]));
                     self.message(trf(
                         "👍 New story imported : '{}'",
@@ -541,7 +541,7 @@ impl Runner {
             &[
                 &episodes.len().to_string(),
                 &podcast.title,
-                &report::format_secs(start.elapsed().as_secs()),
+                &lunii_core::format::secs(start.elapsed().as_secs()),
             ],
         ));
         Ok(())
