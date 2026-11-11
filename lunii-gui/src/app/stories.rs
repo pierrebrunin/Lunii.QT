@@ -25,6 +25,34 @@ pub(super) struct List {
     pub(super) details_uuid: Option<Uuid>,
 }
 
+impl List {
+    /// Selects the rows from the anchor (from `row` without one) to `row`.
+    fn select_range(&mut self, row: usize) {
+        // (kept in the list by rebuild_rows: checked anyway)
+        let anchor = self
+            .anchor
+            .filter(|&a| a < self.visible.len())
+            .unwrap_or(row);
+        let (a, b) = (anchor.min(row), anchor.max(row));
+        self.selected = self.visible[a..=b]
+            .iter()
+            .map(|&i| self.stories[i].uuid)
+            .collect();
+    }
+
+    /// The row of the first of `ids` shown becomes the current one and the
+    /// anchor.
+    fn focus_first(&mut self, ids: &[Uuid]) -> Option<usize> {
+        let row = self
+            .visible
+            .iter()
+            .position(|&i| ids.contains(&self.stories[i].uuid))?;
+        self.current = Some(row);
+        self.anchor = Some(row);
+        Some(row)
+    }
+}
+
 /// Durations measured on the device (stories without one in the database).
 #[derive(Default)]
 pub(super) struct Durations {
@@ -171,18 +199,7 @@ impl App {
                     st.list.anchor = Some(row);
                 }
             } else if shift {
-                // (kept in the list by rebuild_rows: checked anyway)
-                let anchor = st
-                    .list
-                    .anchor
-                    .filter(|&a| a < st.list.visible.len())
-                    .unwrap_or(row);
-                let (a, b) = (anchor.min(row), anchor.max(row));
-                let range: Vec<Uuid> = st.list.visible[a..=b]
-                    .iter()
-                    .map(|&i| st.list.stories[i].uuid)
-                    .collect();
-                st.list.selected = range.into_iter().collect();
+                st.list.select_range(row);
             } else if ctrl {
                 if !st.list.selected.remove(&uuid) {
                     st.list.selected.insert(uuid);
@@ -209,18 +226,7 @@ impl App {
                 None => 0,
             };
             if shift {
-                // (kept in the list by rebuild_rows: checked anyway)
-                let anchor = st
-                    .list
-                    .anchor
-                    .filter(|&a| a < st.list.visible.len())
-                    .unwrap_or(row);
-                let (a, b) = (anchor.min(row), anchor.max(row));
-                let range: Vec<Uuid> = st.list.visible[a..=b]
-                    .iter()
-                    .map(|&i| st.list.stories[i].uuid)
-                    .collect();
-                st.list.selected = range.into_iter().collect();
+                st.list.select_range(row);
             } else {
                 let uuid = st.list.stories[st.list.visible[row]].uuid;
                 st.list.selected = HashSet::from([uuid]);
@@ -377,19 +383,16 @@ impl App {
         }
         self.device_op(|d, _| d.move_stories(&ids, offset));
         // keep the first moved story in view
-        let row = {
-            let st = self.state.borrow();
-            st.list
-                .visible
-                .iter()
-                .position(|&i| ids.contains(&st.list.stories[i].uuid))
-        };
-        if let Some(row) = row {
-            self.state.borrow_mut().list.current = Some(row);
-            self.state.borrow_mut().list.anchor = Some(row);
-            self.selection_changed();
+        if let Some(row) = self.focus_moved(&ids) {
             self.ui().invoke_ensure_visible(row as i32);
         }
+    }
+
+    /// After a move: the first moved story shown becomes the current row.
+    fn focus_moved(&self, ids: &[Uuid]) -> Option<usize> {
+        let row = self.state.borrow_mut().list.focus_first(ids)?;
+        self.selection_changed();
+        Some(row)
     }
 
     /// Selected stories dragged with the mouse, dropped before the row `gap`
@@ -414,20 +417,7 @@ impl App {
             return;
         }
         self.device_op(|d, _| d.move_stories_before(&ids, before));
-        let row = {
-            let st = self.state.borrow();
-            st.list
-                .visible
-                .iter()
-                .position(|&i| ids.contains(&st.list.stories[i].uuid))
-        };
-        if let Some(row) = row {
-            let mut st = self.state.borrow_mut();
-            st.list.current = Some(row);
-            st.list.anchor = Some(row);
-            drop(st);
-            self.selection_changed();
-        }
+        self.focus_moved(&ids);
     }
 
     /// Computes the missing story sizes when they are displayed. A task
@@ -444,5 +434,57 @@ impl App {
             self.launch(Task::Size);
             self.state.borrow_mut().task.sizing = true;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Stories 0..5, the rows showing 0, 2, 3 and 4 (1 filtered out).
+    fn list() -> List {
+        let story = |n: u128| StoryInfo {
+            uuid: Uuid::from_u128(n),
+            str_uuid: Uuid::from_u128(n).to_string(),
+            name: format!("Story {n}"),
+            night_mode: false,
+            official: false,
+            hidden: false,
+            exportable: true,
+            size: None,
+            duration: None,
+            album: false,
+            podcast: false,
+        };
+        List {
+            stories: (0..5).map(story).collect(),
+            visible: vec![0, 2, 3, 4],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn range_selection_from_the_anchor() {
+        let mut list = list();
+        list.anchor = Some(3);
+        list.select_range(1);
+        let expected: HashSet<Uuid> = [2, 3, 4].map(Uuid::from_u128).into();
+        assert_eq!(list.selected, expected);
+
+        // no anchor, or one out of the rows: the row alone
+        list.anchor = Some(9);
+        list.select_range(0);
+        assert_eq!(list.selected, HashSet::from([Uuid::from_u128(0)]));
+    }
+
+    #[test]
+    fn first_moved_story_becomes_current() {
+        let mut list = list();
+        let ids = [Uuid::from_u128(4), Uuid::from_u128(2)];
+        assert_eq!(list.focus_first(&ids), Some(1));
+        assert_eq!((list.current, list.anchor), (Some(1), Some(1)));
+        // only filtered out stories: nothing changes
+        assert_eq!(list.focus_first(&[Uuid::from_u128(1)]), None);
+        assert_eq!(list.current, Some(1));
     }
 }
