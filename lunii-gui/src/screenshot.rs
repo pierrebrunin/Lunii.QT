@@ -337,7 +337,10 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     app.handle_event(crate::worker::Event::Total(1, 3));
     app.handle_event(crate::worker::Event::Story("1A2B3C4D".into(), 4, 10));
     app.handle_event(crate::worker::Event::File("1,234 KB/s".into(), 60, 100));
-    ui.set_eta_text(crate::i18n::trf("Time left: {}", &["3 min 20 s"]).into());
+    ui.set_transfer_text(
+        crate::app::transfer_text(12_897_484, 89_128_960, std::time::Duration::from_secs(200))
+            .into(),
+    );
     pump(&queue, 100);
     render(0, &shot("12-progress"));
     app.handle_event(crate::worker::Event::Finished);

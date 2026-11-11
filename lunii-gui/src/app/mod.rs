@@ -1,7 +1,7 @@
 //! Main window controller (with the night mode and log panels).
 
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -30,6 +30,8 @@ mod progress;
 mod stories;
 
 pub(crate) use devices::DevInfo;
+#[cfg(feature = "screenshot")]
+pub(crate) use progress::transfer_text;
 use stories::*;
 
 pub const APP_VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
@@ -84,7 +86,7 @@ pub struct App {
     podcast_rows: Rc<VecModel<EpisodeRow>>,
     state: RefCell<State>,
     drop_timer: slint::Timer,
-    eta_timer: slint::Timer,
+    transfer_timer: slint::Timer,
 }
 
 fn level_value(level: Level) -> i32 {
@@ -157,7 +159,7 @@ impl App {
             podcast_rows: Rc::new(VecModel::default()),
             state: RefCell::new(State::default()),
             drop_timer: slint::Timer::default(),
-            eta_timer: slint::Timer::default(),
+            transfer_timer: slint::Timer::default(),
         });
         APP.with(|a| *a.borrow_mut() = Some(app.clone()));
 
@@ -457,7 +459,7 @@ impl App {
                     0.0
                 });
             }
-            Event::ImportPlan(total) => self.start_eta(total),
+            Event::ImportPlan(total) => self.start_transfer(total),
             Event::Feed(url, result) => self.feed_loaded(url, result),
             Event::PodcastSearch(token, results) => self.podcast_add_found(token, results),
             Event::PodcastChecked(token, result) => self.podcast_add_checked(token, result),
@@ -551,7 +553,7 @@ impl App {
             Event::UpdateCheck(version) => self.update_checked(version),
             Event::Details(uuid, desc, picture) => self.details_ready(uuid, desc, picture),
             Event::Finished => {
-                self.stop_eta();
+                self.stop_transfer();
                 // the album shown may have changed
                 self.state.borrow_mut().list.details_uuid = None;
                 if let Some((handle, _)) = self.state.borrow_mut().task.worker.take() {

@@ -779,12 +779,6 @@ msgstr "Également enregistré dans {}"
 msgid "Log sent to clipboard."
 msgstr "Journal copié dans le presse-papiers."
 
-msgid "Time left: {}"
-msgstr "Temps restant : {}"
-
-msgid "Estimating time left..."
-msgstr "Estimation du temps restant..."
-
 msgid "Import MP3 album"
 msgstr "Importer un album MP3"
 
@@ -1222,3 +1216,6 @@ msgstr "Ouvrir la page"
 
 msgid "Copy the address"
 msgstr "Copier l'adresse"
+
+msgid "{} / {} · {} left · {}"
+msgstr "{} / {} · reste {} · {}"
