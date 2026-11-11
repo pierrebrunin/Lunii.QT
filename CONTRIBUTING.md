@@ -460,6 +460,7 @@ lunii-cli devices                      # appareils détectés
 lunii-cli info                         # firmware, SNU, clés
 lunii-cli list --sizes
 lunii-cli import histoire.plain.pk dossier_d_archives/
+lunii-cli import dossier_de_mp3/ --normalize-volume   # album MP3
 lunii-cli export 1A2B3C4D -o ~/sauvegardes
 lunii-cli export --all -o ~/sauvegardes
 lunii-cli move 1A2B3C4D --top

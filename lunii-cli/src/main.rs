@@ -10,7 +10,10 @@ use std::time::Instant;
 use anyhow::{Context as _, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use lunii_core::constants::*;
-use lunii_core::{Aborted, Context, Device, Level, Reporter, db, device, firmware, report, tools};
+use lunii_core::convert::audio::AudioOptions;
+use lunii_core::{
+    Aborted, Context, Device, Level, Reporter, album, db, device, firmware, report, tools,
+};
 use uuid::Uuid;
 
 #[derive(Parser)]
@@ -48,10 +51,14 @@ enum Command {
         #[arg(long)]
         sizes: bool,
     },
-    /// Import story archives (files or directories)
+    /// Import story archives, folders of archives, or folders of MP3 files
+    /// (albums)
     Import {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
+        /// Same loudness for every track of the MP3 albums
+        #[arg(long)]
+        normalize_volume: bool,
     },
     /// Export stories to a directory
     Export {
@@ -246,13 +253,14 @@ fn human_size(size: u64) -> String {
     format!("{:.1} MB", size as f64 / 1024.0 / 1024.0)
 }
 
-/// Archives to import, in the given order: files as given, directories scanned
-/// recursively (sorted by name). Duplicates are dropped.
+/// Archives to import, in the given order: files and MP3 albums as given,
+/// other directories scanned recursively (sorted by name). Duplicates are
+/// dropped.
 fn collect_archives(paths: &[PathBuf], extensions: &[&str]) -> Vec<PathBuf> {
     let mut seen = BTreeSet::new();
     let mut out = Vec::new();
     for p in paths {
-        let found: Vec<PathBuf> = if p.is_dir() {
+        let found: Vec<PathBuf> = if p.is_dir() && !album::is_album_dir(p) {
             walkdir::WalkDir::new(p)
                 .sort_by_file_name()
                 .into_iter()
@@ -379,8 +387,13 @@ fn night_mode_config(ctx: &Context, device: Option<&Path>, args: NmConfigArgs) -
     Ok(())
 }
 
-/// `import`: archives (and directories of archives).
-fn import(ctx: &Context, device: Option<&Path>, paths: &[PathBuf]) -> Result<()> {
+/// `import`: archives, directories of archives, MP3 albums.
+fn import(
+    ctx: &Context,
+    device: Option<&Path>,
+    paths: &[PathBuf],
+    audio: AudioOptions,
+) -> Result<()> {
     let mut dev = open(ctx, device)?;
     if !dev.can_import() {
         bail!("No story keys for this Lunii v3, import is not possible (see README).");
@@ -396,7 +409,17 @@ fn import(ctx: &Context, device: Option<&Path>, paths: &[PathBuf]) -> Result<()>
         &archives,
         |_, file| {
             let start = Instant::now();
-            match dev.import_story(ctx, file) {
+            let album = album::is_album_dir(file)
+                .then(|| album::prepare_album(ctx, file, audio))
+                .transpose()?;
+            if let Some(album) = &album {
+                ctx.info(format!(
+                    "🎵 MP3 album '{}' : {} tracks",
+                    album.title, album.tracks
+                ));
+            }
+            let archive = album.as_ref().map_or(file.as_path(), |a| a.path());
+            match dev.import_story(ctx, archive) {
                 Ok(()) => {
                     let time = report::format_secs(start.elapsed().as_secs());
                     ctx.info(format!("Time to import : {time}"));
@@ -563,7 +586,10 @@ fn run(cli: Cli, ctx: &Context) -> Result<()> {
         Command::Devices => list_devices(device),
         Command::Info => show_info(ctx, device),
         Command::List { sizes } => list_stories(ctx, device, sizes),
-        Command::Import { paths } => import(ctx, device, &paths),
+        Command::Import {
+            paths,
+            normalize_volume,
+        } => import(ctx, device, &paths, AudioOptions { normalize_volume }),
         Command::Export { uuids, all, out } => export(ctx, device, uuids, all, &out),
         Command::Remove { uuids, yes } => remove(ctx, device, &uuids, yes),
         Command::Hide { uuids } => {
