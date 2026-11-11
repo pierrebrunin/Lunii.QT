@@ -39,8 +39,8 @@ export component PodcastsView inherits HorizontalLayout {
     // its episodes are being loaded
     in property <bool> loading;
     in property <[EpisodeRow]> rows;
-    // episode selected by a click on its row (its box checks it)
-    property <int> selected-episode: -1;
+    // row selected (click, arrows); its box (or Space) checks it
+    property <int> selected-row: -1;
     in property <int> selected-count;
     // episodes on the device unchecked: to remove
     in property <int> remove-count;
@@ -80,6 +80,8 @@ export component PodcastsView inherits HorizontalLayout {
             // A → Z, but the newest, longest and present first
             root.sort-ascending = column == 0;
         }
+        // the rows change order
+        root.selected-row = -1;
         root.sort-changed();
     }
 
@@ -121,7 +123,7 @@ export component PodcastsView inherits HorizontalLayout {
                     background: i == root.current ? Theme.selection : feed-area.has-hover ? #8882 : transparent;
                     feed-area := TouchArea {
                         clicked => {
-                            root.selected-episode = -1;
+                            root.selected-row = -1;
                             root.select(i);
                         }
                     }
@@ -231,114 +233,187 @@ export component PodcastsView inherits HorizontalLayout {
             border-width: 1px;
             border-color: Palette.border;
             background: Palette.alternate-background;
-            VerticalLayout {
-                // header
-                Rectangle {
-                    height: root.row-height;
-                    background: Palette.control-background;
-                    HorizontalLayout {
-                        padding-left: 6px;
-                        // the scrollbar
-                        padding-right: 14px;
-                        spacing: 6px;
-                        SortHeader {
-                            text: @tr("On the device");
-                            width: root.col-device;
-                            sorted: root.sort-column == 3;
-                            ascending: root.sort-ascending;
-                            clicked => { root.sort-by(3); }
-                        }
-                        SortHeader {
-                            text: @tr("Title");
-                            horizontal-stretch: 1;
-                            sorted: root.sort-column == 0;
-                            ascending: root.sort-ascending;
-                            clicked => { root.sort-by(0); }
-                        }
-                        SortHeader {
-                            text: @tr("Duration");
-                            width: root.col-duration;
-                            horizontal-alignment: right;
-                            sorted: root.sort-column == 1;
-                            ascending: root.sort-ascending;
-                            clicked => { root.sort-by(1); }
-                        }
-                        SortHeader {
-                            text: @tr("Published");
-                            width: root.col-date;
-                            horizontal-alignment: right;
-                            sorted: root.sort-column == 2;
-                            ascending: root.sort-ascending;
-                            clicked => { root.sort-by(2); }
-                        }
-                    }
-                    Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
+            // keyboard: arrows, Page Up/Down, Home/End move the selection,
+            // Space checks or unchecks the episode selected
+            scope := FocusScope {
+                width: 100%;
+                height: 100%;
+                enabled: root.interactive;
+                function go(row: int) {
+                    root.selected-row = max(0, min(root.rows.length - 1, row));
+                    self.reveal();
+                    // again once the list has made the rows now shown: it
+                    // corrects its position then
+                    reveal-again.running = true;
                 }
-                ListView {
-                    for row in root.rows: Rectangle {
-                        height: root.row-height;
-                        property <bool> enabled: !row.present || row.removable;
-                        property <bool> selected: row.index == root.selected-episode;
-                        background: selected ? Theme.selection : area.has-hover ? #8882 : transparent;
-                        property <color> fg: selected ? #fff : enabled ? Palette.foreground : Theme.hidden-text;
-                        // a click selects the row; only its box checks it
-                        area := TouchArea {
-                            clicked => { root.selected-episode = row.index; }
+                // the selected row in view
+                function reveal() {
+                    if (root.selected-row * root.row-height < -episode-list.content-y) {
+                        episode-list.content-y = -root.selected-row * root.row-height;
+                    } else if ((root.selected-row + 1) * root.row-height > -episode-list.content-y + episode-list.visible-height) {
+                        episode-list.content-y = -((root.selected-row + 1) * root.row-height - episode-list.visible-height);
+                    }
+                }
+                reveal-again := Timer {
+                    interval: 1ms;
+                    running: false;
+                    triggered => {
+                        self.running = false;
+                        scope.reveal();
+                    }
+                }
+                key-pressed(event) => {
+                    if (event.modifiers.alt || event.modifiers.control) {
+                        return reject;
+                    }
+                    if (event.text == Key.UpArrow) {
+                        self.go(root.selected-row < 0 ? 0 : root.selected-row - 1);
+                        return accept;
+                    }
+                    if (event.text == Key.DownArrow) {
+                        self.go(root.selected-row + 1);
+                        return accept;
+                    }
+                    if (event.text == Key.PageUp) {
+                        self.go(root.selected-row - 10);
+                        return accept;
+                    }
+                    if (event.text == Key.PageDown) {
+                        self.go(root.selected-row + 10);
+                        return accept;
+                    }
+                    if (event.text == Key.Home) {
+                        self.go(0);
+                        return accept;
+                    }
+                    if (event.text == Key.End) {
+                        self.go(root.rows.length - 1);
+                        return accept;
+                    }
+                    if (event.text == " " && root.selected-row >= 0 && root.selected-row < root.rows.length) {
+                        if (!root.rows[root.selected-row].present || root.rows[root.selected-row].removable) {
+                            root.toggle(root.rows[root.selected-row].index);
                         }
+                        return accept;
+                    }
+                    reject
+                }
+                VerticalLayout {
+                    // header
+                    Rectangle {
+                        height: root.row-height;
+                        background: Palette.control-background;
                         HorizontalLayout {
                             padding-left: 6px;
                             // the scrollbar
                             padding-right: 14px;
                             spacing: 6px;
-                            // checked: on the device, or to import; the
-                            // changes to apply named beside
-                            HorizontalLayout {
+                            SortHeader {
+                                text: @tr("On the device");
                                 width: root.col-device;
-                                spacing: 4px;
-                                // its state follows the row only: the
-                                // clicks go to the TouchArea over it, that
-                                // checks or unchecks the episode
-                                Rectangle {
-                                    width: box.preferred-width;
-                                    box := CheckBox {
-                                        width: 100%;
-                                        checked: row.present ? !row.remove : row.checked;
-                                        enabled: enabled;
+                                sorted: root.sort-column == 3;
+                                ascending: root.sort-ascending;
+                                clicked => { root.sort-by(3); }
+                            }
+                            SortHeader {
+                                text: @tr("Title");
+                                horizontal-stretch: 1;
+                                sorted: root.sort-column == 0;
+                                ascending: root.sort-ascending;
+                                clicked => { root.sort-by(0); }
+                            }
+                            SortHeader {
+                                text: @tr("Duration");
+                                width: root.col-duration;
+                                horizontal-alignment: right;
+                                sorted: root.sort-column == 1;
+                                ascending: root.sort-ascending;
+                                clicked => { root.sort-by(1); }
+                            }
+                            SortHeader {
+                                text: @tr("Published");
+                                width: root.col-date;
+                                horizontal-alignment: right;
+                                sorted: root.sort-column == 2;
+                                ascending: root.sort-ascending;
+                                clicked => { root.sort-by(2); }
+                            }
+                        }
+                        Rectangle { y: parent.height - 1px; height: 1px; background: Palette.border; }
+                    }
+                    episode-list := ListView {
+                        for row[i] in root.rows: Rectangle {
+                            height: root.row-height;
+                            property <bool> enabled: !row.present || row.removable;
+                            property <bool> selected: i == root.selected-row;
+                            background: selected ? Theme.selection : area.has-hover ? #8882 : transparent;
+                            property <color> fg: selected ? #fff : enabled ? Palette.foreground : Theme.hidden-text;
+                            // a click selects the row; only its box checks it
+                            area := TouchArea {
+                                clicked => {
+                                    root.selected-row = i;
+                                    scope.focus();
+                                }
+                            }
+                            HorizontalLayout {
+                                padding-left: 6px;
+                                // the scrollbar
+                                padding-right: 14px;
+                                spacing: 6px;
+                                // checked: on the device, or to import; the
+                                // changes to apply named beside
+                                HorizontalLayout {
+                                    width: root.col-device;
+                                    spacing: 4px;
+                                    // its state follows the row only: the
+                                    // clicks go to the TouchArea over it, that
+                                    // checks or unchecks the episode
+                                    Rectangle {
+                                        width: box.preferred-width;
+                                        box := CheckBox {
+                                            width: 100%;
+                                            checked: row.present ? !row.remove : row.checked;
+                                            enabled: enabled;
+                                        }
+                                        TouchArea {
+                                            enabled: enabled;
+                                            clicked => {
+                                                root.selected-row = i;
+                                                scope.focus();
+                                                root.toggle(row.index);
+                                            }
+                                        }
                                     }
-                                    TouchArea {
-                                        enabled: enabled;
-                                        clicked => { root.toggle(row.index); }
+                                    Text {
+                                        text: row.remove ? @tr("to remove") : row.checked && !row.present ? @tr("to import") : "";
+                                        color: selected ? #fff : row.remove ? #d33 : Theme.selection;
+                                        font-size: 11px;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 1;
+                                        overflow: elide;
                                     }
                                 }
                                 Text {
-                                    text: row.remove ? @tr("to remove") : row.checked && !row.present ? @tr("to import") : "";
-                                    color: selected ? #fff : row.remove ? #d33 : Theme.selection;
-                                    font-size: 11px;
+                                    text: row.title;
+                                    color: fg;
+                                    overflow: elide;
                                     vertical-alignment: center;
                                     horizontal-stretch: 1;
-                                    overflow: elide;
                                 }
-                            }
-                            Text {
-                                text: row.title;
-                                color: fg;
-                                overflow: elide;
-                                vertical-alignment: center;
-                                horizontal-stretch: 1;
-                            }
-                            Text {
-                                text: row.duration;
-                                color: fg;
-                                width: root.col-duration;
-                                horizontal-alignment: right;
-                                vertical-alignment: center;
-                            }
-                            Text {
-                                text: row.date;
-                                color: fg;
-                                width: root.col-date;
-                                horizontal-alignment: right;
-                                vertical-alignment: center;
+                                Text {
+                                    text: row.duration;
+                                    color: fg;
+                                    width: root.col-duration;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
+                                Text {
+                                    text: row.date;
+                                    color: fg;
+                                    width: root.col-date;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                }
                             }
                         }
                     }

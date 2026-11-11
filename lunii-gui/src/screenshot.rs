@@ -122,23 +122,32 @@ fn release(ui: &MainWindow, at: (f32, f32)) {
 
 /// Right button pressed and released at `at`.
 fn right_click(ui: &MainWindow, at: (f32, f32)) {
-    use slint::platform::{PointerEventButton, WindowEvent};
+    click(ui, at, slint::platform::PointerEventButton::Right);
+}
+
+/// `button` pressed and released at `at`.
+fn click(ui: &MainWindow, at: (f32, f32), button: slint::platform::PointerEventButton) {
+    use slint::platform::WindowEvent;
     let window = ui.window();
     let position = slint::LogicalPosition::new(at.0, at.1);
-    let button = PointerEventButton::Right;
     window.dispatch_event(WindowEvent::PointerMoved { position });
     window.dispatch_event(WindowEvent::PointerPressed { position, button });
     window.dispatch_event(WindowEvent::PointerReleased { position, button });
 }
 
-/// Escape: the popup shown closed.
-fn close_popup(ui: &MainWindow) {
-    use slint::platform::{Key, WindowEvent};
-    let text: slint::SharedString = Key::Escape.into();
+/// A key pressed and released (`Key::…` or a character).
+fn press_key(ui: &MainWindow, text: impl Into<slint::SharedString>) {
+    use slint::platform::WindowEvent;
+    let text = text.into();
     ui.window()
         .dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
     ui.window()
         .dispatch_event(WindowEvent::KeyReleased { text });
+}
+
+/// Escape: the popup shown closed.
+fn close_popup(ui: &MainWindow) {
+    press_key(ui, slint::platform::Key::Escape);
 }
 
 /// Mouse press at `from`, moved to `to`, released there.
@@ -359,6 +368,21 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
         }
         pump(&queue, 300);
         render(0, &shot("14-podcast-episodes"));
+        // keyboard: the 4th row clicked (selected, not checked), the next one
+        // reached by Down and checked by Space
+        click(
+            &ui,
+            (500.0, 284.0),
+            slint::platform::PointerEventButton::Left,
+        );
+        press_key(&ui, slint::platform::Key::DownArrow);
+        press_key(&ui, " ");
+        pump(&queue, 200);
+        render(0, &shot("14-podcast-keyboard"));
+        // End: the last row, scrolled into view
+        press_key(&ui, slint::platform::Key::End);
+        pump(&queue, 300);
+        render(0, &shot("14-podcast-keyboard-end"));
 
         // "+": a real search (network) of LUNII_SHOT_SEARCH, a result checked
         if let Ok(term) = std::env::var("LUNII_SHOT_SEARCH") {
