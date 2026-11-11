@@ -125,7 +125,7 @@ La vue **Podcasts** (bouton en haut de la fenêtre, ou Histoires / Importer un p
      Les flux RSS n'annoncent pas toujours tous les épisodes : l'application complète le flux par les épisodes listés sur la page du podcast, quand elle les trouve.
 3. Le podcast est chargé et vérifié (titre, nombre d'épisodes), puis cliquez sur **Suivre**.
 
-Les podcasts suivis sont rechargés en arrière-plan à chaque ouverture de la vue. Sous chacun, une ligne indique combien de ses épisodes sont **sur l'appareil**, et combien il en a en tout. Le bouton **↻** recharge le podcast sélectionné ; sous son titre, l'adresse de sa page web s'ouvre d'un clic.  
+Les podcasts suivis sont rechargés en arrière-plan à chaque ouverture de la vue. Sous chacun, une ligne indique combien de ses épisodes sont **sur l'appareil**, et combien il en a en tout. Le bouton **↻** recharge le podcast sélectionné ; sous son titre, l'adresse de sa page web s'ouvre d'un clic (clic droit : la copier).  
 Un podcast dont l'album est sur l'appareil branché est suivi automatiquement (album importé depuis un autre ordinateur).
 
 ### Ajouter des épisodes sur l'appareil

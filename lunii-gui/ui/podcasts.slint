@@ -2,7 +2,7 @@
 // selected one on the right, to import on the device.
 
 import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette } from "std-widgets.slint";
-import { Theme, EpisodeRow, FollowedRow, Link } from "common.slint";
+import { Theme, EpisodeRow, FollowedRow } from "common.slint";
 
 // Column header: a click sorts by it, again reverses the order.
 component SortHeader inherits Rectangle {
@@ -57,7 +57,8 @@ export component PodcastsView inherits HorizontalLayout {
     callback select(index: int);
     callback refresh();
     callback open-page();
-    callback copy-page();
+    // right click on the address: its menu, at `position` in the window
+    callback page-menu(position: Point);
     callback unfollow();
     callback mode-changed();
     callback toggle(index: int);
@@ -169,24 +170,24 @@ export component PodcastsView inherits HorizontalLayout {
                     font-weight: 600;
                     wrap: word-wrap;
                 }
-                if !root.loading && root.page != "": HorizontalLayout {
-                    spacing: 6px;
-                    Link {
-                        text: root.page;
-                        font-size: 12px;
-                        overflow: elide;
-                        vertical-alignment: center;
+                // click: opened; right click: a menu to copy it
+                if !root.loading && root.page != "": Text {
+                    text: root.page;
+                    font-size: 12px;
+                    overflow: elide;
+                    color: #3584e4;
+                    TouchArea {
+                        mouse-cursor: pointer;
                         clicked => { root.open-page(); }
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                                root.page-menu({
+                                    x: self.absolute-position.x + self.mouse-x,
+                                    y: self.absolute-position.y + self.mouse-y,
+                                });
+                            }
+                        }
                     }
-                    Link {
-                        text: @tr("Copy");
-                        font-size: 12px;
-                        horizontal-stretch: 0;
-                        vertical-alignment: center;
-                        color: Theme.hidden-text;
-                        clicked => { root.copy-page(); }
-                    }
-                    Rectangle { horizontal-stretch: 1; }
                 }
             }
             if root.current >= 0: VerticalLayout {

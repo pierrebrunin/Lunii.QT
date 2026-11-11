@@ -1219,3 +1219,9 @@ msgstr "{} / {} épisodes importés"
 
 msgid "Address sent to clipboard."
 msgstr "Adresse copiée dans le presse-papiers."
+
+msgid "Open the page"
+msgstr "Ouvrir la page"
+
+msgid "Copy the address"
+msgstr "Copier l'adresse"

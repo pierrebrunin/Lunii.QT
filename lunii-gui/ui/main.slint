@@ -536,7 +536,12 @@ export component MainWindow inherits Window {
                 select(index) => { root.podcast-select(index); }
                 refresh => { root.podcast-refresh(); }
                 open-page => { root.open-url(root.podcast-page); }
-                copy-page => { root.podcast-copy-page(); }
+                page-menu(position) => {
+                    page-menu.show({
+                        x: position.x - page-menu.absolute-position.x,
+                        y: position.y - page-menu.absolute-position.y,
+                    });
+                }
                 unfollow => { root.podcast-unfollow(); }
                 mode-changed => { root.podcast-mode-changed(); }
                 toggle(index) => { root.podcast-toggle(index); }
@@ -716,6 +721,26 @@ export component MainWindow inherits Window {
                 MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
                 MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action(Action.export-all); } }
                 MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
+            }
+        }
+    }
+
+    // menu of the address of a podcast page, out of the Podcasts view for the
+    // same reason as the one of the stories
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        page-menu := ContextMenuArea {
+            x: 0;
+            y: 0;
+            width: 0;
+            height: 0;
+            enabled: false;
+            Menu {
+                MenuItem { title: @tr("Open the page"); activated => { root.open-url(root.podcast-page); } }
+                MenuItem { title: @tr("Copy the address"); activated => { root.podcast-copy-page(); } }
             }
         }
     }

@@ -127,7 +127,7 @@ The **Podcasts** view (button at the top of the window, or Stories / Import a po
      RSS feeds do not always list all the episodes: the application completes the feed with the episodes listed on the podcast page, when it finds them.
 3. The podcast is loaded and checked (title, number of episodes), then click **Follow**.
 
-The followed podcasts are reloaded in the background each time the view is opened. Under each of them, a line shows how many of its episodes are **on the device**, and how many it has in all. The **↻** button reloads the selected podcast; under its title, the address of its web page opens with a click.  
+The followed podcasts are reloaded in the background each time the view is opened. Under each of them, a line shows how many of its episodes are **on the device**, and how many it has in all. The **↻** button reloads the selected podcast; under its title, the address of its web page opens with a click (right click: copy it).  
 A podcast whose album is on the connected device is followed automatically (album imported from another computer).
 
 ### Add episodes to the device
