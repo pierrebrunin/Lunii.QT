@@ -1219,3 +1219,6 @@ msgstr "Copier l'adresse"
 
 msgid "{} / {} · {} left · {}"
 msgstr "{} / {} · reste {} · {}"
+
+msgid "Episode {}/{}"
+msgstr "Épisode {}/{}"

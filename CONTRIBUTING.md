@@ -23,7 +23,7 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   ├── src/podcast/         podcasts : mod.rs (types, chargement d'une adresse),
 │   │                        feed.rs (RSS, Atom), page.rs (pages sans flux,
 │   │                        schema.org), html.rs, apple.rs (liens, recherche),
-│   │                        import.rs (téléchargement, préparation de l'import),
+│   │                        import.rs (téléchargement d'un épisode, archives à importer),
 │   │                        state.rs (podcasts suivis)
 │   ├── src/settings.rs      réglages (~/.lunii/settings.json)
 │   ├── src/firmware.rs      téléchargement des firmwares
@@ -285,6 +285,14 @@ directement la fenêtre d'ajout) :
   - **une histoire par épisode** : chaque épisode apparaît dans la liste de
     l'appareil comme une histoire, avec son titre à l'écran, et se lance
     directement.
+- **Un épisode après l'autre** : chacun est téléchargé, converti si besoin,
+  puis écrit sur l'appareil (l'album est créé avec le premier, les suivants
+  y sont ajoutés) et enregistré, avant de passer au suivant. Le compteur suit
+  les épisodes (« Épisode 3/17 ») ; un import interrompu laisse sur
+  l'appareil les épisodes déjà écrits, reconnus au prochain import. Le
+  total d'octets à écrire part des tailles annoncées par le flux et se
+  corrige au fil des épisodes. Le prix : l'index de l'album est réécrit à
+  chaque épisode.
 - En mode « une histoire par épisode », l'UUID de chaque histoire est dérivé du
   flux et de l'épisode : les épisodes déjà présents sur l'appareil sont reconnus
   et grisés.

@@ -66,6 +66,11 @@ impl App {
         if total == 0 {
             return;
         }
+        // the total known so far, updated (podcast episodes)
+        if let Some(transfer) = self.state.borrow_mut().task.transfer.as_mut() {
+            transfer.total = total;
+            return;
+        }
         self.state.borrow_mut().task.transfer = Some(Transfer {
             start: Instant::now(),
             total,

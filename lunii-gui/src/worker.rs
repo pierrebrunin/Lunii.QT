@@ -11,7 +11,7 @@ use std::time::Instant;
 use lunii_core::constants::DeviceVersion;
 use lunii_core::convert::audio::AudioOptions;
 use lunii_core::firmware::{self, AuthToken};
-use lunii_core::podcast::{self, Episode, ImportMode, ImportPlan, Podcast, SearchResult};
+use lunii_core::podcast::{self, Episode, Podcast, SearchResult};
 use lunii_core::{Aborted, Context, Device, Level, Reporter, album, db, report, tools};
 use uuid::Uuid;
 
@@ -118,7 +118,10 @@ pub enum Event {
     Status(String),
     ShowLog,
     Total(usize, usize),
-    /// An import starts: expected number of bytes written to the device
+    /// Episode of a podcast being imported (index, number of episodes)
+    Episode(usize, usize),
+    /// Bytes an import is expected to write to the device (again: the total
+    /// known so far, updated)
     ImportPlan(u64),
     /// Podcast feed loaded (requested address, podcast or error)
     Feed(String, Result<Box<Podcast>, String>),
@@ -496,42 +499,74 @@ impl Runner {
             "⬇ Downloading {} episode(s) of '{}'...",
             &[&episodes.len().to_string(), &podcast.title],
         ));
-        let mode = ImportMode {
-            as_stories,
-            album_on_device: self.album_on_device(&podcast.album_uuid()),
-            audio: self.audio,
+        // one episode after the other: downloaded, converted, written. An
+        // interrupted import leaves the episodes already written, recorded.
+        let uuid = podcast.album_uuid();
+        let mut in_album = !as_stories && self.album_on_device(&uuid);
+        let cover = if as_stories || !in_album {
+            podcast::download_cover(podcast)
+        } else {
+            None
         };
-        let plan = podcast::prepare_import(&self.ctx, podcast, episodes, mode, &dir.0, |i| {
-            self.emit(Event::Total(i, episodes.len()))
-        })?;
-
-        match &plan {
-            // regular imports of STUdio archives
-            ImportPlan::Stories(archives) => return self.import(archives, update_size),
-            ImportPlan::Append(uuid, tracks) => {
-                self.emit(Event::Total(0, 1));
-                self.emit(Event::ImportPlan(append_expected(
-                    tracks.iter().map(|t| t.path.as_path()),
-                )));
-                let result = self.on_device(|d| d.add_album_tracks(&self.ctx, uuid, tracks));
+        // bytes to write: the sizes announced by the feed, then the real ones
+        let mut expected: Vec<u64> = episodes.iter().map(|e| e.size.unwrap_or(0)).collect();
+        let total = episodes.len();
+        let success = report::batch(
+            &self.ctx,
+            episodes,
+            |i, ep| {
+                self.emit(Event::Episode(i, total));
+                self.ctx
+                    .info(format!("⬇ {} ({}/{})", ep.title, i + 1, total));
+                let track = podcast::download_episode(
+                    &self.ctx,
+                    ep,
+                    &format!("{}/{total}", i + 1),
+                    &dir.0,
+                    &format!("episode{i:04}"),
+                    self.audio,
+                )?;
+                let zip = dir.0.join(podcast::story_zip_name(i, &ep.title));
+                let result = if as_stories {
+                    podcast::write_episode_story(podcast, ep, &track, cover.as_deref(), &zip)?;
+                    expected[i] = expected_size(&zip);
+                    self.emit(Event::ImportPlan(expected.iter().sum()));
+                    self.on_device(|d| d.import_story(&self.ctx, &zip))
+                } else if in_album {
+                    expected[i] = append_expected(std::iter::once(track.path.as_path()));
+                    self.emit(Event::ImportPlan(expected.iter().sum()));
+                    self.on_device(|d| {
+                        d.add_album_tracks(&self.ctx, &uuid, std::slice::from_ref(&track))
+                            .map(|_| ())
+                    })
+                } else {
+                    // the album, made of its first episode
+                    podcast::write_new_album(podcast, vec![track.clone()], cover.clone(), &zip)?;
+                    expected[i] = expected_size(&zip);
+                    self.emit(Event::ImportPlan(expected.iter().sum()));
+                    self.on_device(|d| d.import_story(&self.ctx, &zip))
+                };
+                let _ = std::fs::remove_file(&zip);
+                let _ = std::fs::remove_file(&track.path);
                 self.refresh();
                 result?;
-            }
-            ImportPlan::NewAlbum(zip) => {
-                self.emit(Event::Total(0, 1));
-                self.emit(Event::ImportPlan(expected_size(zip)));
-                let result = self.on_device(|d| d.import_story(&self.ctx, zip));
-                self.refresh();
-                result?;
-            }
-        }
-        podcast::record_plan(podcast, episodes, &plan)?;
-        // and on the device: seen from any computer
-        if let Some(Err(e)) =
-            self.with_device(|d| podcast::record_on_device(d, podcast, episodes, &plan))
-        {
-            self.ctx.warn(format!("{e:#}"));
-        }
+                if !as_stories {
+                    podcast::record_imported(podcast, std::slice::from_ref(&ep.guid), !in_album)?;
+                    in_album = true;
+                    // and on the device: seen from any computer
+                    if let Some(Err(e)) = self.with_device(|d| {
+                        podcast::record_on_device(d, podcast, std::slice::from_ref(ep))
+                    }) {
+                        self.ctx.warn(format!("{e:#}"));
+                    }
+                }
+                Ok(())
+            },
+            |ep| {
+                self.emit(Event::ShowLog);
+                self.message(trf("🛑 Failed to import : '{}'", &[&ep.title]));
+            },
+        )?;
         if update_size {
             self.on_device(|d| d.compute_sizes(&self.ctx))?;
             self.refresh();
@@ -539,7 +574,7 @@ impl Runner {
         self.message(trf(
             "✅ {} episode(s) of '{}' imported in {}",
             &[
-                &episodes.len().to_string(),
+                &success.to_string(),
                 &podcast.title,
                 &lunii_core::format::secs(start.elapsed().as_secs()),
             ],

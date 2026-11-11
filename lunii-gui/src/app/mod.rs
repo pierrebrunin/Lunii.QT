@@ -450,9 +450,17 @@ impl App {
             Event::DevicesFound(scan, devices, labels) => self.devices_found(scan, devices, labels),
             Event::DeviceOpened(scan, opened) => self.device_opened(scan, opened),
             Event::ShowLog => self.show_log(),
-            Event::Total(current, total) => {
+            Event::Total(current, total) | Event::Episode(current, total) => {
+                let text = if matches!(event, Event::Episode(..)) {
+                    trf(
+                        "Episode {}/{}",
+                        &[&(current + 1).to_string(), &total.to_string()],
+                    )
+                } else {
+                    format!("Total {}/{total}", current + 1)
+                };
                 ui.set_total_visible(true);
-                ui.set_total_text(format!("Total {}/{total}", current + 1).into());
+                ui.set_total_text(text.into());
                 ui.set_total_progress(if total > 0 {
                     (current + 1) as f32 / total as f32
                 } else {

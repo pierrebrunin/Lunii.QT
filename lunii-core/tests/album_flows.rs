@@ -429,7 +429,7 @@ fn episode_track(dir: &Path, ep: &lunii_core::podcast::Episode) -> album::Track 
 #[test]
 fn podcast_album_on_device() {
     use lunii_core::album::AlbumEntry;
-    use lunii_core::podcast::{self, ImportPlan};
+    use lunii_core::podcast;
     let _cfg = setup();
     let tmp = tempfile::tempdir().unwrap();
     let ctx = Context::default();
@@ -453,8 +453,7 @@ fn podcast_album_on_device() {
     let zip = tmp.path().join("album.zip");
     new_album.write_studio_zip(&zip).unwrap();
     dev.import_story(&ctx, &zip).unwrap();
-    let plan = ImportPlan::NewAlbum(zip);
-    podcast::record_on_device(dev.as_ref(), &p, &p.episodes[..2], &plan).unwrap();
+    podcast::record_on_device(dev.as_ref(), &p, &p.episodes[..2]).unwrap();
     let info_of = |dev: &dyn lunii_core::Device| {
         let story = dev.stories().get(&uuid.to_string()).unwrap().clone();
         dev.album_info(&story).unwrap()
@@ -472,8 +471,7 @@ fn podcast_album_on_device() {
     // an episode appended
     dev.add_album_tracks(&ctx, &uuid, &tracks(&p.episodes[2..]))
         .unwrap();
-    let plan = ImportPlan::Append(uuid, Vec::new());
-    podcast::record_on_device(dev.as_ref(), &p, &p.episodes[2..], &plan).unwrap();
+    podcast::record_on_device(dev.as_ref(), &p, &p.episodes[2..]).unwrap();
     assert_eq!(info_of(dev.as_ref()).episodes, ["a", "b", "c"]);
 
     // edited: the first track removed, the others swapped
@@ -506,7 +504,7 @@ fn podcast_album_on_device() {
 /// tracks matched by title to the episodes this computer remembers.
 #[test]
 fn podcast_album_imported_before() {
-    use lunii_core::podcast::{self, ImportPlan};
+    use lunii_core::podcast;
     let _cfg = setup();
     let tmp = tempfile::tempdir().unwrap();
     let ctx = Context::default();
@@ -537,13 +535,7 @@ fn podcast_album_imported_before() {
 
     dev.add_album_tracks(&ctx, &uuid, &[episode_track(tmp.path(), &p.episodes[1])])
         .unwrap();
-    podcast::record_on_device(
-        dev.as_ref(),
-        &p,
-        &p.episodes[1..],
-        &ImportPlan::Append(uuid, Vec::new()),
-    )
-    .unwrap();
+    podcast::record_on_device(dev.as_ref(), &p, &p.episodes[1..]).unwrap();
     let story = dev.stories().get(&uuid.to_string()).unwrap().clone();
     assert_eq!(dev.album_info(&story).unwrap().episodes, ["a", "b"]);
 }

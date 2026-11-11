@@ -9,60 +9,49 @@ pub fn download_cover(podcast: &Podcast) -> Option<Vec<u8>> {
     http::bytes(resp).ok()
 }
 
-/// Downloads the episodes into `dir`, converted to mono 44.1 kHz MP3 when
-/// needed or with the volume normalized, and returns them as album
-/// tracks. `on_episode(i)` is called
-/// before each one.
-pub fn download_episodes(
+/// Downloads the episode `ep` into `dir`, converted to mono 44.1 kHz MP3 when
+/// needed or with the volume normalized (`{name}.mp3`), and returns it as an
+/// album track. `label` names it in the progress.
+pub fn download_episode(
     ctx: &Context,
-    episodes: &[Episode],
+    ep: &Episode,
+    label: &str,
     dir: &Path,
+    name: &str,
     opts: AudioOptions,
-    mut on_episode: impl FnMut(usize),
-) -> Result<Vec<Track>> {
+) -> Result<Track> {
     std::fs::create_dir_all(dir)?;
-    let mut tracks = Vec::with_capacity(episodes.len());
-    for (i, ep) in episodes.iter().enumerate() {
-        check_abort(ctx)?;
-        on_episode(i);
-        ctx.info(format!("⬇ {} ({}/{})", ep.title, i + 1, episodes.len()));
-        let source = dir.join(format!("episode{i:04}.src"));
-        crate::tools::download(
-            ctx,
-            &ep.url,
-            &source,
-            &format!("⬇ {}/{}", i + 1, episodes.len()),
-        )
+    check_abort(ctx)?;
+    let source = dir.join(format!("{name}.src"));
+    crate::tools::download(ctx, &ep.url, &source, &format!("⬇ {label}"))
         .with_context(|| format!("unable to download '{}'", ep.title))?;
-        let data = std::fs::read(&source)?;
-        let _ = std::fs::remove_file(&source);
-        check_abort(ctx)?;
+    let data = std::fs::read(&source)?;
+    let _ = std::fs::remove_file(&source);
+    check_abort(ctx)?;
 
-        let mp3 = if opts.normalize() {
-            ctx.file_progress("⌛ MP3", 0, 0);
-            let mp3 = audio::normalized_mp3(&data)
-                .with_context(|| format!("unable to convert '{}'", ep.title))?;
-            ctx.file_progress("", 0, 0);
-            mp3
-        } else if audio::transcoding_required(&ep.url, &data) {
-            ctx.file_progress("⌛ MP3", 0, 0);
-            let mp3 = audio::audio_to_mp3(&data)
-                .with_context(|| format!("unable to convert '{}'", ep.title))?;
-            ctx.file_progress("", 0, 0);
-            mp3
-        } else {
-            data
-        };
-        let path = dir.join(format!("episode{i:04}.mp3"));
-        std::fs::write(&path, &mp3)?;
-        tracks.push(Track {
-            path,
-            title: ep.title.clone(),
-            disc: None,
-            number: None,
-        });
-    }
-    Ok(tracks)
+    let mp3 = if opts.normalize() {
+        ctx.file_progress("⌛ MP3", 0, 0);
+        let mp3 = audio::normalized_mp3(&data)
+            .with_context(|| format!("unable to convert '{}'", ep.title))?;
+        ctx.file_progress("", 0, 0);
+        mp3
+    } else if audio::transcoding_required(&ep.url, &data) {
+        ctx.file_progress("⌛ MP3", 0, 0);
+        let mp3 = audio::audio_to_mp3(&data)
+            .with_context(|| format!("unable to convert '{}'", ep.title))?;
+        ctx.file_progress("", 0, 0);
+        mp3
+    } else {
+        data
+    };
+    let path = dir.join(format!("{name}.mp3"));
+    std::fs::write(&path, &mp3)?;
+    Ok(Track {
+        path,
+        title: ep.title.clone(),
+        disc: None,
+        number: None,
+    })
 }
 
 /// `2026-07-24` → `24/07/2026`.
@@ -76,7 +65,7 @@ pub fn display_date(iso: &str) -> String {
 /// A title usable as a file name (shown in the import messages).
 /// Archive of the episode `index` imported as a story: numbered, as titles
 /// may be the same, or start alike (cut to 60 characters).
-pub(super) fn story_zip_name(index: usize, title: &str) -> String {
+pub fn story_zip_name(index: usize, title: &str) -> String {
     format!("{:04} {}.zip", index + 1, file_name(title))
 }
 
@@ -98,83 +87,44 @@ pub(super) fn file_name(title: &str) -> String {
     }
 }
 
-/// What to do on the device to import episodes (see [`prepare_import`]).
-#[derive(Debug)]
-pub enum ImportPlan {
-    /// one STUdio archive per episode, to import
-    Stories(Vec<PathBuf>),
-    /// the STUdio archive of a new album, to import
-    NewAlbum(PathBuf),
-    /// tracks to append to the album already on the device
-    Append(Uuid, Vec<Track>),
-}
-
-/// How to import episodes (see [`prepare_import`]).
-#[derive(Debug, Clone, Copy)]
-pub struct ImportMode {
-    /// one story per episode instead of the podcast album
-    pub as_stories: bool,
-    /// the podcast album is on the device: the episodes are appended to it
-    pub album_on_device: bool,
-    pub audio: AudioOptions,
-}
-
-/// Downloads `episodes` into `dir` and prepares their import.
-/// `on_episode(i)` is called before each download.
-pub fn prepare_import(
-    ctx: &Context,
+/// The STUdio archive `zip` of the episode `ep` imported as a story of its
+/// own (its audio `track`, the podcast `cover`).
+pub fn write_episode_story(
     podcast: &Podcast,
-    episodes: &[Episode],
-    mode: ImportMode,
-    dir: &Path,
-    on_episode: impl FnMut(usize),
-) -> Result<ImportPlan> {
-    let tracks = download_episodes(ctx, episodes, dir, mode.audio, on_episode)?;
+    ep: &Episode,
+    track: &Track,
+    cover: Option<&[u8]>,
+    zip: &Path,
+) -> Result<()> {
+    album::SingleStory {
+        uuid: podcast.episode_uuid(ep),
+        title: &ep.title,
+        description: &podcast.title,
+        header: &podcast.title,
+        footer: &display_date(&ep.date),
+        thumbnail: cover,
+        audio: &track.path,
+    }
+    .write_studio_zip(zip)
+}
 
-    if mode.as_stories {
-        let cover = download_cover(podcast);
-        let mut archives = Vec::with_capacity(tracks.len());
-        for (i, (ep, track)) in episodes.iter().zip(&tracks).enumerate() {
-            let zip = dir.join(story_zip_name(i, &ep.title));
-            album::SingleStory {
-                uuid: podcast.episode_uuid(ep),
-                title: &ep.title,
-                description: &podcast.title,
-                header: &podcast.title,
-                footer: &display_date(&ep.date),
-                thumbnail: cover.as_deref(),
-                audio: &track.path,
-            }
-            .write_studio_zip(&zip)?;
-            archives.push(zip);
-        }
-        return Ok(ImportPlan::Stories(archives));
-    }
-    let uuid = podcast.album_uuid();
-    if mode.album_on_device {
-        return Ok(ImportPlan::Append(uuid, tracks));
-    }
-    let album = album::Album {
-        uuid: Some(uuid),
+/// The STUdio archive `zip` of the album of the podcast, made of `tracks`
+/// (the episodes are appended to it afterwards).
+pub fn write_new_album(
+    podcast: &Podcast,
+    tracks: Vec<Track>,
+    cover: Option<Vec<u8>>,
+    zip: &Path,
+) -> Result<()> {
+    album::Album {
+        uuid: Some(podcast.album_uuid()),
         title: podcast.title.clone(),
         artist: podcast.author.clone(),
-        cover: download_cover(podcast),
+        cover,
         tracks,
         chapters: Vec::new(),
-    };
-    let zip = dir.join("album.zip");
-    album.write_studio_zip(&zip)?;
-    Ok(ImportPlan::NewAlbum(zip))
-}
-
-/// Remembers the episodes imported with `plan` in the podcast album.
-pub fn record_plan(podcast: &Podcast, episodes: &[Episode], plan: &ImportPlan) -> Result<()> {
-    let guids: Vec<String> = episodes.iter().map(|e| e.guid.clone()).collect();
-    match plan {
-        ImportPlan::Stories(_) => Ok(()),
-        ImportPlan::NewAlbum(_) => record_imported(podcast, &guids, true),
-        ImportPlan::Append(..) => record_imported(podcast, &guids, false),
     }
+    .write_studio_zip(zip)
 }
 
 /// Episodes in the album of a podcast, as its `album.json` on the device
@@ -192,18 +142,14 @@ pub fn album_episodes(info: &album::meta::AlbumInfo) -> Option<HashSet<String>> 
 }
 
 /// Records in `album.json` on the device the feed of the podcast and the
-/// episodes of the tracks just imported with `plan` (the last ones of the
-/// album). An album imported before: its earlier tracks matched by title to
-/// the episodes this computer remembers.
+/// episodes of the tracks just added to its album (the last ones). An album
+/// imported before: its earlier tracks matched by title to the episodes this
+/// computer remembers.
 pub fn record_on_device(
     dev: &dyn crate::device::Device,
     podcast: &Podcast,
     episodes: &[Episode],
-    plan: &ImportPlan,
 ) -> Result<()> {
-    if matches!(plan, ImportPlan::Stories(_)) {
-        return Ok(());
-    }
     let uuid = podcast.album_uuid();
     let story = dev
         .stories()
