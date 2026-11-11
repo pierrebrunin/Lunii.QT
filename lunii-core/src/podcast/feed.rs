@@ -129,6 +129,7 @@ pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
                     .and_then(parse_duration),
                 url: url.to_string(),
                 size: enclosure.attribute("length").and_then(|l| l.parse().ok()),
+                link: child_text(item, "link").filter(|l| is_web(l)),
             },
         ));
     }
@@ -158,6 +159,16 @@ pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
 /// An `http(s)://` address.
 fn is_web(url: &str) -> bool {
     url.starts_with("https://") || url.starts_with("http://")
+}
+
+/// `<link rel="alternate">` (the default relation) of an Atom feed or entry.
+fn alternate_link(node: roxmltree::Node) -> Option<String> {
+    node.children()
+        .filter(|c| c.has_tag_name((ATOM, "link")))
+        .find(|c| c.attribute("rel").is_none_or(|r| r == "alternate"))
+        .and_then(|c| c.attribute("href"))
+        .filter(|l| is_web(l))
+        .map(str::to_string)
 }
 
 /// Atom feed (RFC 4287): entries with a `<link rel="enclosure">`.
@@ -206,6 +217,7 @@ pub(super) fn parse_atom(feed_url: &str, feed: roxmltree::Node) -> Result<Podcas
                     .and_then(parse_duration),
                 url: url.to_string(),
                 size: enclosure.attribute("length").and_then(|l| l.parse().ok()),
+                link: alternate_link(entry),
             },
         ));
     }
@@ -227,14 +239,7 @@ pub(super) fn parse_atom(feed_url: &str, feed: roxmltree::Node) -> Result<Podcas
             .filter(|t| !t.is_empty())
             .or_else(|| author(feed)),
         image_url,
-        // `<link rel="alternate">` (the default relation)
-        page_url: feed
-            .children()
-            .filter(|c| c.has_tag_name((ATOM, "link")))
-            .find(|c| c.attribute("rel").is_none_or(|r| r == "alternate"))
-            .and_then(|c| c.attribute("href"))
-            .filter(|l| is_web(l))
-            .map(str::to_string),
+        page_url: alternate_link(feed),
         episodes: episodes.into_iter().map(|(_, e)| e).collect(),
     })
 }
@@ -377,6 +382,14 @@ mod tests {
             <link>https://ex.org/podcast</link></channel></rss>"#;
         let p = parse_feed("https://ex.org/feed.xml", rss).unwrap();
         assert_eq!(p.page_url.as_deref(), Some("https://ex.org/podcast"));
+        let rss = r#"<rss><channel><title>T</title><item><title>E</title>
+            <link>https://ex.org/podcast/e</link><enclosure url="https://ex.org/e.mp3"/>
+            </item></channel></rss>"#;
+        let p = parse_feed("https://ex.org/feed.xml", rss).unwrap();
+        assert_eq!(
+            p.episodes[0].link.as_deref(),
+            Some("https://ex.org/podcast/e")
+        );
         let rss = "<rss><channel><title>T</title><link>/podcast</link></channel></rss>";
         assert_eq!(
             parse_feed("https://ex.org/f.xml", rss).unwrap().page_url,

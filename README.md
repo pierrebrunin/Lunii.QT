@@ -121,7 +121,8 @@ La vue **Podcasts** (bouton en haut de la fenêtre, ou Histoires / Importer un p
 2. Tapez dans le champ, puis Entrée ou **Rechercher** :
    * le **nom** du podcast : il est cherché dans le catalogue Apple Podcasts. Cliquez sur le bon résultat.  
      Les résultats grisés (« flux non public ») ne peuvent pas être chargés ainsi : collez plutôt l'adresse de la page du podcast ;
-   * ou son **adresse** : flux RSS, page web du podcast (par exemple une série sur radiofrance.fr) ou lien Apple Podcasts.
+   * ou son **adresse** : flux RSS, page web du podcast (par exemple une série sur radiofrance.fr) ou lien Apple Podcasts.  
+     Les flux RSS n'annoncent pas toujours tous les épisodes : l'application complète le flux par les épisodes listés sur la page du podcast, quand elle les trouve.
 3. Le podcast est chargé et vérifié (titre, nombre d'épisodes), puis cliquez sur **Suivre**.
 
 Les podcasts suivis sont rechargés en arrière-plan à chaque ouverture de la vue. Sous chacun, une ligne indique combien de ses épisodes sont **sur l'appareil**, et combien il en a en tout. Le bouton **↻** recharge le podcast sélectionné ; sous son titre, l'adresse de sa page web s'ouvre d'un clic.  

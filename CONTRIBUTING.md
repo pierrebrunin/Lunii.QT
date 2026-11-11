@@ -260,6 +260,13 @@ directement la fenêtre d'ajout) :
   schema.org et des balises Open Graph (`og:title`, `og:site_name`,
   `og:image`). Aucun site n'est traité à part : c'est ainsi que fonctionnent,
   par exemple, les séries et sélections de radiofrance.fr.
+  Un **flux incomplet** est complété par la page du podcast : les flux ne
+  gardent souvent qu'une partie des épisodes. La page est celle donnée à
+  l'ajout, sinon le `<link>` du flux ; ses épisodes absents du flux
+  (reconnus par le `<link>` de chaque épisode du flux) sont lus sur leur
+  page, comme pour une page sans flux. Si la première page de la liste ne
+  contient aucun épisode du flux (page d'accueil d'un site…), ce n'est pas
+  la liste du podcast : le flux est gardé seul.
   Les flux des podcasts suivis sont chargés en arrière-plan,
   sans bloquer l'application. Sous chaque podcast : combien de ses épisodes
   sont sur l'appareil (album ou histoires), et son nombre d'épisodes. Les

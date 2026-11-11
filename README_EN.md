@@ -123,7 +123,8 @@ The **Podcasts** view (button at the top of the window, or Stories / Import a po
 2. Type in the field, then Enter or **Search**:
    * the podcast **name**: it is searched in the Apple Podcasts catalog. Click the right result.  
      Greyed results ("feed not public") cannot be loaded this way: paste the address of the podcast page instead;
-   * or its **address**: RSS feed, web page of the podcast (for instance a series on radiofrance.fr) or Apple Podcasts link.
+   * or its **address**: RSS feed, web page of the podcast (for instance a series on radiofrance.fr) or Apple Podcasts link.  
+     RSS feeds do not always list all the episodes: the application completes the feed with the episodes listed on the podcast page, when it finds them.
 3. The podcast is loaded and checked (title, number of episodes), then click **Follow**.
 
 The followed podcasts are reloaded in the background each time the view is opened. Under each of them, a line shows how many of its episodes are **on the device**, and how many it has in all. The **↻** button reloads the selected podcast; under its title, the address of its web page opens with a click.  

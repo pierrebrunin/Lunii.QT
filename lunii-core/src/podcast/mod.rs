@@ -53,6 +53,8 @@ pub struct Episode {
     pub duration: Option<u32>,
     pub url: String,
     pub size: Option<u64>,
+    /// web page of the episode (`<link>` of the item, or the page read)
+    pub link: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -118,16 +120,56 @@ pub fn fetch(address: &str) -> Result<Podcast> {
     }
     if let Some((id, country)) = apple_podcast_id(address) {
         let feed_url = apple_feed_url(&id, country.as_deref())?;
-        return parse_feed(&feed_url, &get_text(&feed_url)?);
+        return Ok(complete_from_page(
+            parse_feed(&feed_url, &get_text(&feed_url)?)?,
+            None,
+        ));
     }
     let body = get_text(address)?;
     if looks_like_feed(&body) {
-        return parse_feed(address, &body);
+        return Ok(complete_from_page(parse_feed(address, &body)?, None));
     }
     match feed_in_page(address, &body) {
-        Some(feed_url) => parse_feed(&feed_url, &get_text(&feed_url)?),
+        // the page given lists the episodes, whatever the feed says
+        Some(feed_url) => Ok(complete_from_page(
+            parse_feed(&feed_url, &get_text(&feed_url)?)?,
+            Some((address, &body)),
+        )),
         None => page_podcast(address, &body),
     }
+}
+
+/// `podcast` read from its feed, with the episodes of its web page (`page`:
+/// its address and contents, or the `<link>` of the feed) that the feed does
+/// not have. The feed alone if the page cannot be read or does not list its
+/// episodes.
+fn complete_from_page(mut podcast: Podcast, page: Option<(&str, &str)>) -> Podcast {
+    let (url, body) = match page {
+        Some((url, body)) => (url.to_string(), body.to_string()),
+        None => {
+            let Some(url) = podcast.page_url.clone() else {
+                return podcast;
+            };
+            match get_text(&url) {
+                Ok(body) => (url, body),
+                Err(e) => {
+                    log::warn!("{e:#}");
+                    return podcast;
+                }
+            }
+        }
+    };
+    // its first page lists none of the episodes of the feed: not the list
+    // of this podcast (a home page...), its next pages are not loaded
+    if !lists_episodes_of(&podcast, &listed_pages(&url, &body)) {
+        return podcast;
+    }
+    let listed = all_listed_pages(&url, &body);
+    let added = merge_page_episodes(&mut podcast, &listed, load_episode_pages);
+    if added > 0 {
+        log::info!("{url}: {added} episode(s) missing from the feed added from the page");
+    }
+    podcast
 }
 
 /// Loads a followed podcast from its address: a feed, or a page listing its
@@ -135,7 +177,7 @@ pub fn fetch(address: &str) -> Result<Podcast> {
 pub fn parse_feed_url(feed_url: &str) -> Result<Podcast> {
     let body = get_text(feed_url)?;
     if looks_like_feed(&body) {
-        parse_feed(feed_url, &body)
+        Ok(complete_from_page(parse_feed(feed_url, &body)?, None))
     } else {
         page_podcast(feed_url, &body)
     }

@@ -166,6 +166,7 @@ pub(super) fn page_episode(url: &str, page: &str) -> Option<Episode> {
             .and_then(|d| parse_iso_duration(&d)),
         url: str_field(audio, "contentUrl")?,
         size: None,
+        link: Some(url.to_string()),
     })
 }
 
@@ -189,10 +190,9 @@ pub(super) fn listed_pages(page_url: &str, page: &str) -> Vec<String> {
 /// Episode pages loaded at the same time.
 pub(super) const PAGES_AT_ONCE: usize = 6;
 
-/// A podcast made from a page without feed that lists episode pages (and its
-/// next pages): each episode is read from its page. The listed pages that are
-/// not episodes (other series...) are skipped.
-pub(super) fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
+/// The pages listed by a page and its next pages (`<link rel="next">`), in
+/// order, without duplicates.
+pub(super) fn all_listed_pages(page_url: &str, page: &str) -> Vec<String> {
     let mut urls = listed_pages(page_url, page);
     let mut visited = HashSet::from([page_url.to_string()]);
     let mut current = (page_url.to_string(), page.to_string());
@@ -216,11 +216,12 @@ pub(super) fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
     }
     let mut seen = HashSet::new();
     urls.retain(|u| seen.insert(u.clone()));
-    if urls.is_empty() {
-        bail!("No podcast feed found at this address");
-    }
+    urls
+}
 
-    // a few pages at a time: a site may refuse too many requests at once
+/// The episodes of episode pages (`None`: not an episode, or not loaded), a
+/// few pages at a time: a site may refuse too many requests at once.
+pub(super) fn load_episode_pages(urls: &[String]) -> Vec<Option<Episode>> {
     let mut episodes: Vec<Option<Episode>> = Vec::with_capacity(urls.len());
     for chunk in urls.chunks(PAGES_AT_ONCE) {
         std::thread::scope(|scope| {
@@ -233,6 +234,76 @@ pub(super) fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
             episodes.extend(handles.into_iter().map(|h| h.join().ok().flatten()));
         });
     }
+    episodes
+}
+
+/// A page address as compared between a feed and a page: without its
+/// fragment nor its final `/`.
+fn page_key(url: &str) -> &str {
+    url.split('#').next().unwrap_or(url).trim_end_matches('/')
+}
+
+/// The pages `listed` lists episodes of `podcast`: at least one of them is
+/// the page of an episode of its feed.
+pub(super) fn lists_episodes_of(podcast: &Podcast, listed: &[String]) -> bool {
+    let known: HashSet<&str> = podcast
+        .episodes
+        .iter()
+        .filter_map(|e| e.link.as_deref())
+        .map(page_key)
+        .collect();
+    listed.iter().any(|u| known.contains(page_key(u)))
+}
+
+/// Adds to `podcast` (read from its feed) the episodes of the pages `listed`
+/// by its web page that its feed does not have: feeds often keep only part
+/// of the episodes. Only the missing pages are loaded (`load`). Nothing if
+/// the list is not the one of this podcast (no episode of the feed in it).
+/// Returns the number of episodes added.
+pub(super) fn merge_page_episodes(
+    podcast: &mut Podcast,
+    listed: &[String],
+    load: impl FnOnce(&[String]) -> Vec<Option<Episode>>,
+) -> usize {
+    if !lists_episodes_of(podcast, listed) {
+        return 0;
+    }
+    let known: HashSet<&str> = podcast
+        .episodes
+        .iter()
+        .filter_map(|e| e.link.as_deref())
+        .map(page_key)
+        .collect();
+    let missing: Vec<String> = listed
+        .iter()
+        .filter(|u| !known.contains(page_key(u)))
+        .cloned()
+        .collect();
+    if missing.is_empty() {
+        return 0;
+    }
+    let audio: HashSet<String> = podcast.episodes.iter().map(|e| e.url.clone()).collect();
+    let added: Vec<Episode> = load(&missing)
+        .into_iter()
+        .flatten()
+        .filter(|e| !audio.contains(&e.url))
+        .collect();
+    let count = added.len();
+    podcast.episodes.extend(added);
+    // oldest first (stable: the order of the feed kept on the same day)
+    podcast.episodes.sort_by(|a, b| a.date.cmp(&b.date));
+    count
+}
+
+/// A podcast made from a page without feed that lists episode pages (and its
+/// next pages): each episode is read from its page. The listed pages that are
+/// not episodes (other series...) are skipped.
+pub(super) fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
+    let urls = all_listed_pages(page_url, page);
+    if urls.is_empty() {
+        bail!("No podcast feed found at this address");
+    }
+    let episodes = load_episode_pages(&urls);
     let skipped = episodes.iter().filter(|e| e.is_none()).count();
     let episodes: Vec<Episode> = episodes.into_iter().flatten().collect();
     if episodes.is_empty() {
@@ -312,5 +383,65 @@ mod tests {
         assert_eq!(parse_iso_duration("PT"), None);
         assert_eq!(parse_iso_duration("PT12"), None);
         assert_eq!(parse_iso_duration("22:50"), None);
+    }
+
+    /// Episodes of the page of a podcast missing from its feed: added, the
+    /// feed alone if the page lists other things.
+    #[test]
+    fn page_completes_feed() {
+        let episode = |n: &str, date: &str, link: Option<&str>| Episode {
+            guid: format!("guid-{n}"),
+            title: n.into(),
+            date: date.into(),
+            duration: None,
+            url: format!("https://ex/{n}.mp3"),
+            size: None,
+            link: link.map(str::to_string),
+        };
+        let feed = || Podcast {
+            feed_url: "https://ex/feed.xml".into(),
+            aliases: Vec::new(),
+            title: "T".into(),
+            author: None,
+            image_url: None,
+            page_url: Some("https://ex/serie".into()),
+            episodes: vec![
+                episode("b", "2026-02-01", Some("https://ex/serie/b")),
+                episode("d", "2026-04-01", Some("https://ex/serie/d/")),
+            ],
+        };
+        let listed: Vec<String> = ["d", "c", "b", "a"]
+            .iter()
+            .map(|n| format!("https://ex/serie/{n}"))
+            .collect();
+        let mut p = feed();
+        let mut asked = Vec::new();
+        let added = merge_page_episodes(&mut p, &listed, |urls| {
+            asked = urls.to_vec();
+            vec![
+                Some(episode("c", "2026-03-01", Some(&urls[0]))),
+                // not an episode
+                None,
+            ]
+        });
+        // only the pages missing from the feed loaded ("d/" is "d")
+        assert_eq!(asked, ["https://ex/serie/c", "https://ex/serie/a"]);
+        assert_eq!(added, 1);
+        let titles: Vec<_> = p.episodes.iter().map(|e| e.title.as_str()).collect();
+        assert_eq!(titles, ["b", "c", "d"]);
+
+        // a page listing none of the episodes of the feed: nothing loaded
+        let mut p = feed();
+        let other = vec!["https://ex/autre/x".to_string()];
+        let added = merge_page_episodes(&mut p, &other, |_| panic!("loaded"));
+        assert_eq!(added, 0);
+        assert_eq!(p.episodes.len(), 2);
+
+        // the same audio under another page: not added twice
+        let mut p = feed();
+        let added = merge_page_episodes(&mut p, &listed, |_| {
+            vec![Some(episode("b", "2026-02-01", Some("https://ex/serie/c")))]
+        });
+        assert_eq!(added, 0);
     }
 }

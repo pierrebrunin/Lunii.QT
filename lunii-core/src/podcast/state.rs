@@ -256,6 +256,7 @@ mod tests {
                     duration: None,
                     url: format!("https://ex/{g}.mp3"),
                     size: None,
+                    link: None,
                 })
                 .collect(),
         }
