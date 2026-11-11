@@ -51,6 +51,11 @@ Pillow, pour l'image annotée).
 - Après un changement de dépendance : `cargo build`, puis commiter
   `Cargo.lock`.
 
+## Idées reportées
+
+[`TODO.md`](TODO.md) liste les pistes laissées pour plus tard. Y ajouter
+celles qu'on repère sans les traiter ; retirer une entrée une fois faite.
+
 ## Commits
 
 - En français, préfixe conventionnel : `feat:`, `fix:`, `docs:`, `refactor:`…
