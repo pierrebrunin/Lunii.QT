@@ -179,8 +179,8 @@ cargo run --release -p lunii-gui
 
 Elle propose : sélection de l'appareil, filtre, liste des
 histoires (sélection multiple Ctrl/Maj, flèches, Ctrl+A, menu contextuel ;
-colonnes durée, taille, base O/T et UUID au choix dans Outils, enregistrées dans
-`~/.lunii/settings.json`, base et UUID masqués par défaut ; la durée vient de la
+colonnes durée, taille, mode nuit, base O/T et UUID au choix dans Affichage, enregistrées dans
+`~/.lunii/settings.json`, mode nuit, base et UUID masqués par défaut ; la durée vient de la
 base officielle, de `album.json` pour les albums et podcasts importés par
 l'application, ou est estimée en arrière-plan d'après les trames MP3 des
 fichiers `sf/`, voir `lunii-core/src/mp3.rs`),
@@ -220,7 +220,7 @@ Histoires / **Importer un album MP3** (Ctrl+Maj+I) transforme un dossier de MP3
   menu. À la fin du dernier titre d'un sous-dossier, le suivant démarre. Les
   sous-dossiers sont triés dans l'ordre naturel (`CD 2` avant `CD 10`). On ne
   peut pas ajouter de pistes à ces albums.
-- **Volume** : Outils / **Égaliser le volume** (réglage retenu) ramène
+- **Volume** : Histoires / **Égaliser le volume** (réglage retenu) ramène
   toutes les pistes des albums et des podcasts au même niveau sonore (EBU R128,
   -16 LUFS), utile pour mélanger des sources différentes. Chaque piste est alors
   réencodée, l'import est un peu plus long.
@@ -431,7 +431,7 @@ nommés du code (`{name}`) s'écrivent `{}` dans le `.po`.
   journaux » ouvre ce dossier.
 - **Détails des histoires** : ils s'affichent dans un panneau à droite de la
   liste, présent en permanence (sauf si la fenêtre fait moins de 760 px de
-  large, ou si Outils / Détails des histoires est décoché). La liste garde
+  large, ou si Affichage / Détails des histoires est décoché). La liste garde
   donc sa taille quand on sélectionne une histoire. Sans sélection, ou avec
   plusieurs histoires sélectionnées, le panneau l'indique. Sa largeur se règle
   avec la poignée à sa gauche (de 240 px jusqu'à laisser 420 px à la liste) et

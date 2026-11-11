@@ -26,7 +26,7 @@ hidden_top, hidden_bottom = row_top(VISIBLE) - 1, row_top(VISIBLE + HIDDEN) - 1
 
 # (frame, number position), in the order of the README legend
 FRAMES = [
-    ((4, 5, 311, 32), (318, 8)),  # 1 menu bar
+    ((4, 5, 334, 32), (341, 8)),  # 1 menu bar
     ((104, 43, 268, 81), (274, 51)),  # 2 Stories / Podcasts views
     ((5, 45, 62, 78), (68, 51)),  # 3 night mode
     ((962, 44, 997, 80), (944, 51)),  # 4 official database refresh

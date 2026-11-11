@@ -168,6 +168,7 @@ impl App {
         ui.set_normalize_volume(normalize);
         ui.set_show_duration(!lunii_core::settings::get_bool("hide_duration"));
         ui.set_show_db(lunii_core::settings::get_bool("show_db"));
+        ui.set_show_nm(lunii_core::settings::get_bool("show_nm"));
         ui.set_show_uuid(lunii_core::settings::get_bool("show_uuid"));
         if let Some(width) = lunii_core::settings::get_number("details_width") {
             ui.set_details_width(width as f32);

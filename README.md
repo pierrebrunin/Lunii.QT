@@ -88,7 +88,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
    La Lunii/Flam connectée se choisit dans le menu **Appareil**, qui relance aussi la détection (Rafraichir les appareils). Son emplacement et ses informations techniques sont dans Fichier / Informations sur l'appareil, ou d'un clic sur la barre d'état.
 3. Gestion du **Mode nuit** ([ici](#mode-nuit)), affichée seulement si la Lunii branchée le gère (Flam exclue)
 4. Actualisation de la **base de données Officielle** : Met à jour la liste des histoires et leurs descriptions depuis le Luniistore. Utilisez ce bouton lorsque certaines histoires officielles ne sont pas reconnues.
-5. La **liste de vos histoires** avec leur durée. Le menu **Outils** permet d'afficher aussi leur taille, leur base de données (DB) et leur UUID, masqués par défaut.  
+5. La **liste de vos histoires** avec leur durée. Le menu **Affichage** permet d'afficher aussi leur taille, le mode nuit (MN), leur base de données (DB) et leur UUID, masqués par défaut.  
    L'UUID : Un identifiant unique permettant de lier les histoires à leur dossier sur la Lunii/Flam. Les huit derniers caractères de l'UUID composent le nom du dossier de l'histoire.
 
    **DB** signifie **Base de données**. Cette application prend en charge deux bases de données différentes
@@ -96,7 +96,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
         (Toutes les métadonnées proviennent des serveurs de Lunii).
      - **T** - base de données **T**ierce, également connue sous Non officielles ou Custom  
         (Ces métadonnées ne peuvent pas être récupérées, elles sont complétées lors de l'importation de l'histoire)
-6. La colonne **MN** (☾) indique que **l'histoire supporte le Mode Nuit**. Il est possible de forcer ce status depuis le menu contextuel
+6. La colonne **MN** (☾) indique que **l'histoire supporte le Mode Nuit**. Masquée par défaut, elle s'affiche par Affichage / Afficher le mode nuit (MN), sur une Lunii qui le gère. Il est possible de forcer ce status depuis le menu contextuel
 7. **Histoires cachées** (les entrées grisées dans la liste).   
    Cette fonctionnalité est activable par le biais du menu contextuel sur une histoire.  
    Son usage est double:  
@@ -135,7 +135,7 @@ Un podcast dont l'album est sur l'appareil branché est suivi automatiquement (a
 3. Cochez les épisodes voulus (mention **à importer**). Le champ de filtre et les boutons **Tous** / **Aucun** aident à choisir ; un clic sur l'en-tête d'une colonne trie la liste (titre, durée, date de publication, présence sur l'appareil).
 4. Cliquez sur **Importer (n)**. Le journal affiche la progression.
 
-Les épisodes déjà sur l'appareil sont cochés dans la colonne **Sur l'appareil**. Les épisodes qui ne sont pas en MP3 sont convertis, et l'option Outils / **Égaliser le volume (albums, podcasts)** ramène toutes les pistes au même niveau sonore.
+Les épisodes déjà sur l'appareil sont cochés dans la colonne **Sur l'appareil**. Les épisodes qui ne sont pas en MP3 sont convertis, et l'option Histoires / **Égaliser le volume (albums, podcasts)** ramène toutes les pistes au même niveau sonore.
 
 ### Supprimer des épisodes
 Dans la liste des épisodes, **décochez** un épisode présent sur l'appareil : il passe **à supprimer**. Le bouton devient **Supprimer (n)**, ou **Importer (n) et supprimer (m)** si des épisodes sont aussi cochés. Une confirmation liste les épisodes avant de les supprimer.  
@@ -207,7 +207,7 @@ Lunii vous offre la possibilité de sauvegarder la dernière version du Firmware
 ### Guide Pratique - Lunii
 1. Récupération du firmware
    1. Sélectionnez une Lunii
-   2. Menu **Outils/Avancé/Récupérer le firmware**
+   2. Menu **Appareil/Récupérer le firmware**
    3. Vous serez invité à vous connecter  
    <img src="./res/screenshot_login.png" width="170">  
 
@@ -235,7 +235,7 @@ Lunii vous offre la possibilité de sauvegarder la dernière version du Firmware
 ### Guide Pratique - Flam
 1. Récupération du firmware
    1. Sélectionnez votre Flam dans la liste des appareils
-   2. Menu **Outils/Avancé/Récupérer le firmware**
+   2. Menu **Appareil/Récupérer le firmware**
    3. Vous serez invité à vous connecter  
    <img src="./res/screenshot_login.png" width="170">  
 

@@ -249,6 +249,7 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
     ui.invoke_filter_edited();
 
     ui.set_show_size(true);
+    ui.set_show_nm(true);
     app.action(crate::Action::ShowSize);
     pump(&queue, 800);
     render(0, &shot("05-sizes"));

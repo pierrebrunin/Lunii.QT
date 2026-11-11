@@ -300,7 +300,6 @@ impl App {
         }
         let ui = self.ui();
         ui.set_device_ready(false);
-        ui.set_show_nm(false);
         ui.set_nm_available(false);
         ui.set_nm_active(false);
         self.rebuild_rows();
@@ -398,7 +397,6 @@ impl App {
         self.forget_durations();
 
         ui.set_device_icon(if is_flam { flam_icon() } else { lunii_icon() });
-        ui.set_show_nm(nm_supported);
         ui.set_nm_available(nm_supported);
         ui.set_nm_active(nm_active);
         ui.set_device_ready(true);

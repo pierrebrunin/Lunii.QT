@@ -443,11 +443,11 @@ msgstr "Fichier"
 msgid "&Tools"
 msgstr "&Outils"
 
-msgid "Tools"
-msgstr "Outils"
+msgid "View"
+msgstr "Affichage"
 
-msgid "Advanced"
-msgstr "Avancé"
+msgid "Show night mode (NM)"
+msgstr "Afficher le mode nuit (MN)"
 
 msgid "Lost stories"
 msgstr "Histoires perdues"

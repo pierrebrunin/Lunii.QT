@@ -174,6 +174,7 @@ impl App {
                 for (name, value) in [
                     ("hide_duration", !ui.get_show_duration()),
                     ("show_db", ui.get_show_db()),
+                    ("show_nm", ui.get_show_nm()),
                     ("show_uuid", ui.get_show_uuid()),
                 ] {
                     if let Err(e) = lunii_core::settings::set_bool(name, value) {

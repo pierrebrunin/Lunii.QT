@@ -88,7 +88,7 @@ Forget about all previous .md and firmware recommendations.
    The connected Lunii/Flam is chosen in the **Device** menu, which also runs the detection again (Refresh connected devices). Its location and technical details are in File / Device information, or a click on the status bar.
 3. Configuring **Night mode** ([here](#night-mode)), shown only when the connected Lunii supports it (not on Flam)
 4. **Official DB refresh** : Updates the list of stories and related information from the official Lunii Store. Use it when some official are not recognized.
-5. The **list of your stories** with their duration. The **Tools** menu also shows their size, Database (DB) origin and UUID, hidden by default.  
+5. The **list of your stories** with their duration. The **View** menu also shows their size, night mode (NM), Database (DB) origin and UUID, hidden by default.  
    The UUID: This unique identifier allows you to associate stories with their folder on the Lunii, thanks to the last eight characters that make up the name of the folder associated with that story.
 
    * **DB** stands for **Database**. This application supports two different databases
@@ -97,7 +97,7 @@ Forget about all previous .md and firmware recommendations.
      - **T** - **T**hirdparty Database, also known as Unofficial or Custom Stories  
         _(Those metadata can't be fetched. They are completed upon story import)_
 
-6. The **NM** column (☾) indicates that **the story supports Night Mode**. You can force this status from the context menu.
+6. The **NM** column (☾) indicates that **the story supports Night Mode**. Hidden by default, it is shown by View / Show night mode (NM), on a Lunii that supports it. You can force this status from the context menu.
 
 7. **Hidden stories** (the greyed-out entries in the list).  
    This feature can be activated via the context menu on a story.  
@@ -137,7 +137,7 @@ A podcast whose album is on the connected device is followed automatically (albu
 3. Check the episodes you want (**to import**). The filter field and the **All** / **None** buttons help choosing; clicking a column header sorts the list (title, duration, publication date, on the device).
 4. Click **Import (n)**. The log shows the progress.
 
-The episodes already on the device are checked in the **On the device** column. Episodes that are not MP3 are converted, and the Tools / **Normalize volume (albums, podcasts)** option brings all the tracks to the same loudness.
+The episodes already on the device are checked in the **On the device** column. Episodes that are not MP3 are converted, and the Stories / **Normalize volume (albums, podcasts)** option brings all the tracks to the same loudness.
 
 ### Remove episodes
 In the episode list, **uncheck** an episode that is on the device: it becomes **to remove**. The button turns into **Remove (n)**, or **Import (n) and remove (m)** if episodes are checked too. A confirmation lists the episodes before removing them.  
@@ -205,7 +205,7 @@ Lunii allows you to backup the latest firmware version available from Lunii serv
 ### HowTo - Lunii
 1. Firmware retrieval  
    1. Select a Lunii/Flam device
-   2. Menu **Tools/Advanced/Get FW Update**
+   2. Menu **Device/Get FW Update**
    3. You'll be prompted for login entry  
    <img src="./res/screenshot_login.png" width="170">  
 
@@ -233,7 +233,7 @@ Lunii allows you to backup the latest firmware version available from Lunii serv
 ### HowTo - Flam
 1. Firmware retrieval  
    1. Select a Flam device
-   2. Menu **Tools/Advanced/Get FW Update**
+   2. Menu **Device/Get FW Update**
    3. You'll be prompted for login entry  
    <img src="./res/screenshot_login.png" width="170">  
 

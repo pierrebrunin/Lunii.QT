@@ -43,9 +43,10 @@ export component MainWindow inherits Window {
     // stories
     in property <[StoryRow]> rows;
     in property <int> current-row: -1;
-    in property <bool> show-nm: false;
     in-out property <bool> show-size: false;
-    // optional columns of the story list (saved in the settings)
+    // optional columns of the story list (saved in the settings); the night
+    // mode one only for a device that has it
+    in-out property <bool> show-nm: false;
     in-out property <bool> show-duration: true;
     in-out property <bool> show-db: false;
     in-out property <bool> show-uuid: false;
@@ -258,6 +259,7 @@ export component MainWindow inherits Window {
     changed show-size => { root.action(Action.show-size); }
     changed show-duration => { root.action(Action.columns); }
     changed show-db => { root.action(Action.columns); }
+    changed show-nm => { root.action(Action.columns); }
     changed show-uuid => { root.action(Action.columns); }
     // the selection is only acted on in the stories view
     property <bool> selection-actions: root.story-actions && root.has-selection && root.view == 0;
@@ -291,6 +293,7 @@ export component MainWindow inherits Window {
             MenuSeparator { }
             MenuItem { title: @tr("Refresh connected devices"); shortcut: @keys(F5); enabled: root.idle && !root.scanning; activated => { root.action(Action.refresh-devices); } }
             MenuItem { title: @tr("Device information"); enabled: root.device-ready && !root.modal; activated => { root.action(Action.device-info); } }
+            MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action(Action.get-firmware); } }
             MenuSeparator { }
             Menu {
                 title: @tr("Lost stories");
@@ -315,25 +318,22 @@ export component MainWindow inherits Window {
             MenuItem { title: @tr("Add MP3 to album"); enabled: root.story-actions && root.can-add-mp3; activated => { root.action(Action.add-to-album); } }
             MenuItem { title: @tr("Edit the album"); enabled: root.story-actions && root.can-add-to-album; activated => { root.action(Action.edit-album); } }
             MenuItem { title: @tr("Import a podcast"); shortcut: @keys(Control + P); enabled: !root.modal; activated => { root.action(Action.import-podcast); } }
+            MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: !root.modal; activated => { root.action(Action.normalize-volume); } }
+            MenuSeparator { }
             MenuItem { title: @tr("Export"); shortcut: @keys(Control + S); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
             MenuItem { title: @tr("Export All"); shortcut: @keys(Control + Shift + S); enabled: root.story-actions && root.can-export-all; activated => { root.action(Action.export-all); } }
             MenuItem { title: @tr("Remove"); shortcut: @keys(Delete); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
         }
         Menu {
-            title: @tr("Tools");
+            title: @tr("View");
             MenuItem { enabled: !root.modal; title: @tr("Show size"); checkable: true; checked <=> root.show-size; }
             MenuItem { enabled: !root.modal; title: @tr("Show duration"); checkable: true; checked <=> root.show-duration; }
+            MenuItem { enabled: !root.modal && root.nm-available; title: @tr("Show night mode (NM)"); checkable: true; checked <=> root.show-nm; }
             MenuItem { enabled: !root.modal; title: @tr("Show database (O / T)"); checkable: true; checked <=> root.show-db; }
             MenuItem { enabled: !root.modal; title: @tr("Show UUID"); checkable: true; checked <=> root.show-uuid; }
+            MenuSeparator { }
             MenuItem { enabled: !root.modal; title: @tr("Show story details"); checkable: true; checked <=> root.show-details; activated => { root.action(Action.show-details); } }
-            MenuSeparator { }
-            MenuItem { title: @tr("Normalize volume (albums, podcasts)"); checkable: true; checked <=> root.normalize-volume; enabled: !root.modal; activated => { root.action(Action.normalize-volume); } }
-            MenuSeparator { }
-            Menu {
-                title: @tr("Advanced");
-                MenuItem { enabled: !root.modal; title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action(Action.show-log); } }
-                MenuItem { title: @tr("Get FW Update"); enabled: root.story-actions; activated => { root.action(Action.get-firmware); } }
-            }
+            MenuItem { enabled: !root.modal; title: @tr("Show Log"); shortcut: @keys(Control + L); checkable: true; checked: root.log-visible; activated => { root.action(Action.show-log); } }
         }
         Menu {
             title: root.update-available ? @tr("[ Help ]") : @tr("Help");
@@ -410,7 +410,7 @@ export component MainWindow inherits Window {
                     vertical-stretch: 1;
                     rows: root.rows;
                     current-row: root.current-row;
-                    show-nm: root.show-nm;
+                    show-nm: root.nm-available && root.show-nm;
                     show-size: root.show-size;
                     show-duration: root.show-duration;
                     show-db: root.show-db;
