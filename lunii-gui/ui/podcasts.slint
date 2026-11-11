@@ -2,7 +2,7 @@
 // selected one on the right, to import on the device.
 
 import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette } from "std-widgets.slint";
-import { Theme, EpisodeRow, FollowedRow } from "common.slint";
+import { Theme, EpisodeRow, FollowedRow, Link } from "common.slint";
 
 // Column header: a click sorts by it, again reverses the order.
 component SortHeader inherits Rectangle {
@@ -32,6 +32,8 @@ export component PodcastsView inherits HorizontalLayout {
     in-out property <int> current: -1;
     // selected podcast: title and details, or the error
     in property <string> header;
+    // its web page, if known
+    in property <string> page;
     // its episodes are being loaded
     in property <bool> loading;
     in property <[EpisodeRow]> rows;
@@ -52,6 +54,7 @@ export component PodcastsView inherits HorizontalLayout {
     callback add();
     callback select(index: int);
     callback refresh();
+    callback open-page();
     callback unfollow();
     callback mode-changed();
     callback toggle(index: int);
@@ -154,12 +157,21 @@ export component PodcastsView inherits HorizontalLayout {
         }
         if root.current >= 0 || root.header != "": HorizontalLayout {
             spacing: 6px;
-            Text {
-                text: root.loading ? @tr("Loading...") : root.header;
-                font-weight: 600;
-                wrap: word-wrap;
-                vertical-alignment: center;
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
                 horizontal-stretch: 1;
+                Text {
+                    text: root.loading ? @tr("Loading...") : root.header;
+                    font-weight: 600;
+                    wrap: word-wrap;
+                }
+                if !root.loading && root.page != "": Link {
+                    text: root.page;
+                    font-size: 12px;
+                    overflow: elide;
+                    clicked => { root.open-page(); }
+                }
             }
             if root.current >= 0: VerticalLayout {
                 alignment: start;

@@ -203,6 +203,7 @@ export component MainWindow inherits Window {
     in-out property <int> podcast-current: -1;
     in property <bool> podcast-loading;
     in property <string> podcast-header;
+    in property <string> podcast-page;
     in property <[EpisodeRow]> podcast-rows;
     in property <int> podcast-selected-count;
     in property <int> podcast-remove-count;
@@ -517,6 +518,7 @@ export component MainWindow inherits Window {
                 followed: root.podcast-followed;
                 current <=> root.podcast-current;
                 header: root.podcast-header;
+                page: root.podcast-page;
                 loading: root.podcast-loading;
                 rows: root.podcast-rows;
                 selected-count: root.podcast-selected-count;
@@ -530,6 +532,7 @@ export component MainWindow inherits Window {
                 add => { root.podcast-add(); }
                 select(index) => { root.podcast-select(index); }
                 refresh => { root.podcast-refresh(); }
+                open-page => { root.open-url(root.podcast-page); }
                 unfollow => { root.podcast-unfollow(); }
                 mode-changed => { root.podcast-mode-changed(); }
                 toggle(index) => { root.podcast-toggle(index); }

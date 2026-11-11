@@ -235,6 +235,8 @@ impl App {
     /// Displays the episodes of the selected podcast (or its state).
     fn podcast_show_current(&self) {
         let ui = self.ui();
+        // set again with the header, once the feed is loaded
+        ui.set_podcast_page("".into());
         let current = ui.get_podcast_current();
         let (entry, feed) = {
             let st = self.state.borrow();
@@ -660,6 +662,7 @@ impl App {
         self.status(&trf("'{}' is no longer followed", &[&entry.title]));
         self.ui().set_podcast_current(-1);
         self.ui().set_podcast_header("".into());
+        self.ui().set_podcast_page("".into());
         self.podcasts_show();
         true
     }
@@ -698,6 +701,7 @@ impl App {
             ));
         }
         ui.set_podcast_header(header.into());
+        ui.set_podcast_page(p.page_url.clone().unwrap_or_default().into());
     }
 
     /// Episodes already on the device, for the import mode chosen.

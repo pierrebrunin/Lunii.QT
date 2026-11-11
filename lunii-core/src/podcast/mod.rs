@@ -64,6 +64,8 @@ pub struct Podcast {
     pub title: String,
     pub author: Option<String>,
     pub image_url: Option<String>,
+    /// web page of the podcast (`<link>` of the feed, or the page read)
+    pub page_url: Option<String>,
     /// oldest first
     pub episodes: Vec<Episode>,
 }

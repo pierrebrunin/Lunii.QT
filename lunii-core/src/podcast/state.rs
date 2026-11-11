@@ -193,6 +193,7 @@ pub fn follow_album(source: &crate::album::meta::PodcastSource, title: &str) -> 
         title: title.to_string(),
         author: None,
         image_url: None,
+        page_url: None,
         episodes: Vec::new(),
     };
     let mut state = load_state();
@@ -245,6 +246,7 @@ mod tests {
             title: title.into(),
             author: None,
             image_url: None,
+            page_url: None,
             episodes: guids
                 .iter()
                 .map(|g| Episode {

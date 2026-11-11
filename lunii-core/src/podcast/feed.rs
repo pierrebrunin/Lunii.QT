@@ -150,8 +150,14 @@ pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
             .map(|t| t.trim().to_string())
             .filter(|t| !t.is_empty()),
         image_url,
+        page_url: child_text(channel, "link").filter(|l| is_web(l)),
         episodes: episodes.into_iter().map(|(_, e)| e).collect(),
     })
+}
+
+/// An `http(s)://` address.
+fn is_web(url: &str) -> bool {
+    url.starts_with("https://") || url.starts_with("http://")
 }
 
 /// Atom feed (RFC 4287): entries with a `<link rel="enclosure">`.
@@ -221,6 +227,14 @@ pub(super) fn parse_atom(feed_url: &str, feed: roxmltree::Node) -> Result<Podcas
             .filter(|t| !t.is_empty())
             .or_else(|| author(feed)),
         image_url,
+        // `<link rel="alternate">` (the default relation)
+        page_url: feed
+            .children()
+            .filter(|c| c.has_tag_name((ATOM, "link")))
+            .find(|c| c.attribute("rel").is_none_or(|r| r == "alternate"))
+            .and_then(|c| c.attribute("href"))
+            .filter(|l| is_web(l))
+            .map(str::to_string),
         episodes: episodes.into_iter().map(|(_, e)| e).collect(),
     })
 }
@@ -352,6 +366,27 @@ mod tests {
         assert_eq!(parse_date("n'importe quoi").0, "");
         assert_eq!(parse_duration("59:30"), Some(3570));
         assert_eq!(parse_duration("abc"), None);
+    }
+
+    /// The web page of the podcast: `<link>` of an RSS channel (not the
+    /// `<atom:link>` of the feed itself), `rel="alternate"` in Atom.
+    #[test]
+    fn page_address() {
+        let rss = r#"<rss xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>T</title>
+            <atom:link rel="self" href="https://ex.org/feed.xml"/>
+            <link>https://ex.org/podcast</link></channel></rss>"#;
+        let p = parse_feed("https://ex.org/feed.xml", rss).unwrap();
+        assert_eq!(p.page_url.as_deref(), Some("https://ex.org/podcast"));
+        let rss = "<rss><channel><title>T</title><link>/podcast</link></channel></rss>";
+        assert_eq!(
+            parse_feed("https://ex.org/f.xml", rss).unwrap().page_url,
+            None
+        );
+        let atom = r#"<feed xmlns="http://www.w3.org/2005/Atom"><title>T</title>
+            <link rel="self" href="https://ex.org/atom.xml"/>
+            <link href="https://ex.org/page"/></feed>"#;
+        let p = parse_feed("https://ex.org/atom.xml", atom).unwrap();
+        assert_eq!(p.page_url.as_deref(), Some("https://ex.org/page"));
     }
 
     /// The other addresses a feed declares: the same podcast elsewhere.

@@ -255,6 +255,7 @@ pub(super) fn page_podcast(page_url: &str, page: &str) -> Result<Podcast> {
         title,
         author: og_meta(page, "site_name"),
         image_url: og_meta(page, "image").and_then(|i| absolute(page_url, &i)),
+        page_url: Some(page_url.to_string()),
         episodes,
     })
 }
