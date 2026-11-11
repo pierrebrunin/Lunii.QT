@@ -502,6 +502,19 @@ fn v2_archive_imports_on_lunii_and_flam() {
     let from_flam = dev3
         .export_story(&ctx(), "000000B2", &out_dir(tmp.path(), "out_c"))
         .unwrap();
+    // the same, the UUID in hexadecimal under a parent directory
+    let hex = tmp.path().join("Archive hex.v2.pk");
+    let prefix = format!("sauvegarde/{}", uuid.simple().to_string().to_uppercase());
+    zip_story_dir(&hex, &root.join(".content/000000B2"), &prefix);
+    let root4 = lunii_v2(&tmp.path().join("d"));
+    let mut dev4 = open_device(&ctx(), &root4).unwrap();
+    dev4.import_story(&ctx(), &hex).unwrap();
+    assert_eq!(tree(&root.join(".content")), tree(&root4.join(".content")));
+    let root5 = flam(&tmp.path().join("e"));
+    let mut dev5 = open_device(&ctx(), &root5).unwrap();
+    dev5.import_story(&ctx(), &hex).unwrap();
+    assert_eq!(tree(&root3.join("str")), tree(&root5.join("str")));
+
     // on the Flam, the ciphered files of a Lunii story are padded to 16 bytes
     let (lunii, flam) = (zip_entries(&from_lunii), zip_entries(&from_flam));
     assert_eq!(

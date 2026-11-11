@@ -368,6 +368,9 @@ impl FlamDevice {
                 if file == FILE_UUID || file.ends_with("bt") {
                     return Ok(None);
                 }
+                let Some(rel) = common::path_in_story(file, &uuid_str) else {
+                    return common::outside_story(ctx, file);
+                };
                 let data_v2 = archive.read(file)?;
                 let plain = if file.ends_with("ni") || file.ends_with("nm") {
                     data_v2
@@ -375,8 +378,7 @@ impl FlamDevice {
                     crypto::xxtea_decipher(&data_v2, &lunii_generic_key(), 512)?
                 };
                 let data = self.ciphered_data(file, &plain, false, false)?;
-                let name =
-                    Self::lunii_ciphered_name(&file.replace(&uuid_str, &long_uuid), false, false);
+                let name = Self::lunii_ciphered_name(&format!("{long_uuid}/{rel}"), false, false);
                 Ok(Some((name, data)))
             },
         )?;

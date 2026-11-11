@@ -243,6 +243,22 @@ pub fn plain_archive_uuid<D: Device + ?Sized>(dev: &D, archive: &Archive) -> Res
     Ok(uuid)
 }
 
+/// Path of an archive entry in the story directory: what follows the UUID
+/// directory `uuid_dir` (whatever its parent directories, `/` or `\`
+/// separators). `None` for an entry outside of it.
+pub fn path_in_story<'a>(entry: &'a str, uuid_dir: &str) -> Option<&'a str> {
+    let start = entry.find(uuid_dir)? + uuid_dir.len();
+    entry.get(start..)?.strip_prefix(['/', '\\'])
+}
+
+/// Skips an archive entry outside the story directory (see [`path_in_story`]).
+pub fn outside_story(ctx: &Context, entry: &str) -> Result<Option<(String, Vec<u8>)>> {
+    ctx.warn(format!(
+        "File outside the story directory, ignored : {entry}"
+    ));
+    Ok(None)
+}
+
 /// The backup `path` was made from the device `snu`: its name starts with it.
 pub fn is_backup_of(path: &Path, snu: &str) -> bool {
     path.file_name()
@@ -971,6 +987,18 @@ mod tests {
             "Le Chateau_ ete _ hiver_"
         );
         assert_eq!(secure_filename("Łódź"), "Lodz");
+    }
+
+    #[test]
+    fn story_paths() {
+        let uuid = "12345678-aaaa-4bbb-8ccc-0000deadbeef";
+        assert_eq!(
+            path_in_story(&format!("{uuid}/rf/000/X"), uuid),
+            Some("rf/000/X")
+        );
+        assert_eq!(path_in_story(&format!("old/{uuid}\\ri"), uuid), Some("ri"));
+        assert_eq!(path_in_story("other/ri", uuid), None);
+        assert_eq!(path_in_story(uuid, uuid), None);
     }
 
     #[test]

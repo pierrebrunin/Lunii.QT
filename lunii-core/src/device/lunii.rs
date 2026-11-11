@@ -587,9 +587,10 @@ impl LuniiDevice {
 
     fn import_lunii_v2(&mut self, ctx: &Context, path: &Path) -> Result<()> {
         let archive = Archive::open(path)?;
-        let (_, new_uuid) = uuid_from_entries(&archive.names())?;
+        let (uuid_dir, new_uuid) = uuid_from_entries(&archive.names())?;
         self.check_not_loaded(&new_uuid)?;
 
+        let short = story::short_uuid(&new_uuid);
         let output = self.content_dir();
         std::fs::create_dir_all(&output)?;
         let v1_v2 = self.device_version.is_lunii_v1_v2();
@@ -604,13 +605,11 @@ impl LuniiDevice {
                 if entry.ends_with("bt") {
                     return Ok(None);
                 }
-                let data_v2 = archive.read(entry)?;
-                // stripping extra uuid chars
-                let file = if entry.contains('-') {
-                    skip_chars(entry, 28)
-                } else {
-                    skip_chars(entry, 24)
+                let Some(rel) = common::path_in_story(entry, &uuid_dir) else {
+                    return common::outside_story(ctx, entry);
                 };
+                let file = format!("{short}/{rel}");
+                let data_v2 = archive.read(entry)?;
                 let data = if v1_v2 {
                     data_v2
                 } else {
@@ -630,7 +629,7 @@ impl LuniiDevice {
         self.set_v2_bt(ri.as_deref())?;
         self.finish_import(
             ctx,
-            &output.join(story::short_uuid(&new_uuid)),
+            &output.join(&short),
             Story::with_flags(new_uuid, false, night_mode),
             true,
         )
