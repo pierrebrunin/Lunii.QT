@@ -324,10 +324,10 @@ impl FlamDevice {
     fn import_lunii_flam_zip(&mut self, ctx: &Context, path: &Path) -> Result<()> {
         if !common::is_backup_of(path, &self.snu_str()) {
             bail!(
-                "Lunii story from Flam personnal backup can't be imported on this device (SNU mismatch)."
+                "Lunii story from Flam personal backup can't be imported on this device (SNU mismatch)."
             );
         }
-        ctx.info("Restoring Lunii story from Flam personnal backup...");
+        ctx.info("Restoring Lunii story from Flam personal backup...");
 
         let archive = Archive::open_zip(path)?;
         let (_, new_uuid) = uuid_from_entries(&archive.names())?;

@@ -90,10 +90,10 @@ msgstr "Sauvegarde incomplète d'une histoire Flam, le fichier key est manquant.
 msgid "Restoring Flam story backup"
 msgstr "Restauration de la sauvegarde d'une histoire Flam"
 
-msgid "Lunii story from Flam personnal backup can't be imported on this device (SNU mismatch)."
+msgid "Lunii story from Flam personal backup can't be imported on this device (SNU mismatch)."
 msgstr "Cette sauvegarde personnelle Lunii sur Flam ne peut être importée (le SNU ne correspond pas)."
 
-msgid "Restoring Lunii story from Flam personnal backup..."
+msgid "Restoring Lunii story from Flam personal backup..."
 msgstr "Restauration d'une sauvegarde personnelle Lunii sur Flam..."
 
 msgid "> Adding UUID ..."
@@ -237,10 +237,10 @@ msgstr "⌛ Transcodage audio {} : {} Ko ..."
 msgid "Lunii v3 requires Device Key for genuine story export."
 msgstr "Une Lunii v3 nécessite des clés de l'appareil pour exporter une histoire."
 
-msgid "Lunii v3 personnal backup can't be imported on this device (SNU mismatch)."
+msgid "Lunii v3 personal backup can't be imported on this device (SNU mismatch)."
 msgstr "Cette sauvegarde personnelle Lunii v3 ne peut être importée (le SNU ne correspond pas)."
 
-msgid "Restoring Lunii v3 personnal backup..."
+msgid "Restoring Lunii v3 personal backup..."
 msgstr "Restauration d'une sauvegarde personnelle Lunii v3..."
 
 msgid "Story directory not found ({})"

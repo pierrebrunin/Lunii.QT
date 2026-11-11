@@ -637,9 +637,9 @@ impl LuniiDevice {
 
     fn import_lunii_v3(&mut self, ctx: &Context, path: &Path) -> Result<()> {
         if !common::is_backup_of(path, &self.snu_str()) {
-            bail!("Lunii v3 personnal backup can't be imported on this device (SNU mismatch).");
+            bail!("Lunii v3 personal backup can't be imported on this device (SNU mismatch).");
         }
-        ctx.info("Restoring Lunii v3 personnal backup...");
+        ctx.info("Restoring Lunii v3 personal backup...");
 
         let archive = Archive::open_zip(path)?;
         let (_, new_uuid) = uuid_from_entries(&archive.names())?;
