@@ -26,8 +26,8 @@ export component StoryTable inherits Rectangle {
 
     // left click (ctrl, shift) or right click on a row
     callback row-pointer(row: int, ctrl: bool, shift: bool, right: bool);
-    // right click on a row, at `position` in the table: its context menu (the
-    // rows take the right button, a ContextMenuArea around never gets it)
+    // right click (on a row or below them) or Menu key, at `position` in the
+    // table: the context menu
     callback context-menu(position: Point);
     // arrow keys / page keys
     callback key-nav(delta: int, shift: bool);
@@ -95,7 +95,30 @@ export component StoryTable inherits Rectangle {
                 root.select-all();
                 return accept;
             }
+            // Menu key: the context menu, at the current row
+            if (event.text == Key.Menu) {
+                root.context-menu({
+                    x: 40px,
+                    y: max(root.row-height, min(root.height - root.row-height,
+                        (root.current-row + 1.5) * root.row-height + list.content-y)),
+                });
+                return accept;
+            }
             reject
+        }
+
+        // right click below the rows: the context menu too (import...)
+        TouchArea {
+            enabled: root.interactive;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                    focus-scope.focus();
+                    root.context-menu({
+                        x: self.absolute-position.x - root.absolute-position.x + self.mouse-x,
+                        y: self.absolute-position.y - root.absolute-position.y + self.mouse-y,
+                    });
+                }
+            }
         }
 
         VerticalLayout {

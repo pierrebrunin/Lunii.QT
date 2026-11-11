@@ -404,52 +404,34 @@ export component MainWindow inherits Window {
                 height: parent.height;
                 spacing: 2px;
                 // ---------------------------------------------------------------- stories
-                story-menu := ContextMenuArea {
+                table := StoryTable {
                     horizontal-stretch: 1;
-                    enabled: root.story-actions;
-                    Menu {
-                        MenuItem { title: @tr("Move Top"); enabled: root.selection-actions; activated => { root.action(Action.move-top); } }
-                        MenuItem { title: @tr("Move Up"); enabled: root.selection-actions; activated => { root.action(Action.move-up); } }
-                        MenuItem { title: @tr("Move Down"); enabled: root.selection-actions; activated => { root.action(Action.move-down); } }
-                        MenuItem { title: @tr("Move Bottom"); enabled: root.selection-actions; activated => { root.action(Action.move-bottom); } }
-                        MenuSeparator { }
-                        MenuItem { title: @tr("Hide / Show"); enabled: root.selection-actions; activated => { root.action(Action.hide); } }
-                        if root.nm-available: MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions; activated => { root.action(Action.night-mode); } }
-                        MenuSeparator { }
-                        MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action(Action.import); } }
-                        MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action(Action.import-album); } }
-                        MenuItem { title: @tr("Add MP3 to album"); enabled: root.can-add-mp3; activated => { root.action(Action.add-to-album); } }
-                        MenuItem { title: @tr("Edit the album"); enabled: root.can-add-to-album; activated => { root.action(Action.edit-album); } }
-                        MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
-                        MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action(Action.export-all); } }
-                        MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
-                    }
-
-                    table := StoryTable {
-                        min-height: 150px;
-                        vertical-stretch: 1;
-                        rows: root.rows;
-                        current-row: root.current-row;
-                        show-nm: root.show-nm;
-                        show-size: root.show-size;
-                        show-duration: root.show-duration;
-                        show-db: root.show-db;
-                        show-uuid: root.show-uuid;
-                        interactive: !root.busy;
-                        drop-hover: root.drop-hover;
-                        placeholder: root.list-placeholder;
-                        row-pointer(row, ctrl, shift, right) => { root.row-pointer(row, ctrl, shift, right); }
-                        // the table fills the ContextMenuArea: same coordinates
-                        context-menu(position) => {
-                            if (root.story-actions) {
-                                story-menu.show(position);
-                            }
+                    min-height: 150px;
+                    vertical-stretch: 1;
+                    rows: root.rows;
+                    current-row: root.current-row;
+                    show-nm: root.show-nm;
+                    show-size: root.show-size;
+                    show-duration: root.show-duration;
+                    show-db: root.show-db;
+                    show-uuid: root.show-uuid;
+                    interactive: !root.busy;
+                    drop-hover: root.drop-hover;
+                    placeholder: root.list-placeholder;
+                    row-pointer(row, ctrl, shift, right) => { root.row-pointer(row, ctrl, shift, right); }
+                    // the menu is elsewhere: position in its coordinates
+                    context-menu(position) => {
+                        if (root.story-actions) {
+                            story-menu.show({
+                                x: self.absolute-position.x - story-menu.absolute-position.x + position.x,
+                                y: self.absolute-position.y - story-menu.absolute-position.y + position.y,
+                            });
                         }
-                        key-nav(delta, shift) => { root.key-nav(delta, shift); }
-                        select-all => { root.select-all(); }
-                        can-move: root.selection-actions;
-                        rows-dropped(gap) => { root.rows-dropped(gap); }
                     }
+                    key-nav(delta, shift) => { root.key-nav(delta, shift); }
+                    select-all => { root.select-all(); }
+                    can-move: root.selection-actions;
+                    rows-dropped(gap) => { root.rows-dropped(gap); }
                 }
 
                 // ---------------------------------------------------------------- details
@@ -690,6 +672,43 @@ export component MainWindow inherits Window {
                     mouse-cursor: pointer;
                     clicked => { root.action(Action.show-log); }
                 }
+            }
+        }
+    }
+
+    // context menu of the stories, shown by the table (right click, Menu
+    // key), in a container of its own. Slint 1.18 sends the click closing a
+    // context menu to the parent of the ContextMenuArea with wrong coordinates
+    // (shifted by about twice the position of that parent): a story lower got
+    // selected. Here that click finds nothing: it only closes the menu.
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        story-menu := ContextMenuArea {
+            x: 0;
+            y: 0;
+            width: 0;
+            height: 0;
+            // shown by the table only
+            enabled: false;
+            Menu {
+                MenuItem { title: @tr("Move Top"); enabled: root.selection-actions; activated => { root.action(Action.move-top); } }
+                MenuItem { title: @tr("Move Up"); enabled: root.selection-actions; activated => { root.action(Action.move-up); } }
+                MenuItem { title: @tr("Move Down"); enabled: root.selection-actions; activated => { root.action(Action.move-down); } }
+                MenuItem { title: @tr("Move Bottom"); enabled: root.selection-actions; activated => { root.action(Action.move-bottom); } }
+                MenuSeparator { }
+                MenuItem { title: @tr("Hide / Show"); enabled: root.selection-actions; activated => { root.action(Action.hide); } }
+                if root.nm-available: MenuItem { title: @tr("Force Night Mode"); enabled: root.selection-actions; activated => { root.action(Action.night-mode); } }
+                MenuSeparator { }
+                MenuItem { title: @tr("Import"); enabled: root.can-import; activated => { root.action(Action.import); } }
+                MenuItem { title: @tr("Import MP3 album"); enabled: root.can-import; activated => { root.action(Action.import-album); } }
+                MenuItem { title: @tr("Add MP3 to album"); enabled: root.can-add-mp3; activated => { root.action(Action.add-to-album); } }
+                MenuItem { title: @tr("Edit the album"); enabled: root.can-add-to-album; activated => { root.action(Action.edit-album); } }
+                MenuItem { title: @tr("Export"); enabled: root.selection-actions && root.can-export; activated => { root.action(Action.export); } }
+                MenuItem { title: @tr("Export All"); enabled: root.can-export-all; activated => { root.action(Action.export-all); } }
+                MenuItem { title: @tr("Remove"); enabled: root.selection-actions; activated => { root.action(Action.remove); } }
             }
         }
     }
