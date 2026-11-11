@@ -58,6 +58,12 @@ pub(super) fn itunes<'a, 'i>(
     node.children().find(|c| c.has_tag_name((ITUNES, name)))
 }
 
+/// `(season, episode)` of an item (`<itunes:episode>`, season 0 if none).
+fn itunes_number(item: roxmltree::Node) -> Option<(u32, u32)> {
+    let number = |name: &str| itunes(item, name)?.text()?.trim().parse::<u32>().ok();
+    Some((number("season").unwrap_or(0), number("episode")?))
+}
+
 /// `<atom:link rel="self" href="…">` of a channel or Atom feed.
 fn self_link(node: roxmltree::Node) -> Option<String> {
     node.children()
@@ -130,12 +136,15 @@ pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
                 url: url.to_string(),
                 size: enclosure.attribute("length").and_then(|l| l.parse().ok()),
                 link: child_text(item, "link").filter(|l| is_web(l)),
+                number: itunes_number(item),
             },
         ));
     }
     // feeds list the newest first: reversed, then sorted by date (stable)
     episodes.reverse();
     episodes.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut episodes: Vec<Episode> = episodes.into_iter().map(|(_, e)| e).collect();
+    order_same_day(&mut episodes);
 
     let declared = itunes(channel, "new-feed-url")
         .and_then(|n| n.text())
@@ -152,7 +161,7 @@ pub fn parse_feed(feed_url: &str, xml: &str) -> Result<Podcast> {
             .filter(|t| !t.is_empty()),
         image_url,
         page_url: child_text(channel, "link").filter(|l| is_web(l)),
-        episodes: episodes.into_iter().map(|(_, e)| e).collect(),
+        episodes,
     })
 }
 
@@ -218,11 +227,14 @@ pub(super) fn parse_atom(feed_url: &str, feed: roxmltree::Node) -> Result<Podcas
                 url: url.to_string(),
                 size: enclosure.attribute("length").and_then(|l| l.parse().ok()),
                 link: alternate_link(entry),
+                number: itunes_number(entry),
             },
         ));
     }
     episodes.reverse();
     episodes.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut episodes: Vec<Episode> = episodes.into_iter().map(|(_, e)| e).collect();
+    order_same_day(&mut episodes);
 
     let image_url = itunes(feed, "image")
         .and_then(|i| i.attribute("href"))
@@ -240,7 +252,7 @@ pub(super) fn parse_atom(feed_url: &str, feed: roxmltree::Node) -> Result<Podcas
             .or_else(|| author(feed)),
         image_url,
         page_url: alternate_link(feed),
-        episodes: episodes.into_iter().map(|(_, e)| e).collect(),
+        episodes,
     })
 }
 
@@ -400,6 +412,54 @@ mod tests {
             <link href="https://ex.org/page"/></feed>"#;
         let p = parse_feed("https://ex.org/atom.xml", atom).unwrap();
         assert_eq!(p.page_url.as_deref(), Some("https://ex.org/page"));
+    }
+
+    /// Episodes put online the same day: in the order of their numbers, not
+    /// of their times (the feed of "Les Aventures de Tintin" dates 1/4 the
+    /// latest).
+    #[test]
+    fn same_day_order() {
+        let item = |title: &str, time: &str, number: &str| {
+            format!(
+                "<item><title>{title}</title><pubDate>Mon, 26 Jun 2023 {time} +0200</pubDate>\
+                 {number}<enclosure url=\"https://ex/{time}.mp3\"/></item>"
+            )
+        };
+        let titles = |items: &[String]| -> Vec<String> {
+            let xml = format!(
+                r#"<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel><title>T</title>{}</channel></rss>"#,
+                items.concat()
+            );
+            let p = parse_feed("https://ex/f.xml", &xml).unwrap();
+            p.episodes.into_iter().map(|e| e.title).collect()
+        };
+        // "n/m" in the titles, times reversed; an episode of the day without
+        // number keeps its place
+        let items = [
+            item("Bonus", "02:00:00", ""),
+            item("Licorne 1/2 : début", "01:03:00", ""),
+            item("Licorne 2/2 : fin", "01:00:00", ""),
+        ];
+        assert_eq!(
+            titles(&items),
+            ["Licorne 1/2 : début", "Licorne 2/2 : fin", "Bonus"]
+        );
+        // the numbers of the feed first
+        let items = [
+            item("B", "01:03:00", "<itunes:episode>2</itunes:episode>"),
+            item("A", "01:00:00", "<itunes:episode>1</itunes:episode>"),
+            item(
+                "C 1/2",
+                "01:01:00",
+                "<itunes:season>2</itunes:season><itunes:episode>1</itunes:episode>",
+            ),
+        ];
+        assert_eq!(titles(&items), ["A", "B", "C 1/2"]);
+        // not a part: a date, a fraction out of range
+        assert_eq!(part_of("Le Secret 3/4 : la ruse"), Some((3, 4)));
+        assert_eq!(part_of("Émission du 12/05/2024"), None);
+        assert_eq!(part_of("5/4"), None);
+        assert_eq!(part_of("24/7"), None);
     }
 
     /// The other addresses a feed declares: the same podcast elsewhere.

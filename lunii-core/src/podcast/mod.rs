@@ -55,6 +55,92 @@ pub struct Episode {
     pub size: Option<u64>,
     /// web page of the episode (`<link>` of the item, or the page read)
     pub link: Option<String>,
+    /// season and number declared by the feed (`<itunes:season>`,
+    /// `<itunes:episode>`)
+    pub number: Option<(u32, u32)>,
+}
+
+/// Puts back in order the episodes published the same day (`episodes` sorted
+/// by date): by their number in the feed if several have one, otherwise by
+/// the `n/m` of their titles ("… 1/4", "… 2/4"). Publishers often give such
+/// episodes, put online together, times that do not follow their order.
+pub(super) fn order_same_day(episodes: &mut [Episode]) {
+    let mut start = 0;
+    while start < episodes.len() {
+        let end = start
+            + episodes[start..]
+                .iter()
+                .take_while(|e| e.date == episodes[start].date)
+                .count();
+        let day = &mut episodes[start..end];
+        let numbered = day.iter().filter(|e| e.number.is_some()).count();
+        if numbered >= 2 {
+            reorder(day, |e| e.number);
+        } else {
+            // each series of the day ("…/4") on its own
+            let totals: HashSet<u32> = day
+                .iter()
+                .filter_map(|e| part_of(&e.title))
+                .map(|p| p.1)
+                .collect();
+            for total in totals {
+                reorder(day, |e| {
+                    part_of(&e.title).filter(|p| p.1 == total).map(|p| p.0)
+                });
+            }
+        }
+        start = end;
+    }
+}
+
+/// Sorts by `key` the episodes that have one, among their own places (the
+/// others do not move).
+fn reorder<K: Ord>(episodes: &mut [Episode], key: impl Fn(&Episode) -> Option<K>) {
+    let places: Vec<usize> = (0..episodes.len())
+        .filter(|&i| key(&episodes[i]).is_some())
+        .collect();
+    if places.len() < 2 {
+        return;
+    }
+    let mut sorted: Vec<Episode> = places.iter().map(|&i| episodes[i].clone()).collect();
+    sorted.sort_by_key(|e| key(e));
+    for (i, e) in places.into_iter().zip(sorted) {
+        episodes[i] = e;
+    }
+}
+
+/// `(n, m)` of a title numbered "… n/m …" (1 ≤ n ≤ m): its last such part.
+fn part_of(title: &str) -> Option<(u32, u32)> {
+    let chars: Vec<char> = title.chars().collect();
+    let number = |range: std::ops::Range<usize>| -> Option<u32> {
+        chars[range].iter().collect::<String>().parse().ok()
+    };
+    let mut found = None;
+    for (slash, _) in chars.iter().enumerate().filter(|(_, c)| **c == '/') {
+        let mut a = slash;
+        while a > 0 && chars[a - 1].is_ascii_digit() {
+            a -= 1;
+        }
+        let mut b = slash + 1;
+        while b < chars.len() && chars[b].is_ascii_digit() {
+            b += 1;
+        }
+        // a whole number on each side ("1/4", not "12/2024/x" parts of a date)
+        let alone = |i: Option<&char>| i.is_none_or(|c| !c.is_ascii_digit() && *c != '/');
+        if a == slash
+            || b == slash + 1
+            || !alone(a.checked_sub(1).map(|i| &chars[i]))
+            || !alone(chars.get(b))
+        {
+            continue;
+        }
+        if let (Some(n), Some(m)) = (number(a..slash), number(slash + 1..b))
+            && (1..=m).contains(&n)
+        {
+            found = Some((n, m));
+        }
+    }
+    found
 }
 
 #[derive(Debug, Clone)]

@@ -167,6 +167,7 @@ pub(super) fn page_episode(url: &str, page: &str) -> Option<Episode> {
         url: str_field(audio, "contentUrl")?,
         size: None,
         link: Some(url.to_string()),
+        number: None,
     })
 }
 
@@ -292,6 +293,7 @@ pub(super) fn merge_page_episodes(
     podcast.episodes.extend(added);
     // oldest first (stable: the order of the feed kept on the same day)
     podcast.episodes.sort_by(|a, b| a.date.cmp(&b.date));
+    order_same_day(&mut podcast.episodes);
     count
 }
 
@@ -397,6 +399,7 @@ mod tests {
             url: format!("https://ex/{n}.mp3"),
             size: None,
             link: link.map(str::to_string),
+            number: None,
         };
         let feed = || Podcast {
             feed_url: "https://ex/feed.xml".into(),

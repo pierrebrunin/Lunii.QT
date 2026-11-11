@@ -316,6 +316,11 @@ directement la fenêtre d'ajout) :
   `<atom:link rel="self">`, retenues dans `podcasts.json`). Pour un podcast
   suivi avant cet enregistrement, le même titre et un épisode déjà importé
   suffisent.
+- **Ordre** : chronologique. Les épisodes publiés le même jour sont rangés
+  par leur numéro dans le flux (`<itunes:season>`, `<itunes:episode>`), sinon
+  par le « n/m » de leur titre (« … 1/4 », « … 2/4 ») : les éditeurs donnent
+  souvent à ces épisodes, mis en ligne ensemble, des heures qui ne suivent
+  pas leur ordre (Radio France date le 1/4 comme le plus récent).
 - Les épisodes qui ne sont pas en MP3 (souvent en M4A/AAC) sont convertis
   (voir [Conversion audio](#conversion-audio)).
 - Les podcasts sont en général destinés à l'écoute privée : ne pas
