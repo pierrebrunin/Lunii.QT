@@ -223,18 +223,13 @@ impl App {
 
     pub(super) fn files_dropped(&self) {
         let files = std::mem::take(&mut self.state.borrow_mut().pending_drop);
-        let (version, can_import) = match self.state.borrow().dev.as_ref() {
-            Some(d) => (d.version, d.can_import),
+        let (extensions, can_import) = match self.state.borrow().dev.as_ref() {
+            Some(d) => (d.extensions, d.can_import),
             None => return,
         };
         if self.ui().get_busy() {
             return;
         }
-        let extensions = if version == DeviceVersion::FlamV1 {
-            FLAM_SUPPORTED_EXT
-        } else {
-            LUNII_SUPPORTED_EXT
-        };
         if !files
             .iter()
             .all(|f| has_supported_ext(f, extensions) || lunii_core::album::is_album_dir(f))

@@ -13,6 +13,8 @@ pub(crate) struct DevInfo {
     pub(super) firmware: String,
     pub(super) hw_text: String,
     pub(super) can_import: bool,
+    /// archives this device can import
+    pub(super) extensions: &'static [&'static str],
     /// export all possible (Flam, Lunii v1/v2, or v3 with device key)
     pub(super) export_all: bool,
     pub(super) config: Option<Vec<u16>>,
@@ -45,6 +47,7 @@ pub(super) fn describe_device(dev: &dyn Device, path: &Path) -> DevInfo {
         firmware,
         hw_text,
         can_import: dev.can_import(),
+        extensions: dev.supported_extensions(),
         export_all,
         // only for a Lunii whose firmware handles the night mode
         config: lunii
