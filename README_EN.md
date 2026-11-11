@@ -79,8 +79,8 @@ Forget about all previous .md and firmware recommendations.
 
 1. The **menu bar**. It will notify you when an update is available  
    (just get it with Menu About/Update to v2.X.X)
-2. The **model of your Lunii/Flam** when it's connected (its location and technical details are in File / Device information, or a click on the status bar).   
-   The button on the left updates automatic detection.
+2. The **Stories** and **Podcasts** views.  
+   The connected Lunii/Flam is chosen in the **Device** menu, which also runs the detection again (Refresh connected devices). Its location and technical details are in File / Device information, or a click on the status bar.
 3. Configuring **Night mode** ([here](#night-mode)), shown only when the connected Lunii supports it (not on Flam)
 4. **Official DB refresh** : Updates the list of stories and related information from the official Lunii Store. Use it when some official are not recognized.
 5. The **list of your stories** with their duration. The **Tools** menu also shows their size, Database (DB) origin and UUID, hidden by default.  
@@ -92,7 +92,7 @@ Forget about all previous .md and firmware recommendations.
      - **T** - **T**hirdparty Database, also known as Unofficial or Custom Stories  
         _(Those metadata can't be fetched. They are completed upon story import)_
 
-6. The 🛏️ icon indicates that **the story supports Night Mode**. You can force this status from the context menu.
+6. The **NM** column (☾) indicates that **the story supports Night Mode**. You can force this status from the context menu.
 
 7. **Hidden stories** (the greyed-out entries in the list).  
    This feature can be activated via the context menu on a story.  

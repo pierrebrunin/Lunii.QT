@@ -79,8 +79,8 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 
 1. La **barre de menu**. Elle vous informera lorsqu'une mise à jour de l'application est disponible  
    (il suffit d'aller dans Menu About/Update to v2.X.X)
-2. **Le modèle de votre Lunii/Flam** lorsqu'elle est connectée (son emplacement et ses informations techniques sont dans Fichier / Informations sur l'appareil, ou d'un clic sur la barre d'état).   
-   Le bouton à gauche relance la détection automatique.
+2. Les vues **Histoires** et **Podcasts**.  
+   La Lunii/Flam connectée se choisit dans le menu **Appareil**, qui relance aussi la détection (Rafraichir les appareils). Son emplacement et ses informations techniques sont dans Fichier / Informations sur l'appareil, ou d'un clic sur la barre d'état.
 3. Gestion du **Mode nuit** ([ici](#mode-nuit)), affichée seulement si la Lunii branchée le gère (Flam exclue)
 4. Actualisation de la **base de données Officielle** : Met à jour la liste des histoires et leurs descriptions depuis le Luniistore. Utilisez ce bouton lorsque certaines histoires officielles ne sont pas reconnues.
 5. La **liste de vos histoires** avec leur durée. Le menu **Outils** permet d'afficher aussi leur taille, leur base de données (DB) et leur UUID, masqués par défaut.  
@@ -91,7 +91,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
         (Toutes les métadonnées proviennent des serveurs de Lunii).
      - **T** - base de données **T**ierce, également connue sous Non officielles ou Custom  
         (Ces métadonnées ne peuvent pas être récupérées, elles sont complétées lors de l'importation de l'histoire)
-6. L'icône 🛏️ indique que **l'histoire supporte le Mode Nuit**. Il est possible de forcer ce status depuis le menu contextuel
+6. La colonne **MN** (☾) indique que **l'histoire supporte le Mode Nuit**. Il est possible de forcer ce status depuis le menu contextuel
 7. **Histoires cachées** (les entrées grisées dans la liste).   
    Cette fonctionnalité est activable par le biais du menu contextuel sur une histoire.  
    Son usage est double:  
