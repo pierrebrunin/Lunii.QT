@@ -13,6 +13,29 @@ pub(super) fn format_duration(secs: u32) -> String {
     }
 }
 
+/// The stories of the device: rows shown, selection, details.
+#[derive(Default)]
+pub(super) struct List {
+    pub(super) stories: Vec<StoryInfo>,
+    /// indexes in `stories` of the displayed rows
+    pub(super) visible: Vec<usize>,
+    pub(super) selected: HashSet<Uuid>,
+    pub(super) anchor: Option<usize>,
+    pub(super) current: Option<usize>,
+    pub(super) details_uuid: Option<Uuid>,
+}
+
+/// Durations measured on the device (stories without one in the database).
+#[derive(Default)]
+pub(super) struct Durations {
+    pub(super) measured: HashMap<Uuid, Option<u32>>,
+    /// a measure is running
+    pub(super) measuring: bool,
+    /// incremented when the measures are forgotten: those still running
+    /// (stories maybe changed or moved meanwhile) are ignored
+    pub(super) generation: u32,
+}
+
 impl App {
     /// Measures in the background the duration of the stories that have none
     /// in the database (once per story: kept for the session).
@@ -22,16 +45,17 @@ impl App {
         }
         let (device, missing) = {
             let st = self.state.borrow();
-            if st.measuring {
+            if st.durations.measuring {
                 return;
             }
             let missing: HashSet<Uuid> = st
+                .list
                 .stories
                 .iter()
-                .filter(|s| s.duration.is_none() && !st.durations.contains_key(&s.uuid))
+                .filter(|s| s.duration.is_none() && !st.durations.measured.contains_key(&s.uuid))
                 .map(|s| s.uuid)
                 .collect();
-            (st.device.clone(), missing)
+            (st.devices.opened.clone(), missing)
         };
         let Some(device) = device.filter(|_| !missing.is_empty()) else {
             return;
@@ -49,8 +73,8 @@ impl App {
         drop(dev);
         let generation = {
             let mut st = self.state.borrow_mut();
-            st.measuring = true;
-            st.durations_generation
+            st.durations.measuring = true;
+            st.durations.generation
         };
         worker::measure_durations(generation, dirs, sink());
     }
@@ -60,11 +84,11 @@ impl App {
     pub(super) fn forget_durations(&self) {
         {
             let mut st = self.state.borrow_mut();
-            if st.durations.is_empty() && !st.measuring {
+            if st.durations.measured.is_empty() && !st.durations.measuring {
                 return;
             }
-            st.durations.clear();
-            st.durations_generation += 1;
+            st.durations.measured.clear();
+            st.durations.generation += 1;
         }
         self.rebuild_rows();
     }
@@ -75,6 +99,7 @@ impl App {
         let rows: Vec<StoryRow> = {
             let mut st = self.state.borrow_mut();
             let visible: Vec<usize> = st
+                .list
                 .stories
                 .iter()
                 .enumerate()
@@ -86,20 +111,21 @@ impl App {
                 .map(|(i, _)| i)
                 .collect();
             // keep only displayed stories in the selection
-            let shown: HashSet<Uuid> = visible.iter().map(|&i| st.stories[i].uuid).collect();
-            st.selected.retain(|u| shown.contains(u));
-            st.visible = visible;
-            if st.current.is_some_and(|c| c >= st.visible.len()) {
-                st.current = st.visible.len().checked_sub(1);
+            let shown: HashSet<Uuid> = visible.iter().map(|&i| st.list.stories[i].uuid).collect();
+            st.list.selected.retain(|u| shown.contains(u));
+            st.list.visible = visible;
+            if st.list.current.is_some_and(|c| c >= st.list.visible.len()) {
+                st.list.current = st.list.visible.len().checked_sub(1);
             }
             // a shift selection starts again from the clicked row
-            if st.anchor.is_some_and(|a| a >= st.visible.len()) {
-                st.anchor = None;
+            if st.list.anchor.is_some_and(|a| a >= st.list.visible.len()) {
+                st.list.anchor = None;
             }
-            st.visible
+            st.list
+                .visible
                 .iter()
                 .map(|&i| {
-                    let s = &st.stories[i];
+                    let s = &st.list.stories[i];
                     StoryRow {
                         name: if s.name == STORY_UNKNOWN {
                             tr(STORY_UNKNOWN)
@@ -115,14 +141,14 @@ impl App {
                             .into(),
                         duration: s
                             .duration
-                            .or_else(|| st.durations.get(&s.uuid).copied().flatten())
+                            .or_else(|| st.durations.measured.get(&s.uuid).copied().flatten())
                             .map(format_duration)
                             .unwrap_or_default()
                             .into(),
                         night_mode: s.night_mode,
                         official: s.official,
                         hidden: s.hidden,
-                        selected: st.selected.contains(&s.uuid),
+                        selected: st.list.selected.contains(&s.uuid),
                     }
                 })
                 .collect()
@@ -135,34 +161,38 @@ impl App {
     pub(crate) fn row_pointer(&self, row: usize, ctrl: bool, shift: bool, right: bool) {
         {
             let mut st = self.state.borrow_mut();
-            let Some(&index) = st.visible.get(row) else {
+            let Some(&index) = st.list.visible.get(row) else {
                 return;
             };
-            let uuid = st.stories[index].uuid;
+            let uuid = st.list.stories[index].uuid;
             if right {
-                if !st.selected.contains(&uuid) {
-                    st.selected = HashSet::from([uuid]);
-                    st.anchor = Some(row);
+                if !st.list.selected.contains(&uuid) {
+                    st.list.selected = HashSet::from([uuid]);
+                    st.list.anchor = Some(row);
                 }
             } else if shift {
                 // (kept in the list by rebuild_rows: checked anyway)
-                let anchor = st.anchor.filter(|&a| a < st.visible.len()).unwrap_or(row);
+                let anchor = st
+                    .list
+                    .anchor
+                    .filter(|&a| a < st.list.visible.len())
+                    .unwrap_or(row);
                 let (a, b) = (anchor.min(row), anchor.max(row));
-                let range: Vec<Uuid> = st.visible[a..=b]
+                let range: Vec<Uuid> = st.list.visible[a..=b]
                     .iter()
-                    .map(|&i| st.stories[i].uuid)
+                    .map(|&i| st.list.stories[i].uuid)
                     .collect();
-                st.selected = range.into_iter().collect();
+                st.list.selected = range.into_iter().collect();
             } else if ctrl {
-                if !st.selected.remove(&uuid) {
-                    st.selected.insert(uuid);
+                if !st.list.selected.remove(&uuid) {
+                    st.list.selected.insert(uuid);
                 }
-                st.anchor = Some(row);
+                st.list.anchor = Some(row);
             } else {
-                st.selected = HashSet::from([uuid]);
-                st.anchor = Some(row);
+                st.list.selected = HashSet::from([uuid]);
+                st.list.anchor = Some(row);
             }
-            st.current = Some(row);
+            st.list.current = Some(row);
         }
         self.selection_changed();
     }
@@ -170,29 +200,33 @@ impl App {
     pub(super) fn key_nav(&self, delta: i32, shift: bool) {
         let row = {
             let mut st = self.state.borrow_mut();
-            if st.visible.is_empty() {
+            if st.list.visible.is_empty() {
                 return;
             }
-            let last = st.visible.len() as i64 - 1;
-            let row = match st.current {
+            let last = st.list.visible.len() as i64 - 1;
+            let row = match st.list.current {
                 Some(c) => (c as i64 + delta as i64).clamp(0, last) as usize,
                 None => 0,
             };
             if shift {
                 // (kept in the list by rebuild_rows: checked anyway)
-                let anchor = st.anchor.filter(|&a| a < st.visible.len()).unwrap_or(row);
+                let anchor = st
+                    .list
+                    .anchor
+                    .filter(|&a| a < st.list.visible.len())
+                    .unwrap_or(row);
                 let (a, b) = (anchor.min(row), anchor.max(row));
-                let range: Vec<Uuid> = st.visible[a..=b]
+                let range: Vec<Uuid> = st.list.visible[a..=b]
                     .iter()
-                    .map(|&i| st.stories[i].uuid)
+                    .map(|&i| st.list.stories[i].uuid)
                     .collect();
-                st.selected = range.into_iter().collect();
+                st.list.selected = range.into_iter().collect();
             } else {
-                let uuid = st.stories[st.visible[row]].uuid;
-                st.selected = HashSet::from([uuid]);
-                st.anchor = Some(row);
+                let uuid = st.list.stories[st.list.visible[row]].uuid;
+                st.list.selected = HashSet::from([uuid]);
+                st.list.anchor = Some(row);
             }
-            st.current = Some(row);
+            st.list.current = Some(row);
             row
         };
         self.selection_changed();
@@ -202,20 +236,22 @@ impl App {
     /// Selected stories (UUID strings), in display order.
     pub(super) fn selected_uuids(&self) -> Vec<String> {
         let st = self.state.borrow();
-        st.visible
+        st.list
+            .visible
             .iter()
-            .map(|&i| &st.stories[i])
-            .filter(|s| st.selected.contains(&s.uuid))
+            .map(|&i| &st.list.stories[i])
+            .filter(|s| st.list.selected.contains(&s.uuid))
             .map(|s| s.str_uuid.clone())
             .collect()
     }
 
     pub(super) fn selected_ids(&self) -> Vec<Uuid> {
         let st = self.state.borrow();
-        st.visible
+        st.list
+            .visible
             .iter()
-            .map(|&i| st.stories[i].uuid)
-            .filter(|u| st.selected.contains(u))
+            .map(|&i| st.list.stories[i].uuid)
+            .filter(|u| st.list.selected.contains(u))
             .collect()
     }
 
@@ -232,8 +268,8 @@ impl App {
             can_add_mp3,
         ) = {
             let st = self.state.borrow();
-            for (row, &i) in st.visible.iter().enumerate() {
-                let selected = st.selected.contains(&st.stories[i].uuid);
+            for (row, &i) in st.list.visible.iter().enumerate() {
+                let selected = st.list.selected.contains(&st.list.stories[i].uuid);
                 if let Some(mut data) = self.rows.row_data(row)
                     && data.selected != selected
                 {
@@ -242,37 +278,40 @@ impl App {
                 }
             }
             let can_export = st
+                .list
                 .stories
                 .iter()
-                .any(|s| st.selected.contains(&s.uuid) && s.exportable);
-            let dev = st.dev.as_ref();
+                .any(|s| st.list.selected.contains(&s.uuid) && s.exportable);
+            let dev = st.devices.info.as_ref();
             let can_import = dev.is_some_and(|d| d.can_import);
             // a single album selected
             let can_add_to_album = can_import
-                && st.selected.len() == 1
+                && st.list.selected.len() == 1
                 && st
+                    .list
                     .stories
                     .iter()
-                    .any(|s| st.selected.contains(&s.uuid) && s.album);
+                    .any(|s| st.list.selected.contains(&s.uuid) && s.album);
             // not to the album of a podcast: its episodes only
             let can_add_mp3 = can_add_to_album
                 && !st
+                    .list
                     .stories
                     .iter()
-                    .any(|s| st.selected.contains(&s.uuid) && s.podcast);
+                    .any(|s| st.list.selected.contains(&s.uuid) && s.podcast);
             (
-                st.current.map(|c| c as i32).unwrap_or(-1),
-                !st.selected.is_empty(),
+                st.list.current.map(|c| c as i32).unwrap_or(-1),
+                !st.list.selected.is_empty(),
                 can_export,
                 can_import,
-                dev.is_some_and(|d| d.export_all) && !st.stories.is_empty(),
+                dev.is_some_and(|d| d.export_all) && !st.list.stories.is_empty(),
                 can_add_to_album,
                 can_add_mp3,
             )
         };
         ui.set_current_row(current);
         ui.set_has_selection(has_selection);
-        ui.set_selected_count(self.state.borrow().selected.len() as i32);
+        ui.set_selected_count(self.state.borrow().list.selected.len() as i32);
         ui.set_can_export(can_export);
         ui.set_can_import(can_import);
         ui.set_can_export_all(can_export_all);
@@ -286,10 +325,11 @@ impl App {
         let ui = self.ui();
         let single = {
             let st = self.state.borrow();
-            if st.selected.len() == 1 && ui.get_show_details() {
-                st.stories
+            if st.list.selected.len() == 1 && ui.get_show_details() {
+                st.list
+                    .stories
                     .iter()
-                    .find(|s| st.selected.contains(&s.uuid))
+                    .find(|s| st.list.selected.contains(&s.uuid))
                     .map(|s| (s.uuid, s.hidden))
             } else {
                 None
@@ -297,21 +337,21 @@ impl App {
         };
         let Some((uuid, hidden)) = single else {
             ui.set_details_visible(false);
-            self.state.borrow_mut().details_uuid = None;
+            self.state.borrow_mut().list.details_uuid = None;
             self.album_hide();
             return;
         };
         ui.set_details_dimmed(hidden);
-        if self.state.borrow().details_uuid == Some(uuid) {
+        if self.state.borrow().list.details_uuid == Some(uuid) {
             return;
         }
-        self.state.borrow_mut().details_uuid = Some(uuid);
+        self.state.borrow_mut().list.details_uuid = Some(uuid);
         self.album_load(uuid);
         worker::fetch_details(uuid, sink());
     }
 
     pub(super) fn details_ready(&self, uuid: Uuid, desc: String, picture: Option<Vec<u8>>) {
-        if self.state.borrow().details_uuid != Some(uuid) {
+        if self.state.borrow().list.details_uuid != Some(uuid) {
             return;
         }
         let ui = self.ui();
@@ -339,13 +379,14 @@ impl App {
         // keep the first moved story in view
         let row = {
             let st = self.state.borrow();
-            st.visible
+            st.list
+                .visible
                 .iter()
-                .position(|&i| ids.contains(&st.stories[i].uuid))
+                .position(|&i| ids.contains(&st.list.stories[i].uuid))
         };
         if let Some(row) = row {
-            self.state.borrow_mut().current = Some(row);
-            self.state.borrow_mut().anchor = Some(row);
+            self.state.borrow_mut().list.current = Some(row);
+            self.state.borrow_mut().list.anchor = Some(row);
             self.selection_changed();
             self.ui().invoke_ensure_visible(row as i32);
         }
@@ -357,14 +398,15 @@ impl App {
         let ids = self.selected_ids();
         let before = {
             let st = self.state.borrow();
-            match st.visible.get(gap) {
-                Some(&i) => Some(st.stories[i].uuid),
+            match st.list.visible.get(gap) {
+                Some(&i) => Some(st.list.stories[i].uuid),
                 // after the last row shown: before the story that follows it
                 // (the list may be filtered)
                 None => st
+                    .list
                     .visible
                     .last()
-                    .and_then(|&i| st.stories.get(i + 1))
+                    .and_then(|&i| st.list.stories.get(i + 1))
                     .map(|s| s.uuid),
             }
         };
@@ -374,14 +416,15 @@ impl App {
         self.device_op(|d, _| d.move_stories_before(&ids, before));
         let row = {
             let st = self.state.borrow();
-            st.visible
+            st.list
+                .visible
                 .iter()
-                .position(|&i| ids.contains(&st.stories[i].uuid))
+                .position(|&i| ids.contains(&st.list.stories[i].uuid))
         };
         if let Some(row) = row {
             let mut st = self.state.borrow_mut();
-            st.current = Some(row);
-            st.anchor = Some(row);
+            st.list.current = Some(row);
+            st.list.anchor = Some(row);
             drop(st);
             self.selection_changed();
         }
@@ -393,13 +436,13 @@ impl App {
         let needed = {
             let st = self.state.borrow();
             self.ui().get_show_size()
-                && st.device.is_some()
-                && st.worker.is_none()
-                && st.stories.iter().any(|s| s.size.is_none())
+                && st.devices.opened.is_some()
+                && st.task.worker.is_none()
+                && st.list.stories.iter().any(|s| s.size.is_none())
         };
         if needed {
             self.launch(Task::Size);
-            self.state.borrow_mut().sizing = true;
+            self.state.borrow_mut().task.sizing = true;
         }
     }
 }

@@ -20,7 +20,6 @@ use crate::i18n::{tr, trf};
 use crate::logfile;
 use crate::worker::{self, Event, GuiReporter, SharedDevice, Sink, StoryInfo, Task};
 use crate::{DialogKind, EpisodeRow, InfoRow, LogLine, MainWindow, StoryRow, Theme};
-use podcast::PodcastView;
 
 mod actions;
 mod album;
@@ -31,7 +30,6 @@ mod progress;
 mod stories;
 
 pub(crate) use devices::DevInfo;
-use progress::*;
 use stories::*;
 
 pub const APP_VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
@@ -60,48 +58,22 @@ pub fn log_from_facade(level: Level, message: &str) {
     }
 }
 
+/// State of the window, by domain (each one defined with the code using it).
 #[derive(Default)]
 struct State {
-    devices: Vec<PathBuf>,
-    /// names of `devices` in the selector
-    device_labels: Vec<String>,
-    /// id of the last device search / opening: older results are ignored
-    scan: u32,
-    device: Option<SharedDevice>,
-    dev: Option<DevInfo>,
-    stories: Vec<StoryInfo>,
-    /// indexes in `stories` of the displayed rows
-    visible: Vec<usize>,
-    selected: HashSet<Uuid>,
-    anchor: Option<usize>,
-    current: Option<usize>,
-    details_uuid: Option<Uuid>,
-    worker: Option<(std::thread::JoinHandle<()>, Context)>,
-    pending_drop: Vec<PathBuf>,
-    fw: Option<(lunii_core::firmware::AuthToken, Vec<String>)>,
-    /// (level 0..3, formatted line)
-    log: Vec<(i32, String)>,
-    /// highest level logged while the log panel was hidden
-    log_alert: i32,
-    eta: Option<Eta>,
-    /// the running task computes the sizes
-    sizing: bool,
-    /// durations measured on the device (stories without one in the database)
-    durations: HashMap<Uuid, Option<u32>>,
-    /// a measure of durations is running
-    measuring: bool,
-    /// incremented when the measures are forgotten: those still running
-    /// (stories maybe changed or moved meanwhile) are ignored
-    durations_generation: u32,
-    /// podcast of the selection dialog, and its selected episodes
-    podcast: Option<(Box<PodcastView>, HashSet<usize>)>,
-    /// the removal confirmed is the one of podcast episodes, not of the
-    /// selected stories
-    confirm_podcast: bool,
+    devices: devices::Devices,
+    list: stories::List,
+    durations: stories::Durations,
+    task: progress::TaskState,
+    log: log_panel::Log,
     /// followed podcasts and their feeds (Podcasts view)
     podcasts: podcast::Podcasts,
     /// album shown in the details panel, with its pending changes
     album: Option<album::AlbumEdit>,
+    /// files dropped on the window, imported once the drop is over
+    pending_drop: Vec<PathBuf>,
+    /// firmware download: the login token and the files to download
+    fw: Option<(lunii_core::firmware::AuthToken, Vec<String>)>,
 }
 
 pub struct App {
@@ -254,7 +226,7 @@ impl App {
             }
         });
         ui.on_filter_edited(with(|app| {
-            app.state.borrow_mut().selected.clear();
+            app.state.borrow_mut().list.selected.clear();
             app.rebuild_rows();
         }));
         let w = Rc::downgrade(self);
@@ -278,8 +250,13 @@ impl App {
         ui.on_select_all(with(|app| {
             {
                 let mut st = app.state.borrow_mut();
-                let all: Vec<Uuid> = st.visible.iter().map(|&i| st.stories[i].uuid).collect();
-                st.selected = all.into_iter().collect();
+                let all: Vec<Uuid> = st
+                    .list
+                    .visible
+                    .iter()
+                    .map(|&i| st.list.stories[i].uuid)
+                    .collect();
+                st.list.selected = all.into_iter().collect();
             }
             app.selection_changed();
         }));
@@ -293,12 +270,12 @@ impl App {
         ui.on_device_info_clicked(with(|app| app.show_device_info()));
         ui.on_device_info_copy(with(|app| app.copy_device_info()));
         ui.on_device_open_folder(with(|app| {
-            if let Some(dev) = app.state.borrow().dev.as_ref() {
+            if let Some(dev) = app.state.borrow().devices.info.as_ref() {
                 let _ = open::that(&dev.mount);
             }
         }));
         ui.on_confirm_remove_accepted(with(|app| {
-            if std::mem::take(&mut app.state.borrow_mut().confirm_podcast) {
+            if std::mem::take(&mut app.state.borrow_mut().podcasts.confirm_removal) {
                 app.podcast_import();
                 return;
             }
@@ -377,7 +354,7 @@ impl App {
         // log panel
         ui.on_log_filter_changed(with(|app| app.rebuild_log()));
         ui.on_log_clear(with(|app| {
-            app.state.borrow_mut().log.clear();
+            app.state.borrow_mut().log.lines.clear();
             app.rebuild_log();
         }));
         ui.on_log_copy(with(|app| app.copy_log()));
@@ -389,7 +366,7 @@ impl App {
         let w = Rc::downgrade(self);
         ui.window().on_close_requested(move || {
             if let Some(app) = w.upgrade()
-                && let Some((_, ctx)) = app.state.borrow().worker.as_ref()
+                && let Some((_, ctx)) = app.state.borrow().task.worker.as_ref()
             {
                 ctx.request_abort();
             }
@@ -410,7 +387,8 @@ impl App {
             };
             match event {
                 WindowEvent::HoveredFile(_) => {
-                    let accept = app.state.borrow().device.is_some() && !app.ui().get_busy();
+                    let accept =
+                        app.state.borrow().devices.opened.is_some() && !app.ui().get_busy();
                     app.ui().set_drop_hover(accept);
                 }
                 WindowEvent::HoveredFileCancelled => app.ui().set_drop_hover(false),
@@ -508,11 +486,14 @@ impl App {
                 // only its row changes (the list keeps its scrolling)
                 let row = {
                     let mut st = self.state.borrow_mut();
-                    if generation != st.durations_generation {
+                    if generation != st.durations.generation {
                         return;
                     }
-                    st.durations.insert(uuid, duration);
-                    st.visible.iter().position(|&i| st.stories[i].uuid == uuid)
+                    st.durations.measured.insert(uuid, duration);
+                    st.list
+                        .visible
+                        .iter()
+                        .position(|&i| st.list.stories[i].uuid == uuid)
                 };
                 if let (Some(row), Some(secs)) = (row, duration)
                     && let Some(mut data) = self.rows.row_data(row)
@@ -523,26 +504,26 @@ impl App {
                 }
             }
             Event::DurationsDone => {
-                self.state.borrow_mut().measuring = false;
+                self.state.borrow_mut().durations.measuring = false;
                 self.ensure_durations();
             }
             Event::DeviceStories(device, stories) => {
                 // another device may have been opened meanwhile
-                let current = self.state.borrow().device.clone();
+                let current = self.state.borrow().devices.opened.clone();
                 if current.is_some_and(|d| Arc::ptr_eq(&d, &device)) {
-                    self.state.borrow_mut().stories = stories;
+                    self.state.borrow_mut().list.stories = stories;
                     self.rebuild_rows();
                 }
             }
             Event::Stories(stories) => {
-                self.state.borrow_mut().stories = stories;
+                self.state.borrow_mut().list.stories = stories;
                 self.rebuild_rows();
             }
             Event::DbLoaded(ok) => {
                 if !ok {
                     self.log(Level::Warn, "Failed to fetch official DB");
                 }
-                let device = self.state.borrow().device.clone();
+                let device = self.state.borrow().devices.opened.clone();
                 // the names may have changed: list read again in the background
                 // (busy: the task refreshes the list at its end)
                 if let (Some(dev), false) = (device, ui.get_busy()) {
@@ -571,12 +552,12 @@ impl App {
             Event::Finished => {
                 self.stop_eta();
                 // the album shown may have changed
-                self.state.borrow_mut().details_uuid = None;
-                if let Some((handle, _)) = self.state.borrow_mut().worker.take() {
+                self.state.borrow_mut().list.details_uuid = None;
+                if let Some((handle, _)) = self.state.borrow_mut().task.worker.take() {
                     let _ = handle.join();
                 }
                 // a failed size computation is not retried in a loop
-                let sized = std::mem::take(&mut self.state.borrow_mut().sizing);
+                let sized = std::mem::take(&mut self.state.borrow_mut().task.sizing);
                 ui.set_busy(false);
                 ui.set_total_visible(false);
                 ui.set_story_visible(false);
@@ -617,7 +598,7 @@ impl App {
 
     /// Joins the running task (application exit).
     pub fn shutdown(&self) {
-        let worker = self.state.borrow_mut().worker.take();
+        let worker = self.state.borrow_mut().task.worker.take();
         if let Some((handle, ctx)) = worker {
             ctx.request_abort();
             let _ = handle.join();

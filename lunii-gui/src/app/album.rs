@@ -108,7 +108,7 @@ impl App {
     /// (`false` otherwise, or when the device is busy).
     pub(super) fn album_load(&self, uuid: Uuid) -> bool {
         let found = (|| {
-            let dev = self.state.borrow().device.clone()?;
+            let dev = self.state.borrow().devices.opened.clone()?;
             let dev = Self::lock_device(&dev).ok()?;
             let story = dev.stories().get(&uuid.to_string())?.clone();
             let info = dev.album_info(&story)?;

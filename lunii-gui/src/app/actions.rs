@@ -31,7 +31,7 @@ impl App {
                 self.launch(Task::RefreshDb);
             }
             Action::Exit => {
-                if let Some((_, ctx)) = self.state.borrow().worker.as_ref() {
+                if let Some((_, ctx)) = self.state.borrow().task.worker.as_ref() {
                     ctx.request_abort();
                 }
                 let _ = slint::quit_event_loop();
@@ -98,7 +98,7 @@ impl App {
                 self.import(albums);
             }
             Action::AddToAlbum => {
-                let Some(uuid) = self.state.borrow().selected.iter().next().copied() else {
+                let Some(uuid) = self.state.borrow().list.selected.iter().next().copied() else {
                     return;
                 };
                 let Some(files) = rfd::FileDialog::new()
@@ -118,7 +118,7 @@ impl App {
             // the tracks are edited in the details panel
             Action::EditAlbum => {
                 ui.set_show_details(true);
-                self.state.borrow_mut().details_uuid = None;
+                self.state.borrow_mut().list.details_uuid = None;
                 self.update_details();
             }
             Action::Export | Action::ExportAll => {
@@ -126,9 +126,10 @@ impl App {
                     self.selected_uuids()
                 } else {
                     let st = self.state.borrow();
-                    st.visible
+                    st.list
+                        .visible
                         .iter()
-                        .map(|&i| st.stories[i].str_uuid.clone())
+                        .map(|&i| st.list.stories[i].str_uuid.clone())
                         .collect()
                 };
                 if uuids.is_empty() {
@@ -144,10 +145,11 @@ impl App {
             Action::Remove => {
                 let names: Vec<String> = {
                     let st = self.state.borrow();
-                    st.visible
+                    st.list
+                        .visible
                         .iter()
-                        .map(|&i| &st.stories[i])
-                        .filter(|s| st.selected.contains(&s.uuid))
+                        .map(|&i| &st.list.stories[i])
+                        .filter(|s| st.list.selected.contains(&s.uuid))
                         .map(|s| s.name.clone())
                         .collect()
                 };
@@ -163,7 +165,7 @@ impl App {
                     message += &tr("\n(and too many others)\n");
                 }
                 message += &tr("\nDo you want to proceed ?");
-                self.state.borrow_mut().confirm_podcast = false;
+                self.state.borrow_mut().podcasts.confirm_removal = false;
                 ui.set_confirm_message(message.into());
                 ui.set_dialog(DialogKind::ConfirmRemove);
             }
@@ -181,7 +183,7 @@ impl App {
                 self.ensure_durations();
             }
             Action::ShowDetails => {
-                self.state.borrow_mut().details_uuid = None;
+                self.state.borrow_mut().list.details_uuid = None;
                 self.update_details();
             }
             Action::ShowLog => {
@@ -223,7 +225,7 @@ impl App {
 
     pub(super) fn files_dropped(&self) {
         let files = std::mem::take(&mut self.state.borrow_mut().pending_drop);
-        let (extensions, can_import) = match self.state.borrow().dev.as_ref() {
+        let (extensions, can_import) = match self.state.borrow().devices.info.as_ref() {
             Some(d) => (d.extensions, d.can_import),
             None => return,
         };
@@ -250,7 +252,8 @@ impl App {
         let Some(config) = self
             .state
             .borrow()
-            .dev
+            .devices
+            .info
             .as_ref()
             .and_then(|d| d.config.clone())
         else {
@@ -267,7 +270,7 @@ impl App {
 
     pub(super) fn save_night_mode(&self) {
         let ui = self.ui();
-        let Some(dev) = self.state.borrow().device.clone() else {
+        let Some(dev) = self.state.borrow().devices.opened.clone() else {
             return;
         };
         let result = {
@@ -290,7 +293,7 @@ impl App {
         match result {
             Ok(config) => {
                 ui.set_nm_active(config[LUNII_CFGPOS_NM_ENABLED] == 1);
-                if let Some(d) = self.state.borrow_mut().dev.as_mut() {
+                if let Some(d) = self.state.borrow_mut().devices.info.as_mut() {
                     d.config = Some(config);
                 }
             }
@@ -306,7 +309,8 @@ impl App {
         let Some((version, snu)) = self
             .state
             .borrow()
-            .dev
+            .devices
+            .info
             .as_ref()
             .map(|d| (d.version, d.snu.clone()))
         else {
@@ -331,7 +335,8 @@ impl App {
         let Some((version, snu)) = self
             .state
             .borrow()
-            .dev
+            .devices
+            .info
             .as_ref()
             .map(|d| (d.version, d.snu.clone()))
         else {

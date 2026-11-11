@@ -2,6 +2,19 @@
 
 use super::*;
 
+/// The devices found, and the one opened.
+#[derive(Default)]
+pub(super) struct Devices {
+    pub(super) paths: Vec<PathBuf>,
+    /// names of `paths` in the selector
+    pub(super) labels: Vec<String>,
+    /// id of the last device search / opening: older results are ignored
+    pub(super) scan: u32,
+    pub(super) opened: Option<SharedDevice>,
+    /// details of `opened`
+    pub(super) info: Option<DevInfo>,
+}
+
 /// Cached details of the opened device.
 pub(crate) struct DevInfo {
     pub(super) mount: PathBuf,
@@ -92,7 +105,7 @@ impl App {
     pub(super) fn update_device_status(&self) {
         let ui = self.ui();
         let st = self.state.borrow();
-        let Some(dev) = st.dev.as_ref() else {
+        let Some(dev) = st.devices.info.as_ref() else {
             ui.set_snu("".into());
             return;
         };
@@ -101,7 +114,7 @@ impl App {
         let free = lunii_core::format::megabytes(free_space(&dev.mount).unwrap_or(0));
         ui.set_free_space(format!("{free} MB").into());
         ui.set_low_space(free < 500);
-        let count = st.visible.len();
+        let count = st.list.visible.len();
         ui.set_story_count(if count > 0 {
             format!("{count} {}", tr("stories")).into()
         } else {
@@ -112,10 +125,11 @@ impl App {
     /// Lines of the device information dialog, and the raw technical details.
     pub(super) fn device_info(&self) -> Option<(Vec<(String, String)>, String)> {
         let st = self.state.borrow();
-        let dev = st.dev.as_ref()?;
+        let dev = st.devices.info.as_ref()?;
         // fresh details (story count...), the cached ones while a task runs
         let details = st
-            .device
+            .devices
+            .opened
             .as_ref()
             .and_then(|d| Self::lock_device(d).ok().map(|d| d.info()))
             .unwrap_or_else(|| dev.info.clone());
@@ -125,14 +139,14 @@ impl App {
             (Ok(free), Err(_)) => format!("{} MB", mb(free)),
             _ => "?".into(),
         };
-        let hidden = st.stories.iter().filter(|s| s.hidden).count();
+        let hidden = st.list.stories.iter().filter(|s| s.hidden).count();
         let stories = if hidden > 0 {
             trf(
                 "{} ({} hidden)",
-                &[&st.stories.len().to_string(), &hidden.to_string()],
+                &[&st.list.stories.len().to_string(), &hidden.to_string()],
             )
         } else {
-            st.stories.len().to_string()
+            st.list.stories.len().to_string()
         };
         let import = if dev.can_import {
             tr("Yes")
@@ -193,7 +207,8 @@ impl App {
         let text = self
             .state
             .borrow()
-            .device_labels
+            .devices
+            .labels
             .get(index.max(0) as usize)
             .filter(|_| index >= 0)
             .cloned();
@@ -214,15 +229,15 @@ impl App {
                 .collect::<Vec<_>>(),
         );
         let mut st = self.state.borrow_mut();
-        st.devices = devices;
-        st.device_labels = labels;
+        st.devices.paths = devices;
+        st.devices.labels = labels;
     }
 
     /// A new device search / opening: its id, the previous ones are outdated.
     pub(super) fn next_scan(&self) -> u32 {
         let mut st = self.state.borrow_mut();
-        st.scan = st.scan.wrapping_add(1);
-        st.scan
+        st.devices.scan = st.devices.scan.wrapping_add(1);
+        st.devices.scan
     }
 
     /// Searches the devices in the background (slow drives, network mounts:
@@ -252,7 +267,7 @@ impl App {
     }
 
     pub(super) fn devices_found(&self, scan: u32, devices: Vec<PathBuf>, labels: Vec<String>) {
-        if scan != self.state.borrow().scan {
+        if scan != self.state.borrow().devices.scan {
             return;
         }
         let ui = self.ui();
@@ -275,13 +290,13 @@ impl App {
     pub(super) fn close_device(&self) {
         {
             let mut st = self.state.borrow_mut();
-            st.device = None;
-            st.dev = None;
-            st.stories.clear();
-            st.selected.clear();
-            st.anchor = None;
-            st.current = None;
-            st.details_uuid = None;
+            st.devices.opened = None;
+            st.devices.info = None;
+            st.list.stories.clear();
+            st.list.selected.clear();
+            st.list.anchor = None;
+            st.list.current = None;
+            st.list.details_uuid = None;
         }
         let ui = self.ui();
         ui.set_device_ready(false);
@@ -292,7 +307,14 @@ impl App {
     }
 
     pub(crate) fn select_device(&self, index: i32) {
-        let Some(path) = self.state.borrow().devices.get(index as usize).cloned() else {
+        let Some(path) = self
+            .state
+            .borrow()
+            .devices
+            .paths
+            .get(index as usize)
+            .cloned()
+        else {
             return;
         };
         self.close_device();
@@ -303,7 +325,7 @@ impl App {
                 Level::Error,
                 &format!("{} is not a recognized device.", path.display()),
             );
-            let mut devices = self.state.borrow().devices.clone();
+            let mut devices = self.state.borrow().devices.paths.clone();
             devices.remove(index as usize);
             self.set_devices(devices);
             self.set_device_index(-1);
@@ -315,7 +337,8 @@ impl App {
         let label = self
             .state
             .borrow()
-            .device_labels
+            .devices
+            .labels
             .get(index as usize)
             .cloned()
             .unwrap_or_default();
@@ -343,7 +366,7 @@ impl App {
         scan: u32,
         opened: Result<Box<worker::OpenedDevice>, String>,
     ) {
-        if scan != self.state.borrow().scan {
+        if scan != self.state.borrow().devices.scan {
             return;
         }
         let ui = self.ui();
@@ -368,9 +391,9 @@ impl App {
 
         {
             let mut st = self.state.borrow_mut();
-            st.device = Some(Arc::new(Mutex::new(dev)));
-            st.dev = Some(info);
-            st.stories = stories;
+            st.devices.opened = Some(Arc::new(Mutex::new(dev)));
+            st.devices.info = Some(info);
+            st.list.stories = stories;
         }
         self.forget_durations();
 
@@ -391,7 +414,14 @@ impl App {
         }
         // a Lunii v3 without story keys can't import: show why
         if version == DeviceVersion::LuniiV3
-            && !self.state.borrow().dev.as_ref().unwrap().can_import
+            && !self
+                .state
+                .borrow()
+                .devices
+                .info
+                .as_ref()
+                .unwrap()
+                .can_import
         {
             self.show_log();
         }
@@ -415,7 +445,7 @@ impl App {
         &self,
         op: impl FnOnce(&mut dyn Device, &Context) -> anyhow::Result<()>,
     ) -> bool {
-        let Some(dev) = self.state.borrow().device.clone() else {
+        let Some(dev) = self.state.borrow().devices.opened.clone() else {
             return false;
         };
         let ctx = self.ctx();
@@ -432,6 +462,7 @@ impl App {
             let mut known: HashMap<Uuid, StoryInfo> = self
                 .state
                 .borrow_mut()
+                .list
                 .stories
                 .drain(..)
                 .map(|s| (s.uuid, s))
@@ -450,9 +481,9 @@ impl App {
             let stories = reordered.unwrap_or_else(|| worker::snapshot(dev.as_ref()));
             (result, stories)
         };
-        self.state.borrow_mut().stories = stories;
+        self.state.borrow_mut().list.stories = stories;
         // a measure may have failed on a story moved meanwhile (hide)
-        if self.state.borrow().measuring {
+        if self.state.borrow().durations.measuring {
             self.forget_durations();
         }
         self.rebuild_rows();

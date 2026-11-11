@@ -8,6 +8,15 @@ use lunii_core::Level;
 use slint::Model;
 use std::time::Duration;
 
+/// Lines of the log panel.
+#[derive(Default)]
+pub(super) struct Log {
+    /// (level 0..3, formatted line)
+    pub(super) lines: Vec<(i32, String)>,
+    /// highest level logged while the panel was hidden
+    pub(super) alert: i32,
+}
+
 impl App {
     pub(super) fn min_log_level(&self) -> i32 {
         match self.ui().get_log_level_index() {
@@ -32,12 +41,13 @@ impl App {
             // progress lines replace each other
             let replace = st
                 .log
+                .lines
                 .last()
                 .is_some_and(|(_, l)| l.starts_with("[DEBUG] Progress"));
             if replace {
-                st.log.pop();
+                st.log.lines.pop();
             }
-            st.log.push((level, line.clone()));
+            st.log.lines.push((level, line.clone()));
             replace
         };
         // progress lines would flood the file
@@ -47,8 +57,8 @@ impl App {
         if level >= 2 && !self.ui().get_log_visible() {
             let alert = {
                 let mut st = self.state.borrow_mut();
-                st.log_alert = st.log_alert.max(level);
-                st.log_alert
+                st.log.alert = st.log.alert.max(level);
+                st.log.alert
             };
             self.ui().set_log_alert(alert);
         }
@@ -85,6 +95,7 @@ impl App {
             .state
             .borrow()
             .log
+            .lines
             .iter()
             .filter(|(level, text)| self.log_line_visible(*level, text))
             .map(|(level, text)| LogLine {
@@ -112,7 +123,7 @@ impl App {
     pub(crate) fn show_log(&self) {
         let ui = self.ui();
         ui.set_log_visible(true);
-        self.state.borrow_mut().log_alert = 0;
+        self.state.borrow_mut().log.alert = 0;
         ui.set_log_alert(0);
         self.scroll_log();
     }

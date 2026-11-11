@@ -40,6 +40,11 @@ pub(super) struct Podcasts {
     add: AddDialog,
     /// podcast being unfollowed, with its album or stories on the device
     unfollow: Option<(SavedPodcast, Vec<String>)>,
+    /// podcast of the selection dialog, and its selected episodes
+    pub(super) selection: Option<(Box<PodcastView>, HashSet<usize>)>,
+    /// the removal confirmed is the one of podcast episodes, not of the
+    /// selected stories
+    pub(super) confirm_removal: bool,
 }
 
 /// "Add a podcast" dialog: a search (several results) or an address (one).
@@ -100,6 +105,7 @@ impl App {
     fn album_on_device(&self, uuid: &Uuid) -> bool {
         self.state
             .borrow()
+            .list
             .stories
             .iter()
             .any(|s| s.uuid == *uuid && s.album)
@@ -117,7 +123,7 @@ impl App {
     fn album_episodes(&self, podcast: &Podcast) -> (HashSet<String>, HashSet<String>) {
         let uuid = podcast.album_uuid();
         let info = (|| {
-            let dev = self.state.borrow().device.clone()?;
+            let dev = self.state.borrow().devices.opened.clone()?;
             let dev = Self::lock_device(&dev).ok()?;
             let story = dev.stories().get(&uuid.to_string())?.clone();
             dev.album_info(&story)
@@ -145,7 +151,7 @@ impl App {
     /// known yet: imported from another computer.
     pub(super) fn follow_device_podcasts(&self) {
         let found: Vec<(lunii_core::album::meta::PodcastSource, String)> = (|| {
-            let dev = self.state.borrow().device.clone()?;
+            let dev = self.state.borrow().devices.opened.clone()?;
             let dev = Self::lock_device(&dev).ok()?;
             Some(
                 dev.stories()
@@ -229,7 +235,7 @@ impl App {
             else {
                 drop(st);
                 ui.set_podcast_loading(false);
-                self.state.borrow_mut().podcast = None;
+                self.state.borrow_mut().podcasts.selection = None;
                 self.rebuild_podcast_rows();
                 return;
             };
@@ -240,19 +246,19 @@ impl App {
             None => {
                 ui.set_podcast_loading(true);
                 ui.set_podcast_header(entry.title.into());
-                self.state.borrow_mut().podcast = None;
+                self.state.borrow_mut().podcasts.selection = None;
             }
             Some(Err(e)) => {
                 ui.set_podcast_loading(false);
                 ui.set_podcast_header(format!("🛑 {} : {e}", entry.title).into());
-                self.state.borrow_mut().podcast = None;
+                self.state.borrow_mut().podcasts.selection = None;
             }
             Some(Ok(p)) => {
                 ui.set_podcast_loading(false);
                 let mut view = self.podcast_view(p);
                 let mut st = self.state.borrow_mut();
                 // same podcast: the selection is kept
-                let selected = match st.podcast.take() {
+                let selected = match st.podcasts.selection.take() {
                     Some((old, selected)) if old.podcast.feed_url == view.podcast.feed_url => {
                         view.removed = old.removed;
                         selected
@@ -263,7 +269,7 @@ impl App {
                         HashSet::new()
                     }
                 };
-                st.podcast = Some((Box::new(view), selected));
+                st.podcasts.selection = Some((Box::new(view), selected));
                 drop(st);
                 self.podcast_mode_changed();
                 return;
@@ -278,7 +284,7 @@ impl App {
         let on_device = self.album_on_device(&uuid);
         let stories = {
             let st = self.state.borrow();
-            let on_device: HashSet<Uuid> = st.stories.iter().map(|s| s.uuid).collect();
+            let on_device: HashSet<Uuid> = st.list.stories.iter().map(|s| s.uuid).collect();
             podcast
                 .episodes
                 .iter()
@@ -627,7 +633,8 @@ impl App {
             Some(Some(Ok(p))) => p.episodes.iter().map(|e| p.episode_uuid(e)).collect(),
             _ => HashSet::new(),
         };
-        st.stories
+        st.list
+            .stories
             .iter()
             .filter(|s| s.uuid == entry.album || episodes.contains(&s.uuid))
             .map(|s| (s.str_uuid.clone(), s.name.clone()))
@@ -657,7 +664,7 @@ impl App {
     pub(super) fn update_podcast_header(&self) {
         let ui = self.ui();
         let st = self.state.borrow();
-        let Some((view, _)) = st.podcast.as_ref() else {
+        let Some((view, _)) = st.podcasts.selection.as_ref() else {
             return;
         };
         let p = &view.podcast;
@@ -701,7 +708,7 @@ impl App {
     }
 
     pub(super) fn podcast_mode_changed(&self) {
-        if let Some((view, selected)) = self.state.borrow_mut().podcast.as_mut() {
+        if let Some((view, selected)) = self.state.borrow_mut().podcasts.selection.as_mut() {
             let present = self.podcast_present(view);
             let episodes = &view.podcast.episodes;
             selected.retain(|&i| !present.contains(&episodes[i].guid));
@@ -723,7 +730,7 @@ impl App {
         let ui = self.ui();
         let filter = ui.get_podcast_filter().to_lowercase();
         let st = self.state.borrow();
-        let Some((view, _)) = st.podcast.as_ref() else {
+        let Some((view, _)) = st.podcasts.selection.as_ref() else {
             return Vec::new();
         };
         let episodes = &view.podcast.episodes;
@@ -755,7 +762,7 @@ impl App {
         let visible = self.podcast_visible();
         let (rows, count) = {
             let st = self.state.borrow();
-            match st.podcast.as_ref() {
+            match st.podcasts.selection.as_ref() {
                 Some((view, selected)) => {
                     let present = self.podcast_present(view);
                     (
@@ -793,7 +800,7 @@ impl App {
     /// An episode checked or unchecked: to import if it is not on the
     /// device, to remove (unchecked) if it is.
     pub(super) fn podcast_toggle(&self, index: usize) {
-        if let Some((view, selected)) = self.state.borrow_mut().podcast.as_mut()
+        if let Some((view, selected)) = self.state.borrow_mut().podcasts.selection.as_mut()
             && let Some(e) = view.podcast.episodes.get(index)
         {
             let set = if !self.podcast_present(view).contains(&e.guid) {
@@ -813,7 +820,7 @@ impl App {
     /// Selects (or unselects) the displayed episodes not imported yet.
     pub(super) fn podcast_select_all(&self, all: bool) {
         let visible = self.podcast_visible();
-        if let Some((view, selected)) = self.state.borrow_mut().podcast.as_mut() {
+        if let Some((view, selected)) = self.state.borrow_mut().podcasts.selection.as_mut() {
             let present = self.podcast_present(view);
             for i in visible {
                 if present.contains(&view.podcast.episodes[i].guid) {
@@ -834,7 +841,7 @@ impl App {
     pub(super) fn podcast_apply(&self) {
         let titles: Vec<String> = {
             let st = self.state.borrow();
-            let Some((view, _)) = st.podcast.as_ref() else {
+            let Some((view, _)) = st.podcasts.selection.as_ref() else {
                 return;
             };
             let mut indexes: Vec<usize> = view.removed.iter().copied().collect();
@@ -860,32 +867,33 @@ impl App {
             message += &tr("\n(and too many others)\n");
         }
         message += &tr("\nDo you want to proceed ?");
-        self.state.borrow_mut().confirm_podcast = true;
+        self.state.borrow_mut().podcasts.confirm_removal = true;
         let ui = self.ui();
         ui.set_confirm_message(message.into());
         ui.set_dialog(DialogKind::ConfirmRemove);
     }
 
     pub(super) fn podcast_import(&self) {
-        let Some((podcast, episodes, remove)) =
-            self.state
-                .borrow_mut()
-                .podcast
-                .as_mut()
-                .map(|(view, selected)| {
-                    // chronological order in the album
-                    let pick = |set: &mut HashSet<usize>| {
-                        let mut indexes: Vec<usize> = set.drain().collect();
-                        indexes.sort();
-                        indexes
-                            .iter()
-                            .map(|&i| view.podcast.episodes[i].clone())
-                            .collect::<Vec<_>>()
-                    };
-                    let episodes = pick(selected);
-                    let remove = pick(&mut view.removed);
-                    (view.podcast.clone(), episodes, remove)
-                })
+        let Some((podcast, episodes, remove)) = self
+            .state
+            .borrow_mut()
+            .podcasts
+            .selection
+            .as_mut()
+            .map(|(view, selected)| {
+                // chronological order in the album
+                let pick = |set: &mut HashSet<usize>| {
+                    let mut indexes: Vec<usize> = set.drain().collect();
+                    indexes.sort();
+                    indexes
+                        .iter()
+                        .map(|&i| view.podcast.episodes[i].clone())
+                        .collect::<Vec<_>>()
+                };
+                let episodes = pick(selected);
+                let remove = pick(&mut view.removed);
+                (view.podcast.clone(), episodes, remove)
+            })
         else {
             return;
         };

@@ -2,6 +2,15 @@
 
 use super::*;
 
+/// The running task.
+#[derive(Default)]
+pub(super) struct TaskState {
+    pub(super) worker: Option<(std::thread::JoinHandle<()>, Context)>,
+    pub(super) eta: Option<Eta>,
+    /// the task computes the sizes
+    pub(super) sizing: bool,
+}
+
 /// Remaining time estimation of an import, from the bytes written to the device.
 pub(super) struct Eta {
     start: Instant,
@@ -63,16 +72,16 @@ pub(super) fn format_eta(d: Duration) -> String {
 
 impl App {
     pub(super) fn launch(&self, task: Task) {
-        if self.state.borrow().worker.is_some() {
+        if self.state.borrow().task.worker.is_some() {
             return;
         }
         let ctx = self.ctx();
-        let device = self.state.borrow().device.clone();
+        let device = self.state.borrow().devices.opened.clone();
         let audio = lunii_core::convert::audio::AudioOptions {
             normalize_volume: self.ui().get_normalize_volume(),
         };
         let handle = worker::spawn(task, device, audio, ctx.clone(), sink());
-        self.state.borrow_mut().worker = Some((handle, ctx));
+        self.state.borrow_mut().task.worker = Some((handle, ctx));
         let ui = self.ui();
         ui.set_busy(true);
         ui.set_abort_visible(true);
@@ -82,6 +91,7 @@ impl App {
         let Some(base) = self
             .state
             .borrow()
+            .task
             .worker
             .as_ref()
             .map(|(_, c)| c.progress())
@@ -91,7 +101,7 @@ impl App {
         if total == 0 {
             return;
         }
-        self.state.borrow_mut().eta = Some(Eta {
+        self.state.borrow_mut().task.eta = Some(Eta {
             start: Instant::now(),
             total,
             base,
@@ -114,6 +124,7 @@ impl App {
         let Some(written) = self
             .state
             .borrow()
+            .task
             .worker
             .as_ref()
             .map(|(_, c)| c.progress())
@@ -122,7 +133,7 @@ impl App {
         };
         let text = {
             let mut st = self.state.borrow_mut();
-            let Some(eta) = st.eta.as_mut() else {
+            let Some(eta) = st.task.eta.as_mut() else {
                 return;
             };
             let done = written.saturating_sub(eta.base);
@@ -141,12 +152,12 @@ impl App {
 
     pub(super) fn stop_eta(&self) {
         self.eta_timer.stop();
-        self.state.borrow_mut().eta = None;
+        self.state.borrow_mut().task.eta = None;
         self.ui().set_eta_text("".into());
     }
 
     pub(super) fn abort(&self) {
-        if let Some((_, ctx)) = self.state.borrow().worker.as_ref() {
+        if let Some((_, ctx)) = self.state.borrow().task.worker.as_ref() {
             ctx.request_abort();
         } else {
             return;
