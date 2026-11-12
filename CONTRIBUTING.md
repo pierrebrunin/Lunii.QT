@@ -171,6 +171,12 @@ packaging/macos/package.sh v4.0.0 dist                      # macOS, après les 
 3. Relire la release en brouillon sur GitHub (paquets, notes), puis la publier.
    L'application signale la nouvelle version à ses utilisateurs.
 
+**Version beta :** même démarche avec une version semver de pré-version
+(`4.0.0-beta.1`, `4.0.0-rc.1`), dans `Cargo.toml` comme dans le tag
+(`v4.0.0-beta.1`). La release est marquée « pré-version » : elle n'est pas
+proposée aux utilisateurs des versions stables, et ceux de la beta seront
+prévenus de la version finale.
+
 ## Interface graphique
 
 ```bash

@@ -122,17 +122,35 @@ fn has_supported_ext(path: &Path, extensions: &[&str]) -> bool {
     extensions.iter().any(|ext| name.ends_with(ext))
 }
 
-/// `true` if `latest` is a newer release than `current` (alpha aware: `3.2.0a1`).
+/// `true` if `latest` is a newer release than `current`, pre-release aware:
+/// `4.0.0-beta.1` (semver) or `3.2.0a1` (older Python releases).
 pub fn is_newer(current: &str, latest: &str) -> bool {
-    fn parse(v: &str) -> (Vec<u32>, Option<u32>) {
+    /// Version numbers and pre-release (alpha < beta < rc, then its number).
+    fn parse(v: &str) -> (Vec<u32>, Option<(u8, u32)>) {
         let v = v.trim_start_matches('v');
-        let (main, alpha) = match v.split_once('a') {
-            Some((m, a)) => (m, a.parse().ok()),
-            None => (v, None),
+        let (main, pre) = match v.split_once('-') {
+            Some((m, p)) => (m, Some(p)),
+            None => match v.find(|c: char| c.is_ascii_alphabetic()) {
+                Some(i) => (&v[..i], Some(&v[i..])),
+                None => (v, None),
+            },
         };
+        let pre = pre.map(|p| {
+            let label = p.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.');
+            let n = p[label.len()..]
+                .trim_start_matches('.')
+                .parse()
+                .unwrap_or(0);
+            let rank = match label {
+                "a" | "alpha" => 0,
+                "b" | "beta" => 1,
+                _ => 2,
+            };
+            (rank, n)
+        });
         (
             main.split('.').map(|p| p.parse().unwrap_or(0)).collect(),
-            alpha,
+            pre,
         )
     }
     let (c, ca) = parse(current);
@@ -140,7 +158,7 @@ pub fn is_newer(current: &str, latest: &str) -> bool {
     match l.cmp(&c) {
         std::cmp::Ordering::Greater => la.is_none() || ca.is_some(),
         std::cmp::Ordering::Less => false,
-        // same version: alpha -> stable, or newer alpha
+        // same version: pre-release -> stable, or newer pre-release
         std::cmp::Ordering::Equal => match (ca, la) {
             (Some(_), None) => true,
             (Some(a), Some(b)) => b > a,
@@ -653,5 +671,15 @@ mod tests {
         assert!(is_newer("v3.1.5a1", "v3.1.5"), "alpha vs stable");
         assert!(is_newer("v3.1.5a1", "v3.1.5a2"), "alpha vs alpha");
         assert!(!is_newer("v3.2.0", "v3.1.9"));
+        assert!(is_newer("v4.0.0-beta.1", "v4.0.0"), "beta vs stable");
+        assert!(is_newer("v4.0.0-beta.1", "v4.0.0-beta.2"), "beta vs beta");
+        assert!(is_newer("v4.0.0-beta.2", "v4.0.0-rc.1"), "beta vs rc");
+        assert!(is_newer("v4.0.0-alpha.3", "v4.0.0-beta.1"), "alpha vs beta");
+        assert!(!is_newer("v4.0.0-beta.1", "v3.1.4"), "beta vs older stable");
+        assert!(!is_newer("v4.0.0", "v4.0.1-beta.1"), "stable vs beta");
+        assert!(
+            is_newer("v4.0.0-beta.1", "v4.0.1-beta.1"),
+            "beta vs next beta"
+        );
     }
 }
