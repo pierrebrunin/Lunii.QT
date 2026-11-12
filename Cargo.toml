@@ -3,7 +3,7 @@ resolver = "3"
 members = ["lunii-core", "lunii-cli", "lunii-gui"]
 
 [workspace.package]
-version = "4.0.0"
+version = "4.0.0-beta.1"
 edition = "2024"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/o-daneel/Lunii.QT"
