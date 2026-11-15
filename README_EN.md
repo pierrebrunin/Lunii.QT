@@ -44,6 +44,7 @@ Forget about all previous .md and firmware recommendations.
     - [Add episodes to the device](#add-episodes-to-the-device)
     - [Remove episodes](#remove-episodes)
     - [Unfollow a podcast](#unfollow-a-podcast)
+    - [A few podcast ideas](#a-few-podcast-ideas)
   - [Shortcuts](#shortcuts)
   - [Features](#features)
   - [Audio Transcoding](#audio-transcoding)
@@ -148,6 +149,20 @@ In an album, only the episodes whose track is recognized can be removed; the oth
 Select it, then click **Unfollow**. If its album, or episodes imported as stories, are on the device, the application asks what to do with them:
 * **Keep on the device**: the podcast leaves the list, its episodes stay on the Lunii/Flam (but the album is no longer updated);
 * **Remove from the device**: the album or the stories of the podcast are removed too.
+
+### A few podcast ideas
+Podcasts for children (in French) that load well in the application. Paste their address in **Add a podcast**, or search for their name.
+
+France Inter series, the ones heard on its radio for children **Mon petit France Inter**:
+* [Une histoire et… Oli](https://www.radiofrance.fr/franceinter/podcasts/une-histoire-et-oli): bedtime stories read by their authors, for 5-7 year olds;
+* [Bestioles](https://www.radiofrance.fr/franceinter/podcasts/bestioles): animals, with the French Natural History Museum, for 5-8 year olds;
+* [Les Odyssées](https://www.radiofrance.fr/franceinter/podcasts/les-odyssees): the great adventures of History, for 7-12 year olds;
+* [Les P'tits Bateaux](https://www.radiofrance.fr/franceinter/podcasts/les-p-tits-bateaux): children's questions, answered by specialists;
+* [Les aventures du professeur Caillou](https://www.radiofrance.fr/franceinter/podcasts/les-aventures-du-professeur-caillou): two geologists discover the metals of everyday life.
+
+And also:
+* [Salut l'info !](https://www.radiofrance.fr/franceinfo/podcasts/salut-l-info) (franceinfo): the news explained to children;
+* [Encore une histoire](https://feeds.acast.com/public/shows/670d1795df4dd6f896655670): hundreds of stories for children.
 
 > Podcasts are usually meant for private listening: do not redistribute the files.
 

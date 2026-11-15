@@ -45,6 +45,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
     - [Ajouter des épisodes sur l'appareil](#ajouter-des-épisodes-sur-lappareil)
     - [Supprimer des épisodes](#supprimer-des-épisodes)
     - [Ne plus suivre un podcast](#ne-plus-suivre-un-podcast)
+    - [Quelques idées de podcasts](#quelques-idées-de-podcasts)
   - [Raccourcis clavier](#raccourcis-clavier)
   - [Fonctionnalités](#fonctionnalités)
   - [Transcodage audio](#transcodage-audio)
@@ -146,6 +147,20 @@ Dans un album, seuls les épisodes dont la piste est reconnue peuvent être reti
 Sélectionnez-le puis cliquez sur **Ne plus suivre**. Si son album, ou des épisodes importés comme histoires, sont sur l'appareil, l'application demande quoi en faire :
 * **Garder sur l'appareil** : le podcast disparaît de la liste, ses épisodes restent sur la Lunii/Flam (mais l'album n'est plus mis à jour) ;
 * **Supprimer de l'appareil** : l'album ou les histoires du podcast sont aussi supprimés.
+
+### Quelques idées de podcasts
+Des podcasts pour enfants qui se chargent bien dans l'application. Collez leur adresse dans **Ajouter un podcast**, ou cherchez leur nom.
+
+Séries de France Inter, celles qu'on retrouve sur la radio pour enfants **Mon petit France Inter** :
+* [Une histoire et… Oli](https://www.radiofrance.fr/franceinter/podcasts/une-histoire-et-oli) : des histoires du soir lues par leurs auteurs, pour les 5-7 ans ;
+* [Bestioles](https://www.radiofrance.fr/franceinter/podcasts/bestioles) : les animaux, avec le Muséum national d'histoire naturelle, pour les 5-8 ans ;
+* [Les Odyssées](https://www.radiofrance.fr/franceinter/podcasts/les-odyssees) : les grandes aventures de l'Histoire, pour les 7-12 ans ;
+* [Les P'tits Bateaux](https://www.radiofrance.fr/franceinter/podcasts/les-p-tits-bateaux) : les questions des enfants, et les réponses de spécialistes ;
+* [Les aventures du professeur Caillou](https://www.radiofrance.fr/franceinter/podcasts/les-aventures-du-professeur-caillou) : deux géologues à la découverte des métaux de notre quotidien.
+
+Et aussi :
+* [Salut l'info !](https://www.radiofrance.fr/franceinfo/podcasts/salut-l-info) (franceinfo) : l'actualité expliquée aux enfants ;
+* [Encore une histoire](https://feeds.acast.com/public/shows/670d1795df4dd6f896655670) : des centaines d'histoires pour enfants.
 
 > Les podcasts sont en général destinés à l'écoute privée : ne redistribuez pas les fichiers.
 
