@@ -46,8 +46,6 @@ pub struct LuniiDevice {
     /// The firmware handles the night mode: its `.cfg` was found and read
     night_mode_supported: bool,
     stories: StoryList,
-    /// Debug: write plain files on the device
-    pub debug_plain: bool,
 }
 
 fn u16_le(data: &[u8], pos: usize) -> u16 {
@@ -106,7 +104,6 @@ impl LuniiDevice {
             config: DEFAULT_CONFIG.to_vec(),
             night_mode_supported: false,
             stories: StoryList::new(),
-            debug_plain: false,
         };
 
         let md_version = u16_le(&md, 0);
@@ -118,12 +115,9 @@ impl LuniiDevice {
             dev.unsupported_md_parse(ctx, &md)?;
         }
 
-        match feed_config(ctx, mount_point) {
-            Some(config) => {
-                dev.config = config;
-                dev.night_mode_supported = true;
-            }
-            None => dev.config = DEFAULT_CONFIG.to_vec(),
+        if let Some(config) = feed_config(ctx, mount_point) {
+            dev.config = config;
+            dev.night_mode_supported = true;
         }
         dev.stories = feed_stories(ctx, mount_point);
         dev.update_pack_index()?;
@@ -362,9 +356,6 @@ impl LuniiDevice {
     }
 
     fn cipher(&self, buffer: &[u8], key: &[u8], iv: Option<&[u8]>) -> Result<Vec<u8>> {
-        if self.debug_plain {
-            return Ok(buffer.to_vec());
-        }
         if self.device_version == DeviceVersion::LuniiV3 {
             crypto::aes_cipher(buffer, key, iv.context("missing IV")?, 512)
         } else {
@@ -892,10 +883,6 @@ impl Device for LuniiDevice {
         !(self.device_version == DeviceVersion::LuniiV3 && self.story_key.is_none())
     }
 
-    fn can_export(&self) -> bool {
-        true
-    }
-
     fn story_exportable(&self, story: &Story) -> bool {
         self.device_version >= DeviceVersion::LuniiV3 || !story.is_official()
     }
@@ -905,7 +892,7 @@ impl Device for LuniiDevice {
     }
 
     fn resolve_dir_uuid(&self, dir_name: &str) -> Option<String> {
-        super::uuid_from_db(dir_name).or_else(|| {
+        crate::db::find_full_uuid(dir_name).or_else(|| {
             (dir_name.len() == 8 && dir_name.chars().all(|c| c.is_ascii_hexdigit()))
                 .then(|| format!("{}{dir_name}", "00".repeat(12)))
         })

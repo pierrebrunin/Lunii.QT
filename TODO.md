@@ -5,9 +5,6 @@ laissées pour plus tard. Retirer une entrée une fois traitée.
 
 ## Interface
 
-- **En-têtes de section vides** dans `lunii-gui/src/app/mod.rs` (« Devices »,
-  « Story list ») : le code correspondant est dans `devices.rs` et
-  `stories.rs`.
 - **Découper `App::connect()`** (`app/mod.rs`, ~160 lignes) par écran : liste,
   podcasts, dialogues. Même idée pour les branches longues de
   `App::action()` (`app/actions.rs`, ~200 lignes).
@@ -55,6 +52,13 @@ laissées pour plus tard. Retirer une entrée une fois traitée.
   font une sauvegarde chiffrée, restaurable sur le même appareil).
   `common::export_backup_story` existe déjà ; reste à vérifier l'import de ces
   sauvegardes, avec un test d'aller-retour.
+
+## Albums
+
+- **Deux constructions parallèles de `story.json`** (`album/layout.rs`) :
+  `story_json` et `chapters_story_json` répètent la couverture, les nœuds de
+  lecture et l'enveloppe. Les fusionner demande de garder exactement le même
+  ordre des nœuds (les fichiers d'index de l'appareil en dépendent).
 
 ## Tests
 

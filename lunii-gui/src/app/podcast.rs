@@ -100,6 +100,12 @@ impl App {
         self.podcast_add_open();
     }
 
+    /// The followed podcast selected in the list.
+    fn podcast_current(&self) -> Option<SavedPodcast> {
+        let index = usize::try_from(self.ui().get_podcast_current()).ok()?;
+        self.state.borrow().podcasts.followed.get(index).cloned()
+    }
+
     fn album_on_device(&self, uuid: &Uuid) -> bool {
         self.state
             .borrow()
@@ -111,13 +117,8 @@ impl App {
 
     /// Episodes in the album of `podcast` on the device: as its `album.json`
     /// records them, or as this computer remembers them (albums imported
-    /// before, or device busy).
-    fn imported_in_album(&self, podcast: &Podcast) -> HashSet<String> {
-        self.album_episodes(podcast).0
-    }
-
-    /// See [`Self::imported_in_album`]; and those whose track is known on
-    /// the device, that can be removed.
+    /// before, or device busy); and those whose track is known on the
+    /// device, that can be removed.
     fn album_episodes(&self, podcast: &Podcast) -> (HashSet<String>, HashSet<String>) {
         let uuid = podcast.album_uuid();
         let info = (|| {
@@ -174,9 +175,21 @@ impl App {
                 Err(e) => self.log(lunii_core::Level::Warn, &format!("{e:#}")),
             }
         }
-        if added && self.ui().get_view() == 1 {
-            self.podcasts_show();
+        if added {
+            self.podcasts_refresh_device();
         }
+    }
+
+    /// Episodes of `podcast` on the device as stories of their own.
+    fn episodes_as_stories(&self, podcast: &Podcast) -> HashSet<String> {
+        let st = self.state.borrow();
+        let on_device: HashSet<Uuid> = st.list.stories.iter().map(|s| s.uuid).collect();
+        podcast
+            .episodes
+            .iter()
+            .filter(|e| on_device.contains(&podcast.episode_uuid(e)))
+            .map(|e| e.guid.clone())
+            .collect()
     }
 
     fn rebuild_followed(&self) {
@@ -207,19 +220,11 @@ impl App {
     fn feed_info(&self, p: &Podcast) -> String {
         let count = trf("{} episodes", &[&p.episodes.len().to_string()]);
         let in_album = if self.album_on_device(&p.album_uuid()) {
-            self.imported_in_album(p).len()
+            self.album_episodes(p).0.len()
         } else {
             0
         };
-        let as_stories = {
-            let st = self.state.borrow();
-            let stories: HashSet<Uuid> = st.list.stories.iter().map(|s| s.uuid).collect();
-            p.episodes
-                .iter()
-                .filter(|e| stories.contains(&p.episode_uuid(e)))
-                .count()
-        };
-        match in_album + as_stories {
+        match in_album + self.episodes_as_stories(p).len() {
             0 => count,
             n => format!("{} · {count}", trf("{} on the device", &[&n.to_string()])),
         }
@@ -235,36 +240,23 @@ impl App {
         let ui = self.ui();
         // set again with the header, once the feed is loaded
         ui.set_podcast_page("".into());
-        let current = ui.get_podcast_current();
-        let (entry, feed) = {
+        let entry = self.podcast_current();
+        let feed = entry.as_ref().and_then(|entry| {
             let st = self.state.borrow();
-            let Some(entry) = usize::try_from(current)
-                .ok()
-                .and_then(|i| st.podcasts.followed.get(i))
-                .cloned()
-            else {
-                drop(st);
-                ui.set_podcast_loading(false);
-                self.state.borrow_mut().podcasts.selection = None;
-                self.rebuild_podcast_rows();
-                return;
-            };
-            let feed = st.podcasts.feeds.get(&entry.feed_url).cloned().flatten();
-            (entry, feed)
-        };
-        match feed {
-            None => {
-                ui.set_podcast_loading(true);
+            st.podcasts.feeds.get(&entry.feed_url).cloned().flatten()
+        });
+        ui.set_podcast_loading(entry.is_some() && feed.is_none());
+        match (entry, feed) {
+            (None, _) => self.state.borrow_mut().podcasts.selection = None,
+            (Some(entry), None) => {
                 ui.set_podcast_header(entry.title.into());
                 self.state.borrow_mut().podcasts.selection = None;
             }
-            Some(Err(e)) => {
-                ui.set_podcast_loading(false);
+            (Some(entry), Some(Err(e))) => {
                 ui.set_podcast_header(format!("🛑 {} : {e}", entry.title).into());
                 self.state.borrow_mut().podcasts.selection = None;
             }
-            Some(Ok(p)) => {
-                ui.set_podcast_loading(false);
+            (Some(_), Some(Ok(p))) => {
                 let mut view = self.podcast_view(p);
                 let mut st = self.state.borrow_mut();
                 // same podcast: the selection is kept
@@ -290,18 +282,8 @@ impl App {
     /// What of `podcast` is on the device.
     fn podcast_view(&self, podcast: Podcast) -> PodcastView {
         let uuid = podcast.album_uuid();
-        let on_device = self.album_on_device(&uuid);
-        let stories = {
-            let st = self.state.borrow();
-            let on_device: HashSet<Uuid> = st.list.stories.iter().map(|s| s.uuid).collect();
-            podcast
-                .episodes
-                .iter()
-                .filter(|e| on_device.contains(&podcast.episode_uuid(e)))
-                .map(|e| e.guid.clone())
-                .collect()
-        };
-        let (imported, album_removable) = if on_device {
+        let stories = self.episodes_as_stories(&podcast);
+        let (imported, album_removable) = if self.album_on_device(&uuid) {
             self.album_episodes(&podcast)
         } else {
             (HashSet::new(), HashSet::new())
@@ -317,38 +299,28 @@ impl App {
 
     /// ↻: the feed of the selected podcast loaded again.
     pub(super) fn podcast_refresh(&self) {
-        let current = self.ui().get_podcast_current();
-        let url = {
-            let mut st = self.state.borrow_mut();
-            let Some(url) = usize::try_from(current)
-                .ok()
-                .and_then(|i| st.podcasts.followed.get(i))
-                .map(|f| f.feed_url.clone())
-            else {
-                return;
-            };
-            st.podcasts.feeds.insert(url.clone(), None);
-            url
+        let Some(entry) = self.podcast_current() else {
+            return;
         };
+        let url = entry.feed_url;
+        self.state
+            .borrow_mut()
+            .podcasts
+            .feeds
+            .insert(url.clone(), None);
         worker::fetch_feed(url, sink());
         self.rebuild_followed();
         self.podcast_show_current();
     }
 
     pub(super) fn feed_loaded(&self, url: String, result: Result<Box<Podcast>, String>) {
-        let ui = self.ui();
         self.state
             .borrow_mut()
             .podcasts
             .feeds
             .insert(url.clone(), Some(result.map(|p| *p)));
         self.rebuild_followed();
-        let current = ui.get_podcast_current();
-        let shown = usize::try_from(current)
-            .ok()
-            .and_then(|i| self.state.borrow().podcasts.followed.get(i).cloned())
-            .is_some_and(|f| f.feed_url == url);
-        if shown {
+        if self.podcast_current().is_some_and(|f| f.feed_url == url) {
             self.podcast_show_current();
         }
     }
@@ -591,11 +563,7 @@ impl App {
     /// "Unfollow": what of the podcast is on the device is removed or kept,
     /// as asked; nothing on it, the podcast is unfollowed right away.
     pub(super) fn podcast_unfollow(&self) {
-        let current = self.ui().get_podcast_current();
-        let Some(entry) = usize::try_from(current)
-            .ok()
-            .and_then(|i| self.state.borrow().podcasts.followed.get(i).cloned())
-        else {
+        let Some(entry) = self.podcast_current() else {
             return;
         };
         let on_device = self.podcast_stories_on_device(&entry);
@@ -603,20 +571,15 @@ impl App {
             self.podcast_unfollow_done(&entry);
             return;
         }
-        let mut message = trf("'{}' is on the device :\n", &[&entry.title]);
-        for (_, name) in &on_device {
-            message += &format!("- {name}\n");
-        }
-        if message.chars().count() > 512 {
-            message = message.chars().take(512).collect::<String>() + "...";
-            message += &tr("\n(and too many others)\n");
-        }
-        message += &tr("\nRemove it from the device too ?");
-        let uuids = on_device.into_iter().map(|(uuid, _)| uuid).collect();
+        let (uuids, names): (Vec<String>, Vec<String>) = on_device.into_iter().unzip();
+        let head = trf("'{}' is on the device :\n", &[&entry.title]);
         self.state.borrow_mut().podcasts.unfollow = Some((entry, uuids));
-        let ui = self.ui();
-        ui.set_confirm_message(message.into());
-        ui.set_dialog(DialogKind::UnfollowPodcast);
+        self.confirm(
+            DialogKind::UnfollowPodcast,
+            head,
+            &names,
+            &tr("\nRemove it from the device too ?"),
+        );
     }
 
     /// The podcast unfollowed after the dialog: its album or stories removed
@@ -663,7 +626,8 @@ impl App {
         true
     }
 
-    /// After a task (import, update): what is on the device changed.
+    /// The Podcasts view, if it is the one shown, is brought up to date
+    /// (view chosen, or what is on the device changed: import, update).
     pub(super) fn podcasts_refresh_device(&self) {
         if self.ui().get_view() == 1 {
             self.podcasts_show();
@@ -861,22 +825,16 @@ impl App {
             self.podcast_import();
             return;
         }
-        let mut message = trf(
-            "You are requesting to remove from the device {} episode(s) :\n",
-            &[&titles.len().to_string()],
-        );
-        for t in &titles {
-            message += &format!("- {t}\n");
-        }
-        if message.chars().count() > 512 {
-            message = message.chars().take(512).collect::<String>() + "...";
-            message += &tr("\n(and too many others)\n");
-        }
-        message += &tr("\nDo you want to proceed ?");
         self.state.borrow_mut().podcasts.confirm_removal = true;
-        let ui = self.ui();
-        ui.set_confirm_message(message.into());
-        ui.set_dialog(DialogKind::ConfirmRemove);
+        self.confirm(
+            DialogKind::ConfirmRemove,
+            trf(
+                "You are requesting to remove from the device {} episode(s) :\n",
+                &[&titles.len().to_string()],
+            ),
+            &titles,
+            &tr("\nDo you want to proceed ?"),
+        );
     }
 
     pub(super) fn podcast_import(&self) {

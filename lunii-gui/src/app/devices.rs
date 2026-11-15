@@ -10,6 +10,8 @@ pub(super) struct Devices {
     pub(super) labels: Vec<String>,
     /// id of the last device search / opening: older results are ignored
     pub(super) scan: u32,
+    /// a background check for plugged / unplugged devices is running
+    pub(super) watching: bool,
     pub(super) opened: Option<SharedDevice>,
     /// details of `opened`
     pub(super) info: Option<DevInfo>,
@@ -91,6 +93,19 @@ pub(super) fn device_labels(devices: &[PathBuf]) -> Vec<String> {
             }
         })
         .collect()
+}
+
+/// The devices plugged in and their names (reads them: in the background).
+fn detect_devices() -> (Vec<PathBuf>, Vec<String>) {
+    // LUNII_DEVICES replaces the detection (tests, or devices mounted elsewhere)
+    let devices: Vec<PathBuf> = match std::env::var_os("LUNII_DEVICES") {
+        Some(list) => std::env::split_paths(&list)
+            .filter(|p| device::is_lunii(p) || device::is_flam(p))
+            .collect(),
+        None => device::find_devices(None),
+    };
+    let labels = device_labels(&devices);
+    (devices, labels)
 }
 
 pub(super) fn lunii_icon() -> slint::Image {
@@ -216,12 +231,7 @@ impl App {
         ui.set_device_value(text.unwrap_or_default().into());
     }
 
-    pub(super) fn set_devices(&self, devices: Vec<PathBuf>) {
-        let labels = device_labels(&devices);
-        self.set_devices_labelled(devices, labels);
-    }
-
-    pub(super) fn set_devices_labelled(&self, devices: Vec<PathBuf>, labels: Vec<String>) {
+    pub(super) fn set_devices(&self, devices: Vec<PathBuf>, labels: Vec<String>) {
         self.devices_model.set_vec(
             labels
                 .iter()
@@ -245,7 +255,7 @@ impl App {
     pub fn refresh_devices(&self) {
         let scan = self.next_scan();
         self.close_device();
-        self.set_devices_labelled(Vec::new(), Vec::new());
+        self.set_devices(Vec::new(), Vec::new());
         let ui = self.ui();
         self.set_device_index(-1);
         ui.set_device_icon(lunii_icon());
@@ -254,16 +264,80 @@ impl App {
         self.status(&tr("🔍 Searching for Lunii and Flam devices..."));
         let sink = sink();
         std::thread::spawn(move || {
-            // LUNII_DEVICES replaces the detection (tests, or devices mounted elsewhere)
-            let devices: Vec<PathBuf> = match std::env::var_os("LUNII_DEVICES") {
-                Some(list) => std::env::split_paths(&list)
-                    .filter(|p| device::is_lunii(p) || device::is_flam(p))
-                    .collect(),
-                None => device::find_devices(None),
-            };
-            let labels = device_labels(&devices);
+            let (devices, labels) = detect_devices();
             sink(Event::DevicesFound(scan, devices, labels));
         });
+    }
+
+    /// Checks in the background whether a device was plugged in or unplugged
+    /// (every few seconds), see `devices_watched`. Not during a search, the
+    /// opening of a device or a task.
+    pub(super) fn watch_devices(&self) {
+        let ui = self.ui();
+        if ui.get_scanning() || ui.get_busy() {
+            return;
+        }
+        let scan = {
+            let mut st = self.state.borrow_mut();
+            if std::mem::replace(&mut st.devices.watching, true) {
+                return;
+            }
+            st.devices.scan
+        };
+        let sink = sink();
+        std::thread::spawn(move || {
+            let (devices, labels) = detect_devices();
+            sink(Event::DevicesWatched(scan, devices, labels));
+        });
+    }
+
+    /// The devices plugged in now: the list follows them. The opened device
+    /// unplugged is closed; a new one is opened when none is.
+    pub(super) fn devices_watched(&self, scan: u32, devices: Vec<PathBuf>, labels: Vec<String>) {
+        let ui = self.ui();
+        let (known, opened) = {
+            let mut st = self.state.borrow_mut();
+            st.devices.watching = false;
+            // a search, an opening or a task started meanwhile
+            if scan != st.devices.scan || ui.get_scanning() || ui.get_busy() {
+                return;
+            }
+            let opened = st.devices.info.as_ref().map(|d| d.mount.clone());
+            (st.devices.paths.clone(), opened)
+        };
+        if devices == known {
+            return;
+        }
+        let added = devices.iter().position(|d| !known.contains(d));
+        let current = opened
+            .as_ref()
+            .and_then(|mount| devices.iter().position(|d| d == mount));
+        let empty = devices.is_empty();
+        let added_label = added.map(|i| labels[i].clone());
+        self.set_devices(devices, labels);
+        self.set_device_index(current.map_or(-1, |i| i as i32));
+        ui.set_device_placeholder(if empty {
+            tr("No Lunii detected 😥").into()
+        } else {
+            tr("Select your Lunii").into()
+        });
+        if opened.is_some() && current.is_none() {
+            self.close_device();
+            ui.set_device_icon(lunii_icon());
+            self.status(&tr("🔌 Storyteller unplugged"));
+        }
+        match (current, added) {
+            (None, Some(index)) => {
+                self.set_device_index(index as i32);
+                self.open_device(index as i32, true);
+            }
+            // another device stays opened: the new one is only announced
+            (Some(_), Some(_)) => self.status(&trf(
+                "🔌 {} detected: choose it in the Device menu to open it",
+                &[&added_label.unwrap_or_default()],
+            )),
+            _ => {}
+        }
     }
 
     pub(super) fn devices_found(&self, scan: u32, devices: Vec<PathBuf>, labels: Vec<String>) {
@@ -272,12 +346,12 @@ impl App {
         }
         let ui = self.ui();
         ui.set_scanning(false);
-        self.set_devices_labelled(devices.clone(), labels);
+        self.set_devices(devices.clone(), labels);
         self.status("");
 
         if devices.is_empty() {
             ui.set_device_placeholder(tr("No Lunii detected 😥").into());
-            self.status(&tr("No Lunii detected 😥, try File/Open"));
+            self.status(&tr("No Lunii detected 😥"));
         } else {
             ui.set_device_placeholder(tr("Select your Lunii").into());
             if devices.len() == 1 {
@@ -300,12 +374,19 @@ impl App {
         }
         let ui = self.ui();
         ui.set_device_ready(false);
+        ui.set_list_placeholder("".into());
         ui.set_nm_available(false);
         ui.set_nm_active(false);
         self.rebuild_rows();
     }
 
     pub(crate) fn select_device(&self, index: i32) {
+        self.open_device(index, false);
+    }
+
+    /// Opens the device `index` of the list (`detected`: just plugged in,
+    /// opened by itself).
+    fn open_device(&self, index: i32, detected: bool) {
         let Some(path) = self
             .state
             .borrow()
@@ -326,7 +407,8 @@ impl App {
             );
             let mut devices = self.state.borrow().devices.paths.clone();
             devices.remove(index as usize);
-            self.set_devices(devices);
+            let labels = device_labels(&devices);
+            self.set_devices(devices, labels);
             self.set_device_index(-1);
             return;
         }
@@ -342,7 +424,14 @@ impl App {
             .cloned()
             .unwrap_or_default();
         ui.set_scanning(true);
-        self.status(&trf("⏳ Reading {}...", &[&label]));
+        let message = if detected {
+            trf("🔌 {} detected, reading its stories...", &[&label])
+        } else {
+            trf("⏳ Reading {}...", &[&label])
+        };
+        // in the middle of the (empty) list too
+        ui.set_list_placeholder(message.as_str().into());
+        self.status(&message);
         let ctx = self.ctx();
         let sink = sink();
         std::thread::spawn(move || {
@@ -374,13 +463,15 @@ impl App {
             Ok(d) => *d,
             Err(e) => {
                 let error = tr("🛑 PermissionError : Unable to open this device");
+                ui.set_list_placeholder("".into());
                 self.log(Level::Error, &e);
                 self.status(&error);
                 return;
             }
         };
-        let version = info.version;
-        let is_flam = version == DeviceVersion::FlamV1;
+        let is_flam = info.version == DeviceVersion::FlamV1;
+        // a Lunii v3 without story keys can't import
+        let missing_keys = info.version == DeviceVersion::LuniiV3 && !info.can_import;
         let sizes_unknown = stories.iter().any(|s| s.size.is_none());
         let nm_supported = info.config.is_some();
         let nm_active = info
@@ -410,17 +501,8 @@ impl App {
         if sizes_unknown {
             self.ensure_sizes();
         }
-        // a Lunii v3 without story keys can't import: show why
-        if version == DeviceVersion::LuniiV3
-            && !self
-                .state
-                .borrow()
-                .devices
-                .info
-                .as_ref()
-                .unwrap()
-                .can_import
-        {
+        // the log tells why
+        if missing_keys {
             self.show_log();
         }
     }

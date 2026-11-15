@@ -87,6 +87,8 @@ pub struct App {
     state: RefCell<State>,
     drop_timer: slint::Timer,
     transfer_timer: slint::Timer,
+    /// looks for plugged / unplugged devices
+    watch_timer: slint::Timer,
 }
 
 fn level_value(level: Level) -> i32 {
@@ -104,6 +106,15 @@ fn level_name(level: i32) -> &'static str {
         2 => "WARNING",
         1 => "INFO",
         _ => "DEBUG",
+    }
+}
+
+/// `done / total` for a progress bar (0 without a total).
+fn ratio(done: usize, total: usize) -> f32 {
+    if total > 0 {
+        done as f32 / total as f32
+    } else {
+        0.0
     }
 }
 
@@ -178,6 +189,7 @@ impl App {
             state: RefCell::new(State::default()),
             drop_timer: slint::Timer::default(),
             transfer_timer: slint::Timer::default(),
+            watch_timer: slint::Timer::default(),
         });
         APP.with(|a| *a.borrow_mut() = Some(app.clone()));
 
@@ -224,161 +236,104 @@ impl App {
     // -----------------------------------------------------------------------
 
     fn connect(self: &Rc<Self>, ui: &MainWindow) {
-        let weak = Rc::downgrade(self);
-        let with = move |f: fn(&Rc<App>)| {
-            let weak = weak.clone();
-            move || {
-                if let Some(app) = weak.upgrade() {
-                    f(&app)
-                }
-            }
-        };
+        // `on!(setter, |app, arguments...| body)`: a callback of the window,
+        // run while the application is alive
+        macro_rules! on {
+            ($setter:ident, |$app:ident $(, $arg:ident)*| $body:expr) => {{
+                let weak = Rc::downgrade(self);
+                ui.$setter(move |$($arg),*| {
+                    if let Some($app) = weak.upgrade() {
+                        $body;
+                    }
+                });
+            }};
+        }
 
-        let w = Rc::downgrade(self);
-        ui.on_action(move |name| {
-            if let Some(app) = w.upgrade() {
-                app.action(name);
-            }
-        });
-        let w = Rc::downgrade(self);
-        ui.on_device_selected(move |index| {
-            if let Some(app) = w.upgrade() {
-                app.select_device(index);
-            }
-        });
-        ui.on_filter_edited(with(|app| {
+        on!(on_action, |app, name| app.action(name));
+        on!(on_device_selected, |app, index| app.select_device(index));
+        on!(on_filter_edited, |app| {
             app.state.borrow_mut().list.selected.clear();
             app.rebuild_rows();
-        }));
-        let w = Rc::downgrade(self);
-        ui.on_row_pointer(move |row, ctrl, shift, right| {
-            if let Some(app) = w.upgrade() {
-                app.row_pointer(row as usize, ctrl, shift, right);
-            }
         });
-        let w = Rc::downgrade(self);
-        ui.on_key_nav(move |delta, shift| {
-            if let Some(app) = w.upgrade() {
-                app.key_nav(delta, shift);
-            }
+        on!(on_row_pointer, |app, row, ctrl, shift, right| {
+            app.row_pointer(row as usize, ctrl, shift, right)
         });
-        let w = Rc::downgrade(self);
-        ui.on_rows_dropped(move |gap| {
-            if let Some(app) = w.upgrade() {
-                app.drop_selection(gap.max(0) as usize);
-            }
-        });
-        ui.on_select_all(with(|app| {
+        on!(on_key_nav, |app, delta, shift| app.key_nav(delta, shift));
+        on!(on_rows_dropped, |app, gap| app
+            .drop_selection(gap.max(0) as usize));
+        on!(on_select_all, |app| {
             {
                 let mut st = app.state.borrow_mut();
-                let all: Vec<Uuid> = st
-                    .list
-                    .visible
-                    .iter()
-                    .map(|&i| st.list.stories[i].uuid)
-                    .collect();
-                st.list.selected = all.into_iter().collect();
+                let list = &mut st.list;
+                list.selected = list.visible.iter().map(|&i| list.stories[i].uuid).collect();
             }
             app.selection_changed();
-        }));
-        ui.on_abort(with(|app| app.abort()));
-        ui.on_details_width_changed(with(|app| {
+        });
+        on!(on_abort, |app| app.abort());
+        on!(on_details_width_changed, |app| {
             let width = app.ui().get_details_width();
             if let Err(e) = lunii_core::settings::set_number("details_width", width.into()) {
                 app.log(Level::Warn, &format!("{e:#}"));
             }
-        }));
-        ui.on_device_info_clicked(with(|app| app.show_device_info()));
-        ui.on_device_info_copy(with(|app| app.copy_device_info()));
-        ui.on_device_open_folder(with(|app| {
+        });
+        on!(on_device_info_clicked, |app| app.show_device_info());
+        on!(on_device_info_copy, |app| app.copy_device_info());
+        on!(on_device_open_folder, |app| {
             if let Some(dev) = app.state.borrow().devices.info.as_ref() {
                 let _ = open::that(&dev.mount);
             }
-        }));
-        ui.on_confirm_remove_accepted(with(|app| {
+        });
+        on!(on_confirm_remove_accepted, |app| {
             if std::mem::take(&mut app.state.borrow_mut().podcasts.confirm_removal) {
                 app.podcast_import();
-                return;
+            } else {
+                let uuids = app.selected_uuids();
+                app.launch(Task::Remove { uuids });
             }
-            let uuids = app.selected_uuids();
-            app.launch(Task::Remove { uuids });
-        }));
-        ui.on_login_accepted(with(|app| app.firmware_login()));
-        ui.on_night_mode_accepted(with(|app| app.save_night_mode()));
+        });
+        on!(on_login_accepted, |app| app.firmware_login());
+        on!(on_night_mode_accepted, |app| app.save_night_mode());
 
         // Podcasts view
-        ui.on_view_changed(with(|app| {
-            if app.ui().get_view() == 1 {
-                app.podcasts_show();
-            }
-        }));
-        ui.on_podcast_add(with(|app| app.podcast_add_open()));
-        ui.on_podcast_add_submit(with(|app| app.podcast_add_submit()));
-        ui.on_podcast_add_follow(with(|app| app.podcast_add_follow()));
-        let w = Rc::downgrade(self);
-        ui.on_podcast_add_choose(move |index| {
-            if let Some(app) = w.upgrade() {
-                app.podcast_add_choose(index);
-            }
-        });
-        ui.on_podcast_refresh(with(|app| app.podcast_refresh()));
-        ui.on_podcast_copy_page(with(|app| app.podcast_copy_page()));
-        ui.on_podcast_unfollow(with(|app| app.podcast_unfollow()));
-        let w = Rc::downgrade(self);
-        ui.on_podcast_unfollow_accepted(move |remove| {
-            if let Some(app) = w.upgrade() {
-                app.podcast_unfollow_accepted(remove);
-            }
-        });
-        let w = Rc::downgrade(self);
-        ui.on_podcast_select(move |index| {
-            if let Some(app) = w.upgrade() {
-                app.podcast_select(index);
-            }
-        });
-        ui.on_podcast_mode_changed(with(|app| app.podcast_mode_changed()));
-        ui.on_podcast_accepted(with(|app| app.podcast_apply()));
-        ui.on_podcast_sort_changed(with(|app| app.rebuild_podcast_rows()));
-        let w = Rc::downgrade(self);
-        ui.on_podcast_toggle(move |index| {
-            if let Some(app) = w.upgrade() {
-                app.podcast_toggle(index as usize);
-            }
-        });
-        let w = Rc::downgrade(self);
-        ui.on_podcast_select_all(move |all| {
-            if let Some(app) = w.upgrade() {
-                app.podcast_select_all(all);
-            }
-        });
+        on!(on_view_changed, |app| app.podcasts_refresh_device());
+        on!(on_podcast_add, |app| app.podcast_add_open());
+        on!(on_podcast_add_submit, |app| app.podcast_add_submit());
+        on!(on_podcast_add_follow, |app| app.podcast_add_follow());
+        on!(on_podcast_add_choose, |app, index| app
+            .podcast_add_choose(index));
+        on!(on_podcast_refresh, |app| app.podcast_refresh());
+        on!(on_podcast_copy_page, |app| app.podcast_copy_page());
+        on!(on_podcast_unfollow, |app| app.podcast_unfollow());
+        on!(on_podcast_unfollow_accepted, |app, remove| app
+            .podcast_unfollow_accepted(remove));
+        on!(on_podcast_select, |app, index| app.podcast_select(index));
+        on!(on_podcast_mode_changed, |app| app.podcast_mode_changed());
+        on!(on_podcast_accepted, |app| app.podcast_apply());
+        on!(on_podcast_sort_changed, |app| app.rebuild_podcast_rows());
+        on!(on_podcast_toggle, |app, index| app
+            .podcast_toggle(index as usize));
+        on!(on_podcast_select_all, |app, all| app
+            .podcast_select_all(all));
         // album tracks (details panel)
-        ui.on_album_remove(with(|app| app.album_remove()));
-        ui.on_album_add_files(with(|app| app.album_add_files()));
-        ui.on_album_apply(with(|app| app.album_apply()));
-        ui.on_album_revert(with(|app| app.album_revert()));
-        let w = Rc::downgrade(self);
-        ui.on_album_move(move |delta| {
-            if let Some(app) = w.upgrade() {
-                app.album_move(delta);
-            }
-        });
-        let w = Rc::downgrade(self);
-        ui.on_album_drop(move |from, gap| {
-            if let Some(app) = w.upgrade() {
-                app.album_drop(from.max(0) as usize, gap.max(0) as usize);
-            }
+        on!(on_album_remove, |app| app.album_remove());
+        on!(on_album_add_files, |app| app.album_add_files());
+        on!(on_album_apply, |app| app.album_apply());
+        on!(on_album_revert, |app| app.album_revert());
+        on!(on_album_move, |app, delta| app.album_move(delta));
+        on!(on_album_drop, |app, from, gap| {
+            app.album_drop(from.max(0) as usize, gap.max(0) as usize)
         });
         ui.on_open_url(|url| {
             let _ = open::that(url.as_str());
         });
 
         // log panel
-        ui.on_log_filter_changed(with(|app| app.rebuild_log()));
-        ui.on_log_clear(with(|app| {
+        on!(on_log_filter_changed, |app| app.rebuild_log());
+        on!(on_log_clear, |app| {
             app.state.borrow_mut().log.lines.clear();
             app.rebuild_log();
-        }));
-        ui.on_log_copy(with(|app| app.copy_log()));
+        });
+        on!(on_log_copy, |app| app.copy_log());
         ui.on_log_open_folder(|| {
             let _ = open::that(logfile::log_dir());
         });
@@ -386,10 +341,8 @@ impl App {
         // close: abort current task
         let w = Rc::downgrade(self);
         ui.window().on_close_requested(move || {
-            if let Some(app) = w.upgrade()
-                && let Some((_, ctx)) = app.state.borrow().task.worker.as_ref()
-            {
-                ctx.request_abort();
+            if let Some(app) = w.upgrade() {
+                app.request_abort();
             }
             let _ = slint::quit_event_loop();
             slint::CloseRequestResponse::HideWindow
@@ -449,14 +402,6 @@ impl App {
     }
 
     // -----------------------------------------------------------------------
-    // Devices
-    // -----------------------------------------------------------------------
-
-    // -----------------------------------------------------------------------
-    // Story list
-    // -----------------------------------------------------------------------
-
-    // -----------------------------------------------------------------------
     // Worker
     // -----------------------------------------------------------------------
 
@@ -466,6 +411,9 @@ impl App {
             Event::Log(level, msg) => self.log(level, &msg),
             Event::Status(msg) => self.status(&msg),
             Event::DevicesFound(scan, devices, labels) => self.devices_found(scan, devices, labels),
+            Event::DevicesWatched(scan, devices, labels) => {
+                self.devices_watched(scan, devices, labels)
+            }
             Event::DeviceOpened(scan, opened) => self.device_opened(scan, opened),
             Event::ShowLog => self.show_log(),
             Event::Total(current, total) | Event::Episode(current, total) => {
@@ -479,11 +427,7 @@ impl App {
                 };
                 ui.set_total_visible(true);
                 ui.set_total_text(text.into());
-                ui.set_total_progress(if total > 0 {
-                    (current + 1) as f32 / total as f32
-                } else {
-                    0.0
-                });
+                ui.set_total_progress(ratio(current + 1, total));
             }
             Event::ImportPlan(total) => self.start_transfer(total),
             Event::Feed(url, result) => self.feed_loaded(url, result),
@@ -495,11 +439,7 @@ impl App {
             Event::Story(uuid, current, total) => {
                 ui.set_story_visible(true);
                 ui.set_story_text(uuid.into());
-                ui.set_story_progress(if total > 0 {
-                    (current + 1) as f32 / total as f32
-                } else {
-                    0.0
-                });
+                ui.set_story_progress(ratio(current + 1, total));
             }
             Event::File(label, current, total) => {
                 ui.set_story_visible(true);
@@ -640,6 +580,16 @@ impl App {
         self.ui()
             .set_device_placeholder(tr("Select your Lunii").into());
         self.refresh_devices();
+        let w = Rc::downgrade(self);
+        self.watch_timer.start(
+            slint::TimerMode::Repeated,
+            Duration::from_secs(2),
+            move || {
+                if let Some(app) = w.upgrade() {
+                    app.watch_devices();
+                }
+            },
+        );
         // stories database (may download the official one): names are refreshed once loaded
         let db_sink = sink();
         std::thread::spawn(move || db_sink(Event::DbLoaded(lunii_core::db::load_db(false))));

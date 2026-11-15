@@ -33,8 +33,6 @@ pub struct FlamDevice {
     story_iv: Vec<u8>,
     keyfile: Vec<u8>,
     stories: StoryList,
-    /// Debug: write plain files on the device
-    pub debug_plain: bool,
 }
 
 impl FlamDevice {
@@ -101,7 +99,6 @@ impl FlamDevice {
             story_iv,
             keyfile,
             stories: StoryList::new(),
-            debug_plain: false,
         };
 
         // metadata file backup
@@ -134,13 +131,6 @@ impl FlamDevice {
             .to_string()
     }
 
-    fn cipher(&self, data: &[u8], key: &[u8], iv: &[u8], len: usize) -> Result<Vec<u8>> {
-        if self.debug_plain {
-            return Ok(data.to_vec());
-        }
-        crypto::aes_cipher(data, key, iv, len)
-    }
-
     fn ciphered_data(
         &self,
         file: &str,
@@ -169,7 +159,7 @@ impl FlamDevice {
             )
         };
         match (key, iv) {
-            (Some(key), Some(iv)) => self.cipher(data, &key, &iv, len),
+            (Some(key), Some(iv)) => crypto::aes_cipher(data, &key, &iv, len),
             _ => Ok(data.to_vec()),
         }
     }
@@ -618,7 +608,7 @@ impl Device for FlamDevice {
     }
 
     fn resolve_dir_uuid(&self, dir_name: &str) -> Option<String> {
-        super::uuid_from_db(dir_name).or_else(|| Some(dir_name.to_string()))
+        crate::db::find_full_uuid(dir_name).or_else(|| Some(dir_name.to_string()))
     }
 
     fn edit_album(

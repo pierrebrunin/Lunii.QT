@@ -464,9 +464,6 @@ msgstr "Mise à jour v2.X.X disponible"
 msgid "Help"
 msgstr "Aide"
 
-msgid "No Lunii detected 😥, try File/Open"
-msgstr "Aucune Lunii détectée 😥, essayer Fichier/Ouvrir"
-
 msgid "No Lunii detected 😥"
 msgstr "Aucune Lunii détectée 😥"
 
@@ -1222,3 +1219,12 @@ msgstr "{} / {} · reste {} · {}"
 
 msgid "Episode {}/{}"
 msgstr "Épisode {}/{}"
+
+msgid "🔌 Storyteller unplugged"
+msgstr "🔌 Conteuse débranchée"
+
+msgid "🔌 {} detected, reading its stories..."
+msgstr "🔌 {} détectée, lecture de ses histoires…"
+
+msgid "🔌 {} detected: choose it in the Device menu to open it"
+msgstr "🔌 {} détectée : choisissez-la dans le menu Appareil pour l'ouvrir"

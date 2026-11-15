@@ -85,7 +85,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 1. La **barre de menu**. Elle vous informera lorsqu'une mise à jour de l'application est disponible  
    (il suffit d'aller dans Menu About/Update to v2.X.X)
 2. Les vues **Histoires** et **Podcasts**.  
-   La Lunii/Flam connectée se choisit dans le menu **Appareil**, qui relance aussi la détection (Rafraichir les appareils). Son emplacement et ses informations techniques sont dans Fichier / Informations sur l'appareil, ou d'un clic sur la barre d'état.
+   La Lunii/Flam connectée se choisit dans le menu **Appareil**, qui relance aussi la détection (Rafraichir les appareils). Une conteuse branchée pendant que l'application tourne est détectée toute seule, et ouverte si aucune ne l'est ; débranchée, elle est retirée. Son emplacement et ses informations techniques sont dans Fichier / Informations sur l'appareil, ou d'un clic sur la barre d'état.
 3. Gestion du **Mode nuit** ([ici](#mode-nuit)), affichée seulement si la Lunii branchée le gère (Flam exclue)
 4. Actualisation de la **base de données Officielle** : Met à jour la liste des histoires et leurs descriptions depuis le Luniistore. Utilisez ce bouton lorsque certaines histoires officielles ne sont pas reconnues.
 5. La **liste de vos histoires** avec leur durée. Le menu **Affichage** permet d'afficher aussi leur taille, le mode nuit (MN), leur base de données (DB) et leur UUID, masqués par défaut.  

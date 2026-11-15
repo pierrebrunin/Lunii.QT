@@ -68,10 +68,6 @@ impl Context {
         self.abort.store(true, Ordering::SeqCst);
     }
 
-    pub fn clear_abort(&self) {
-        self.abort.store(false, Ordering::SeqCst);
-    }
-
     pub fn is_aborted(&self) -> bool {
         self.abort.load(Ordering::SeqCst)
     }

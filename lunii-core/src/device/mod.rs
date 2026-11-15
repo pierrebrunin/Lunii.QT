@@ -10,7 +10,6 @@ use anyhow::{Context as _, Result, bail};
 use uuid::Uuid;
 
 use crate::constants::DeviceVersion;
-use crate::db;
 use crate::report::{Context, check_abort};
 use crate::story::{Story, StoryList, move_stories, move_stories_before};
 
@@ -44,10 +43,6 @@ pub trait Device: Send {
     fn can_import(&self) -> bool {
         true
     }
-    /// Can stories be exported (as plain or backup).
-    fn can_export(&self) -> bool {
-        true
-    }
     /// Can a story be exported (official stories are forbidden on Lunii v1/v2).
     fn story_exportable(&self, _story: &Story) -> bool {
         true
@@ -61,6 +56,9 @@ pub trait Device: Send {
     fn validate_story_dir(&mut self, ctx: &Context, story_dir: &Path) -> bool;
 
     fn as_lunii(&self) -> Option<&LuniiDevice> {
+        None
+    }
+    fn as_lunii_mut(&mut self) -> Option<&mut LuniiDevice> {
         None
     }
 
@@ -110,9 +108,6 @@ pub trait Device: Send {
         self.edit_album(ctx, uuid, &entries)?;
         Ok(tracks.len())
     }
-    fn as_lunii_mut(&mut self) -> Option<&mut LuniiDevice> {
-        None
-    }
 
     // -----------------------------------------------------------------------
     // Provided methods
@@ -126,17 +121,21 @@ pub trait Device: Send {
         self.mount_point().join(self.hidden_stories_basedir())
     }
 
-    /// Location of a story on the device (taking care of hidden state).
-    fn story_path(&self, story: &Story) -> PathBuf {
-        let base = if story.hidden {
+    /// Directory of the stories, hidden or not.
+    fn stories_dir(&self, hidden: bool) -> PathBuf {
+        if hidden {
             self.hidden_content_dir()
         } else {
             self.content_dir()
-        };
-        base.join(self.story_dir_name(&story.uuid))
+        }
     }
 
-    /// Single story matching `uuid_part`, error if none or ambiguous.
+    /// Location of a story on the device (taking care of hidden state).
+    fn story_path(&self, story: &Story) -> PathBuf {
+        self.stories_dir(story.hidden)
+            .join(self.story_dir_name(&story.uuid))
+    }
+
     /// Error if the story `uuid` is already on the device.
     fn check_not_loaded(&self, uuid: &Uuid) -> Result<()> {
         if let Some(s) = self.stories().get(&uuid.to_string()) {
@@ -154,6 +153,7 @@ pub trait Device: Send {
         crate::report::Aborted.into()
     }
 
+    /// Single story matching `uuid_part`, error if none or ambiguous.
     fn find_story(&self, uuid_part: &str) -> Result<Story> {
         let list = self.stories().matching(uuid_part);
         match list.len() {
@@ -178,11 +178,7 @@ pub trait Device: Send {
         ctx.info(format!("🚧 Removing {short} - {}...", story.name()));
         ctx.story_progress(&short, 0, 3);
 
-        let dir_name = self.story_dir_name(&story.uuid);
-        common::remove_dirs(&[
-            self.content_dir().join(&dir_name),
-            self.hidden_content_dir().join(&dir_name),
-        ])?;
+        self.clean_up_story_dir(&story.uuid)?;
         ctx.story_progress(&short, 1, 3);
 
         self.stories_mut().remove_uuid(&story.uuid);
@@ -191,7 +187,7 @@ pub trait Device: Send {
         Ok(())
     }
 
-    /// Removes the directories of a partially imported story.
+    /// Removes the directories of a story (removed, or partially imported).
     fn clean_up_story_dir(&self, uuid: &Uuid) -> Result<()> {
         let dir_name = self.story_dir_name(uuid);
         common::remove_dirs(&[
@@ -233,12 +229,7 @@ pub trait Device: Send {
                 continue;
             };
 
-            let base = if *hidden {
-                self.hidden_content_dir()
-            } else {
-                self.content_dir()
-            };
-            let story_dir = base.join(dir_name);
+            let story_dir = self.stories_dir(*hidden).join(dir_name);
             let nm = self.version() != DeviceVersion::FlamV1 && story_dir.join("nm").is_file();
             let story = Story::with_flags(full_uuid, *hidden, nm);
             let label = format!("{} - {}", story.str_uuid(), story.name());
@@ -284,12 +275,7 @@ pub trait Device: Send {
             if self.stories().contains_key(dir_name) {
                 continue;
             }
-            let base = if *hidden {
-                self.hidden_content_dir()
-            } else {
-                self.content_dir()
-            };
-            let lost = base.join(dir_name);
+            let lost = self.stories_dir(*hidden).join(dir_name);
             let size = common::dir_size(&lost);
             ctx.info(format!("Deleting - {}", lost.display()));
             match std::fs::remove_dir_all(&lost) {
@@ -329,11 +315,7 @@ pub trait Device: Send {
                 bail!("This story is not present on your storyteller");
             };
             let src = self.story_path(&story);
-            let dst_parent = if story.hidden {
-                self.content_dir()
-            } else {
-                self.hidden_content_dir()
-            };
+            let dst_parent = self.stories_dir(!story.hidden);
             if !src.is_dir() {
                 ctx.info("💡 Try to use menu 'Device/Lost stories' (Recover or Remove) to fix it");
                 bail!(
@@ -488,9 +470,4 @@ pub fn find_devices(extra_path: Option<&Path>) -> Vec<PathBuf> {
         devices.push(extra.to_path_buf());
     }
     devices
-}
-
-/// Full UUID resolution from the story databases.
-pub(crate) fn uuid_from_db(dir_name: &str) -> Option<String> {
-    db::find_full_uuid(dir_name)
 }

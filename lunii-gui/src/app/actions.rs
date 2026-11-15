@@ -31,29 +31,23 @@ impl App {
                 self.launch(Task::RefreshDb);
             }
             Action::Exit => {
-                if let Some((_, ctx)) = self.state.borrow().task.worker.as_ref() {
-                    ctx.request_abort();
-                }
+                self.request_abort();
                 let _ = slint::quit_event_loop();
             }
             Action::MoveTop => self.move_selection(-2),
             Action::MoveUp => self.move_selection(-1),
             Action::MoveDown => self.move_selection(1),
             Action::MoveBottom => self.move_selection(2),
-            Action::Hide => {
+            Action::Hide | Action::NightMode => {
                 let ids = self.selected_ids();
-                if self.device_op(|d, ctx| d.toggle_hidden(ctx, &ids)) {
-                    self.status(&tr("✅ Stories updated..."));
-                } else {
-                    self.status(&tr("🛑 Unable to update story ..."));
-                    self.show_log();
-                }
-            }
-            Action::NightMode => {
-                let ids = self.selected_ids();
-                let ok = self.device_op(|d, _| match d.as_lunii_mut() {
-                    Some(l) => l.toggle_night_mode(&ids),
-                    None => Ok(()),
+                let ok = self.device_op(|d, ctx| {
+                    if action == Action::Hide {
+                        return d.toggle_hidden(ctx, &ids);
+                    }
+                    match d.as_lunii_mut() {
+                        Some(l) => l.toggle_night_mode(&ids),
+                        None => Ok(()),
+                    }
                 });
                 if ok {
                     self.status(&tr("✅ Stories updated..."));
@@ -156,18 +150,13 @@ impl App {
                 if names.is_empty() {
                     return;
                 }
-                let mut message = tr("You are requesting to delete : \n");
-                for n in &names {
-                    message += &format!("- {n}\n");
-                }
-                if message.len() > 512 {
-                    message = message.chars().take(512).collect::<String>() + "...";
-                    message += &tr("\n(and too many others)\n");
-                }
-                message += &tr("\nDo you want to proceed ?");
                 self.state.borrow_mut().podcasts.confirm_removal = false;
-                ui.set_confirm_message(message.into());
-                ui.set_dialog(DialogKind::ConfirmRemove);
+                self.confirm(
+                    DialogKind::ConfirmRemove,
+                    tr("You are requesting to delete : \n"),
+                    &names,
+                    &tr("\nDo you want to proceed ?"),
+                );
             }
             Action::ShowSize => self.ensure_sizes(),
             Action::Columns => {
@@ -213,6 +202,35 @@ impl App {
             Action::DeviceInfo => self.show_device_info(),
             Action::NightModeSettings => self.open_night_mode(),
         }
+    }
+
+    /// Asks to confirm a change of the listed `items`: `head`, the items
+    /// (shortened when there are too many), `question`.
+    pub(super) fn confirm(
+        &self,
+        dialog: DialogKind,
+        head: String,
+        items: &[String],
+        question: &str,
+    ) {
+        let mut message = head;
+        for item in items {
+            message += &format!("- {item}\n");
+        }
+        if message.chars().count() > 512 {
+            message = message.chars().take(512).collect::<String>() + "...";
+            message += &tr("\n(and too many others)\n");
+        }
+        message += question;
+        let ui = self.ui();
+        ui.set_confirm_message(message.into());
+        ui.set_dialog(dialog);
+    }
+
+    /// Model and serial number of the opened device.
+    fn device_id(&self) -> Option<(DeviceVersion, String)> {
+        let st = self.state.borrow();
+        st.devices.info.as_ref().map(|d| (d.version, d.snu.clone()))
     }
 
     pub(crate) fn import(&self, files: Vec<PathBuf>) {
@@ -307,14 +325,7 @@ impl App {
 
     pub(super) fn firmware_login(&self) {
         let ui = self.ui();
-        let Some((version, snu)) = self
-            .state
-            .borrow()
-            .devices
-            .info
-            .as_ref()
-            .map(|d| (d.version, d.snu.clone()))
-        else {
+        let Some((version, snu)) = self.device_id() else {
             return;
         };
         let email = ui.get_login_email().to_string();
@@ -333,14 +344,7 @@ impl App {
         let Some((auth, files)) = self.state.borrow_mut().fw.take() else {
             return;
         };
-        let Some((version, snu)) = self
-            .state
-            .borrow()
-            .devices
-            .info
-            .as_ref()
-            .map(|d| (d.version, d.snu.clone()))
-        else {
+        let Some((version, snu)) = self.device_id() else {
             return;
         };
         let (filter_name, ext) = if version == DeviceVersion::FlamV1 {

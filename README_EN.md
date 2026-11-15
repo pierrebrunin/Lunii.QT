@@ -85,7 +85,7 @@ Forget about all previous .md and firmware recommendations.
 1. The **menu bar**. It will notify you when an update is available  
    (just get it with Menu About/Update to v2.X.X)
 2. The **Stories** and **Podcasts** views.  
-   The connected Lunii/Flam is chosen in the **Device** menu, which also runs the detection again (Refresh connected devices). Its location and technical details are in File / Device information, or a click on the status bar.
+   The connected Lunii/Flam is chosen in the **Device** menu, which also runs the detection again (Refresh connected devices). A storyteller plugged in while the application is running is detected by itself, and opened if none is; unplugged, it is removed. Its location and technical details are in File / Device information, or a click on the status bar.
 3. Configuring **Night mode** ([here](#night-mode)), shown only when the connected Lunii supports it (not on Flam)
 4. **Official DB refresh** : Updates the list of stories and related information from the official Lunii Store. Use it when some official are not recognized.
 5. The **list of your stories** with their duration. The **View** menu also shows their size, night mode (NM), Database (DB) origin and UUID, hidden by default.  

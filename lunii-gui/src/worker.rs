@@ -145,6 +145,9 @@ pub enum Event {
     Details(Uuid, String, Option<Vec<u8>>),
     /// Background device search done (search id, devices and their names)
     DevicesFound(u32, Vec<PathBuf>, Vec<String>),
+    /// Devices plugged in now, checked in the background (search id at the
+    /// time, devices and their names)
+    DevicesWatched(u32, Vec<PathBuf>, Vec<String>),
     /// Background device opening done (search id, device or error)
     DeviceOpened(u32, Result<Box<OpenedDevice>, String>),
     Finished,
@@ -268,6 +271,20 @@ impl Runner {
             .unwrap_or_else(|| Err(anyhow::anyhow!("No device selected")))
     }
 
+    /// Computes the missing story sizes, then lists the stories again.
+    fn update_sizes(&self) -> anyhow::Result<()> {
+        self.on_device(|d| d.compute_sizes(&self.ctx))?;
+        self.refresh();
+        Ok(())
+    }
+
+    /// Name of a story of the device (`uuid` itself when it is not found).
+    fn story_name(&self, uuid: &str) -> String {
+        self.with_device(|d| d.find_story(uuid).map(|s| s.name()).ok())
+            .flatten()
+            .unwrap_or_else(|| uuid.to_string())
+    }
+
     fn import(&self, files: &[PathBuf], update_size: bool) -> anyhow::Result<()> {
         let is_flam = self
             .with_device(|d| d.version() == DeviceVersion::FlamV1)
@@ -336,8 +353,7 @@ impl Runner {
             },
         )?;
         if update_size {
-            self.on_device(|d| d.compute_sizes(&self.ctx))?;
-            self.refresh();
+            self.update_sizes()?;
         }
         self.message(trf(
             "✅ Import done : {}/{}",
@@ -365,8 +381,7 @@ impl Runner {
         self.refresh();
         let added = result?;
         if update_size {
-            self.on_device(|d| d.compute_sizes(&self.ctx))?;
-            self.refresh();
+            self.update_sizes()?;
         }
         self.message(trf(
             "✅ {} track(s) added to the album in {} s",
@@ -409,8 +424,7 @@ impl Runner {
         self.refresh();
         result?;
         if update_size {
-            self.on_device(|d| d.compute_sizes(&self.ctx))?;
-            self.refresh();
+            self.update_sizes()?;
         }
         self.message(trf(
             "✅ Album updated in {} s",
@@ -568,8 +582,7 @@ impl Runner {
             },
         )?;
         if update_size {
-            self.on_device(|d| d.compute_sizes(&self.ctx))?;
-            self.refresh();
+            self.update_sizes()?;
         }
         self.message(trf(
             "✅ {} episode(s) of '{}' imported in {}",
@@ -620,12 +633,8 @@ impl Runner {
     /// After the failure on a story: the log, and the message made with its
     /// name.
     fn failed(&self, uuid: &str, message: impl FnOnce(&str) -> String) {
-        let name = self
-            .with_device(|d| d.find_story(uuid).map(|s| s.name()).ok())
-            .flatten()
-            .unwrap_or_else(|| uuid.to_string());
         self.emit(Event::ShowLog);
-        self.message(message(&name));
+        self.message(message(&self.story_name(uuid)));
     }
 
     fn remove(&self, uuids: &[String]) -> anyhow::Result<()> {
@@ -634,10 +643,7 @@ impl Runner {
             uuids,
             |index, uuid| {
                 self.emit(Event::Total(index, uuids.len()));
-                let name = self
-                    .with_device(|d| d.find_story(uuid).map(|s| s.name()).ok())
-                    .flatten()
-                    .unwrap_or_else(|| uuid.clone());
+                let name = self.story_name(uuid);
                 let result = self.on_device(|d| d.remove_story(&self.ctx, uuid));
                 if result.is_ok() {
                     self.message(trf("👍 Story removed: '{}'", &[&name]));
@@ -670,7 +676,7 @@ impl Runner {
                 }
                 Ok(_) => self.message(tr("🛑 Fail to download update")),
                 Err(e) => {
-                    self.emit(Event::Log(Level::Error, format!("{e:#}")));
+                    self.ctx.error(format!("{e:#}"));
                     self.message(tr("🛑 Fail to download update"));
                 }
             }
@@ -705,13 +711,11 @@ impl Runner {
                 if !episodes.is_empty() {
                     self.import_podcast(&podcast, &episodes, as_stories, update_size)?;
                 } else if update_size {
-                    self.on_device(|d| d.compute_sizes(&self.ctx))?;
-                    self.refresh();
+                    self.update_sizes()?;
                 }
             }
             Task::Size => {
-                self.on_device(|d| d.compute_sizes(&self.ctx))?;
-                self.refresh();
+                self.update_sizes()?;
                 self.message(tr("✅ Stories parsed, sizes updated"));
             }
             Task::Recover { dry_run } => {
@@ -747,7 +751,7 @@ impl Runner {
                 }
                 Err(e) if e.is::<Aborted>() => return Err(e),
                 Err(e) => {
-                    self.emit(Event::Log(Level::Error, format!("{e:#}")));
+                    self.ctx.error(format!("{e:#}"));
                     self.message(tr("🛑 Failed to import DB (wrong file ?)"));
                 }
             },
@@ -769,14 +773,14 @@ impl Runner {
                     match firmware::device_fw_getlist(version, &snu, &auth) {
                         Ok(files) => self.emit(Event::FirmwareFiles(auth, files)),
                         Err(e) => {
-                            self.emit(Event::Log(Level::Error, format!("{e:#}")));
+                            self.ctx.error(format!("{e:#}"));
                             self.message(tr("🛑 Network error..."));
                         }
                     }
                 }
                 Ok(None) => self.message(tr("⚠️ Login failed, please check your credentials")),
                 Err(e) => {
-                    self.emit(Event::Log(Level::Error, format!("{e:#}")));
+                    self.ctx.error(format!("{e:#}"));
                     self.message(tr("🛑 Network error..."));
                 }
             },
@@ -812,14 +816,16 @@ pub fn spawn(
                 runner.message(tr("🛑 Aborted"));
             } else {
                 runner.emit(Event::ShowLog);
-                runner.message(trf(
-                    "🛑 Critical error : {}",
-                    &[&crate::i18n::tr_message(&format!("{e:#}"))],
-                ));
+                runner.message(trf("🛑 Critical error : {}", &[&tr_error(e)]));
             }
         }
         runner.emit(Event::Finished);
     })
+}
+
+/// An error of lunii-core, translated for the user.
+fn tr_error(e: anyhow::Error) -> String {
+    crate::i18n::tr_message(&format!("{e:#}"))
 }
 
 /// Measures the duration of stories from their audio files (not a task: only
@@ -850,7 +856,7 @@ pub fn fetch_feed(url: String, sink: Sink) {
     std::thread::spawn(move || {
         let result = podcast::parse_feed_url(&url)
             .map(Box::new)
-            .map_err(|e| crate::i18n::tr_message(&format!("{e:#}")));
+            .map_err(tr_error);
         sink(Event::Feed(url, result));
     });
 }
@@ -858,8 +864,7 @@ pub fn fetch_feed(url: String, sink: Sink) {
 /// Searches podcasts by name (Apple Podcasts), then downloads their covers.
 pub fn search_podcasts(token: u32, term: String, country: String, sink: Sink) {
     std::thread::spawn(move || {
-        let results = podcast::search(&term, &country)
-            .map_err(|e| crate::i18n::tr_message(&format!("{e:#}")));
+        let results = podcast::search(&term, &country).map_err(tr_error);
         let artworks: Vec<(usize, String)> = results
             .iter()
             .flatten()
@@ -901,9 +906,7 @@ pub fn check_feed(token: u32, url: String, address: bool, sink: Sink) {
             .ok()
             .filter(|_| address)
             .and_then(|p| p.image_url.clone());
-        let result = result
-            .map(Box::new)
-            .map_err(|e| crate::i18n::tr_message(&format!("{e:#}")));
+        let result = result.map(Box::new).map_err(tr_error);
         sink(Event::PodcastChecked(token, result));
         if let Some(data) = image.and_then(|u| podcast::download_artwork(&u)) {
             sink(Event::PodcastArtwork(token, 0, data));

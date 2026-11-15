@@ -52,15 +52,25 @@ impl App {
         ui.set_abort_visible(true);
     }
 
+    /// Bytes written by the running task.
+    fn task_progress(&self) -> Option<u64> {
+        let st = self.state.borrow();
+        st.task.worker.as_ref().map(|(_, ctx)| ctx.progress())
+    }
+
+    /// Asks the running task to stop: `false` without one.
+    pub(super) fn request_abort(&self) -> bool {
+        match self.state.borrow().task.worker.as_ref() {
+            Some((_, ctx)) => {
+                ctx.request_abort();
+                true
+            }
+            None => false,
+        }
+    }
+
     pub(super) fn start_transfer(self: &Rc<Self>, total: u64) {
-        let Some(base) = self
-            .state
-            .borrow()
-            .task
-            .worker
-            .as_ref()
-            .map(|(_, c)| c.progress())
-        else {
+        let Some(base) = self.task_progress() else {
             return;
         };
         if total == 0 {
@@ -90,14 +100,7 @@ impl App {
     }
 
     pub(super) fn update_transfer(&self) {
-        let Some(written) = self
-            .state
-            .borrow()
-            .task
-            .worker
-            .as_ref()
-            .map(|(_, c)| c.progress())
-        else {
+        let Some(written) = self.task_progress() else {
             return;
         };
         let text = {
@@ -121,12 +124,9 @@ impl App {
     }
 
     pub(super) fn abort(&self) {
-        if let Some((_, ctx)) = self.state.borrow().task.worker.as_ref() {
-            ctx.request_abort();
-        } else {
-            return;
+        if self.request_abort() {
+            self.status(&tr("Abort requested, please wait..."));
         }
-        self.status(&tr("Abort requested, please wait..."));
     }
 }
 
