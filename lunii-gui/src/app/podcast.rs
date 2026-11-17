@@ -271,6 +271,7 @@ impl App {
                     }
                     _ => {
                         ui.set_podcast_mode(0);
+                        ui.set_podcast_filter("".into());
                         HashSet::new()
                     }
                 };
@@ -717,8 +718,8 @@ impl App {
         self.rebuild_podcast_rows();
     }
 
-    /// Indexes of the episodes, in the order of the column chosen (newest
-    /// first by default).
+    /// Indexes of the episodes whose title contains the filter, in the order
+    /// of the column chosen (newest first by default).
     pub(super) fn podcast_visible(&self) -> Vec<usize> {
         let ui = self.ui();
         let st = self.state.borrow();
@@ -726,7 +727,11 @@ impl App {
             return Vec::new();
         };
         let episodes = &view.podcast.episodes;
-        let mut visible: Vec<usize> = (0..episodes.len()).rev().collect();
+        let filter = ui.get_podcast_filter().trim().to_lowercase();
+        let mut visible: Vec<usize> = (0..episodes.len())
+            .rev()
+            .filter(|&i| episodes[i].title.to_lowercase().contains(&filter))
+            .collect();
         let present = self.podcast_present(view);
         let column = SortColumn::from(ui.get_podcast_sort_column());
         // stable: the same keys stay newest first

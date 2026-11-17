@@ -312,6 +312,7 @@ impl App {
         on!(on_podcast_mode_changed, |app| app.podcast_mode_changed());
         on!(on_podcast_accepted, |app| app.podcast_apply());
         on!(on_podcast_sort_changed, |app| app.rebuild_podcast_rows());
+        on!(on_podcast_filter_edited, |app| app.rebuild_podcast_rows());
         on!(on_podcast_toggle, |app, index| app
             .podcast_toggle(index as usize));
         on!(on_podcast_select_all, |app, all| app

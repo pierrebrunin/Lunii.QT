@@ -1,7 +1,7 @@
 // Podcasts view: the followed podcasts on the left, the episodes of the
 // selected one on the right, to import on the device.
 
-import { Button, CheckBox, ComboBox, ListView, Palette } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ListView, Palette } from "std-widgets.slint";
 import { Theme, EpisodeRow, FollowedRow } from "common.slint";
 
 // Column header: a click sorts by it, again reverses the order.
@@ -49,6 +49,9 @@ export component PodcastsView inherits HorizontalLayout {
     in-out property <bool> sort-ascending: false;
     // 0: one album (a menu to choose the episode), 1: one story per episode
     in-out property <int> mode;
+    // episodes shown: those whose title contains it
+    in-out property <string> filter;
+    callback filter-edited();
     // a device that stories can be imported to, and no task running
     in property <bool> can-import;
     // no task running
@@ -213,7 +216,8 @@ export component PodcastsView inherits HorizontalLayout {
                 }
             }
         }
-        if root.rows.length > 0: HorizontalLayout {
+        // the filter may hide all the episodes: the bars stay
+        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
             spacing: 6px;
             Text {
                 text: @tr("Import as:");
@@ -225,8 +229,27 @@ export component PodcastsView inherits HorizontalLayout {
                 selected => { root.mode-changed(); }
                 horizontal-stretch: 1;
             }
+        }
+        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
+            spacing: 6px;
+            LineEdit {
+                text <=> root.filter;
+                placeholder-text: @tr("Filter the episodes by title");
+                edited => { root.filter-edited(); }
+                horizontal-stretch: 1;
+            }
+            // the episodes shown
             Button { text: @tr("All"); clicked => { root.select-all(true); } }
             Button { text: @tr("None"); clicked => { root.select-all(false); } }
+        }
+        if root.rows.length == 0 && root.filter != "": Rectangle {
+            vertical-stretch: 1;
+            border-width: 1px;
+            border-color: Palette.border;
+            Text {
+                text: @tr("No episode matches the filter.");
+                color: Theme.hidden-text;
+            }
         }
         if root.rows.length > 0: Rectangle {
             vertical-stretch: 1;

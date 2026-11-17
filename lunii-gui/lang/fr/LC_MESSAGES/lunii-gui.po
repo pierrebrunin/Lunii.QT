@@ -1231,3 +1231,9 @@ msgstr "🔌 {} détectée, lecture de ses histoires…"
 
 msgid "🔌 {} detected: choose it in the Device menu to open it"
 msgstr "🔌 {} détectée : choisissez-la dans le menu Appareil pour l'ouvrir"
+
+msgid "Filter the episodes by title"
+msgstr "Filtrer les épisodes par titre"
+
+msgid "No episode matches the filter."
+msgstr "Aucun épisode ne correspond au filtre."

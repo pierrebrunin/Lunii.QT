@@ -280,7 +280,7 @@ directement la fenêtre d'ajout) :
   tente pas de deviner les « nouveaux » épisodes. Ils sont
   enregistrés dans `~/.lunii/podcasts.json`, comme les épisodes importés ;
 - **à droite, les épisodes** du podcast sélectionné, à cocher par leur case (Tous /
-  Aucun), le mode d'import, puis **Importer (n)**. ↻ recharge le flux, **Ne plus
+  Aucun, sur les épisodes affichés), un filtre sur le titre, le mode d'import, puis **Importer (n)**. ↻ recharge le flux, **Ne plus
   suivre** retire le podcast de la liste (voir plus bas pour ce qui est sur
   l'appareil).
 

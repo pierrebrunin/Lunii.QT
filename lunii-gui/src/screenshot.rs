@@ -386,6 +386,18 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
         press_key(&ui, slint::platform::Key::End);
         pump(&queue, 300);
         render(0, &shot("14-podcast-keyboard-end"));
+        // episodes filtered by title, then none matching
+        for (filter, name) in [
+            ("ium", "14-podcast-filter"),
+            ("xyz", "14-podcast-filter-none"),
+        ] {
+            ui.set_podcast_filter(filter.into());
+            ui.invoke_podcast_filter_edited();
+            pump(&queue, 200);
+            render(0, &shot(name));
+        }
+        ui.set_podcast_filter("".into());
+        ui.invoke_podcast_filter_edited();
 
         // "+": a real search (network) of LUNII_SHOT_SEARCH, a result checked
         if let Ok(term) = std::env::var("LUNII_SHOT_SEARCH") {

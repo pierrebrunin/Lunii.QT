@@ -213,6 +213,9 @@ export component MainWindow inherits Window {
     in-out property <int> podcast-sort-column: 2;
     in-out property <bool> podcast-sort-ascending: false;
     in-out property <int> podcast-mode;
+    // episodes shown: those whose title contains it
+    in-out property <string> podcast-filter;
+    callback podcast-filter-edited();
     callback podcast-add();
     callback podcast-select(index: int);
     callback podcast-refresh();
@@ -530,6 +533,8 @@ export component MainWindow inherits Window {
                 sort-column <=> root.podcast-sort-column;
                 sort-ascending <=> root.podcast-sort-ascending;
                 mode <=> root.podcast-mode;
+                filter <=> root.podcast-filter;
+                filter-edited => { root.podcast-filter-edited(); }
                 can-import: root.story-actions && root.can-import;
                 interactive: !root.busy;
                 add => { root.podcast-add(); }
