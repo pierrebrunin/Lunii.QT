@@ -133,7 +133,7 @@ A podcast whose album is on the connected device is followed automatically (albu
 
 ### Add episodes to the device
 1. Choose the podcast on the left.
-2. Choose the import mode, **Import as:**
+2. Choose the import mode, **Import as:** (at the bottom, next to the **Import** button)
    * **an album** (default): a single story, one episode per track in chronological order, with a menu to choose the episode. If the album is already on the device, the chosen episodes are **appended** to it;
    * **one story per episode**: each episode shows up as a story of its own in the device list.
 3. Check the episodes you want with their box (**to import**); a click elsewhere on the row only selects it. With the keyboard, the arrows, Page Up/Down and Home/End move the selection, **Space** checks or unchecks the selected episode. The **Filter the episodes by title** field shows only those whose title contains the text typed. The **All** / **None** buttons check or uncheck the episodes shown; clicking a column header sorts the list (title, duration, publication date, on the device).

@@ -219,19 +219,6 @@ export component PodcastsView inherits HorizontalLayout {
         // the filter may hide all the episodes: the bars stay
         if root.rows.length > 0 || root.filter != "": HorizontalLayout {
             spacing: 6px;
-            Text {
-                text: @tr("Import as:");
-                vertical-alignment: center;
-            }
-            ComboBox {
-                model: [@tr("an album (a menu to choose the episode)"), @tr("one story per episode")];
-                current-index <=> root.mode;
-                selected => { root.mode-changed(); }
-                horizontal-stretch: 1;
-            }
-        }
-        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
-            spacing: 6px;
             LineEdit {
                 text <=> root.filter;
                 placeholder-text: @tr("Filter the episodes by title");
@@ -443,11 +430,21 @@ export component PodcastsView inherits HorizontalLayout {
                 }
             }
         }
-        if (root.current >= 0 || root.header != "") && root.rows.length == 0: Rectangle {
+        if (root.current >= 0 || root.header != "") && root.rows.length == 0 && root.filter == "": Rectangle {
             vertical-stretch: 1;
         }
-        if root.rows.length > 0: HorizontalLayout {
+        // checked episodes hidden by the filter are imported too
+        if root.rows.length > 0 || root.filter != "": HorizontalLayout {
             spacing: 6px;
+            Text {
+                text: @tr("Import as:");
+                vertical-alignment: center;
+            }
+            ComboBox {
+                model: [@tr("an album (a menu to choose the episode)"), @tr("one story per episode")];
+                current-index <=> root.mode;
+                selected => { root.mode-changed(); }
+            }
             Rectangle { horizontal-stretch: 1; }
             Text {
                 text: root.count;

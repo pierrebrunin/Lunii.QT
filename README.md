@@ -131,7 +131,7 @@ Un podcast dont l'album est sur l'appareil branché est suivi automatiquement (a
 
 ### Ajouter des épisodes sur l'appareil
 1. Choisissez le podcast à gauche.
-2. Choisissez le mode d'import, **Importer comme :**
+2. Choisissez le mode d'import, **Importer comme :** (en bas, à côté du bouton **Importer**)
    * **un album** (par défaut) : une seule histoire, un épisode par piste dans l'ordre chronologique, avec un menu pour choisir l'épisode. Si l'album est déjà sur l'appareil, les épisodes choisis y sont **ajoutés** ;
    * **une histoire par épisode** : chaque épisode apparaît comme une histoire à part dans la liste de l'appareil.
 3. Cochez les épisodes voulus, par leur case (mention **à importer**) ; un clic ailleurs sur la ligne la sélectionne seulement. Au clavier, les flèches, Page préc./suiv. et Début/Fin déplacent la sélection, **Espace** coche ou décoche l'épisode sélectionné. Le champ **Filtrer les épisodes par titre** n'affiche que ceux dont le titre contient le texte saisi. Les boutons **Tous** / **Aucun** cochent ou décochent les épisodes affichés ; un clic sur l'en-tête d'une colonne trie la liste (titre, durée, date de publication, présence sur l'appareil).
