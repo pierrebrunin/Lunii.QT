@@ -861,10 +861,11 @@ pub fn fetch_feed(url: String, sink: Sink) {
     });
 }
 
-/// Searches podcasts by name (Apple Podcasts), then downloads their covers.
-pub fn search_podcasts(token: u32, term: String, country: String, sink: Sink) {
+/// Searches podcasts by name (Apple Podcasts; `kids_only`: Kids & Family
+/// genre), then downloads their covers.
+pub fn search_podcasts(token: u32, term: String, country: String, kids_only: bool, sink: Sink) {
     std::thread::spawn(move || {
-        let results = podcast::search(&term, &country).map_err(tr_error);
+        let results = podcast::search(&term, &country, kids_only).map_err(tr_error);
         let artworks: Vec<(usize, String)> = results
             .iter()
             .flatten()

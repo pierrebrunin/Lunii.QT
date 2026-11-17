@@ -11,6 +11,11 @@ laissées pour plus tard. Retirer une entrée une fois traitée.
 - **Un seul mécanisme pour ignorer les résultats périmés** : `devices.scan`,
   `durations.generation` et les jetons de la recherche de podcasts font la
   même chose de trois façons.
+- **Âge conseillé des podcasts** : aucun flux RSS ne le donne. Les pages
+  Radio France l'ont dans `<meta name="ad:rubriques">`
+  (`podcasts-enfants-a-partir-de-{3,6,9}-ans`, parfois plusieurs : garder le
+  plus petit). Ailleurs, seulement du texte libre (« dès 5 ans »,
+  « ages 4-10 » dans `itunes:keywords`), rare et peu fiable.
 
 ## Fichiers de configuration
 

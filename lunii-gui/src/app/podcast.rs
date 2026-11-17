@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use std::rc::Rc;
 
+use lunii_core::Level;
 use lunii_core::podcast::{self, Podcast, SavedPodcast, SearchResult};
 use slint::{Model as _, ModelRc, VecModel};
 use uuid::Uuid;
@@ -13,6 +14,9 @@ use super::{App, decode_image, format_duration, sink};
 use crate::i18n::{tr, trf};
 use crate::worker::{self, Task};
 use crate::{DialogKind, EpisodeRow, FollowedRow, PodcastResult};
+
+/// Setting: the search shows all podcasts, not only children's ones.
+const SEARCH_ALL_SETTING: &str = "podcast_search_all";
 
 /// The podcast displayed, with what is already on the device.
 pub struct PodcastView {
@@ -341,6 +345,7 @@ impl App {
         };
         ui.set_podcast_add_results(ModelRc::from(rows));
         ui.set_podcast_add_query("".into());
+        ui.set_podcast_add_kids_only(!lunii_core::settings::get_bool(SEARCH_ALL_SETTING));
         ui.set_podcast_add_selected(-1);
         ui.set_podcast_add_working(false);
         ui.set_podcast_add_can_follow(false);
@@ -384,7 +389,21 @@ impl App {
             worker::check_feed(token, query, true, sink());
         } else {
             self.podcast_add_message(&tr("Searching..."), false);
-            worker::search_podcasts(token, query, store_country(), sink());
+            let kids_only = ui.get_podcast_add_kids_only();
+            worker::search_podcasts(token, query, store_country(), kids_only, sink());
+        }
+    }
+
+    /// "Children's podcasts only" toggled: kept, and the search done again.
+    pub(super) fn podcast_add_kids_toggled(&self) {
+        let ui = self.ui();
+        let all = !ui.get_podcast_add_kids_only();
+        if let Err(e) = lunii_core::settings::set_bool(SEARCH_ALL_SETTING, all) {
+            self.log(Level::Warn, &format!("{e:#}"));
+        }
+        let query = ui.get_podcast_add_query();
+        if !query.trim().is_empty() && !podcast::is_address(&query) {
+            self.podcast_add_submit();
         }
     }
 

@@ -378,6 +378,9 @@ export component AddPodcastDialog inherits Overlay {
     in property <bool> message-error;
     // a feed was checked
     in property <bool> can-follow;
+    // search limited to the "Kids & Family" genre of Apple Podcasts
+    in-out property <bool> kids-only: true;
+    callback kids-toggled();
     callback submit();
     callback choose(index: int);
     callback follow();
@@ -414,6 +417,11 @@ export component AddPodcastDialog inherits Overlay {
         wrap: word-wrap;
         font-size: 12px;
         color: Theme.hidden-text;
+    }
+    CheckBox {
+        text: @tr("Children's podcasts only (Apple Podcasts search)");
+        checked <=> root.kids-only;
+        toggled => { root.kids-toggled(); }
     }
     if root.results.length > 0: Rectangle {
         height: min(290px, root.results.length * 54px + 2px);

@@ -108,15 +108,26 @@ pub fn is_address(text: &str) -> bool {
     text.starts_with("http://") || text.starts_with("https://")
 }
 
+/// Results shown by [`search`].
+const SEARCH_RESULTS: usize = 30;
+
+/// Apple Podcasts genre "Kids & Family" (its subgenres come with it).
+const KIDS_GENRE: &str = "1305";
+
 /// Searches podcasts by name in the Apple Podcasts catalog of `country`
 /// (`fr`, `us`...): free API, no key, about 20 requests per minute.
-pub fn search(term: &str, country: &str) -> Result<Vec<SearchResult>> {
+/// `kids_only`: only those of the "Kids & Family" genre.
+pub fn search(term: &str, country: &str, kids_only: bool) -> Result<Vec<SearchResult>> {
+    // the API ignores `genreId`: more results asked for, then filtered
+    let limit = if kids_only { 200 } else { SEARCH_RESULTS };
     let url = format!(
-        "https://itunes.apple.com/search?media=podcast&entity=podcast&limit=30&country={}&term={}",
+        "https://itunes.apple.com/search?media=podcast&entity=podcast&limit={limit}&country={}&term={}",
         query_encode(country),
         query_encode(term.trim())
     );
-    parse_search(&get_text(&url)?)
+    let mut results = parse_search(&get_text(&url)?, kids_only)?;
+    results.truncate(SEARCH_RESULTS);
+    Ok(results)
 }
 
 /// Percent-encoding of a query value.
@@ -134,7 +145,7 @@ pub(super) fn query_encode(value: &str) -> String {
     out
 }
 
-pub(super) fn parse_search(json: &str) -> Result<Vec<SearchResult>> {
+pub(super) fn parse_search(json: &str, kids_only: bool) -> Result<Vec<SearchResult>> {
     let data: Value = serde_json::from_str(json).context("Invalid answer of Apple Podcasts")?;
     let text = |r: &Value, name: &str| {
         r[name]
@@ -147,6 +158,12 @@ pub(super) fn parse_search(json: &str) -> Result<Vec<SearchResult>> {
         .into_iter()
         .flatten()
         .filter(|r| r["kind"] == "podcast")
+        .filter(|r| {
+            !kids_only
+                || r["genreIds"]
+                    .as_array()
+                    .is_some_and(|ids| ids.iter().any(|id| id == KIDS_GENRE))
+        })
         .filter_map(|r| {
             Some(SearchResult {
                 title: text(r, "collectionName").or_else(|| text(r, "trackName"))?,
@@ -173,11 +190,17 @@ mod tests {
     fn apple_search() {
         let json = r#"{"resultCount":3,"results":[
  {"kind":"podcast","collectionName":"Un podcast à soi","artistName":"ARTE Radio",
-  "feedUrl":"https://www.arteradio.com/xml","artworkUrl100":"https://img/100.jpg","trackCount":69},
+  "feedUrl":"https://www.arteradio.com/xml","artworkUrl100":"https://img/100.jpg","trackCount":69,
+  "genreIds":["1324","26"]},
  {"kind":"podcast","collectionName":"Contes du soir","artistName":"Radio Exemple","trackCount":203,
-  "collectionViewUrl":"https://podcasts.apple.com/fr/podcast/contes-du-soir/id42?uo=4"},
+  "collectionViewUrl":"https://podcasts.apple.com/fr/podcast/contes-du-soir/id42?uo=4",
+  "genreIds":["1520","26","1305"]},
  {"kind":"podcast-episode","trackName":"Un épisode"}]}"#;
-        let r = parse_search(json).unwrap();
+        // Kids & Family only
+        let kids = parse_search(json, true).unwrap();
+        assert_eq!(kids.len(), 1);
+        assert_eq!(kids[0].title, "Contes du soir");
+        let r = parse_search(json, false).unwrap();
         assert_eq!(r.len(), 2);
         assert_eq!(r[0].title, "Un podcast à soi");
         assert_eq!(r[0].author.as_deref(), Some("ARTE Radio"));
@@ -193,7 +216,7 @@ mod tests {
             r[1].apple_url.as_deref(),
             Some("https://podcasts.apple.com/fr/podcast/contes-du-soir/id42?uo=4")
         );
-        assert!(parse_search("<html>").is_err());
+        assert!(parse_search("<html>", false).is_err());
         assert_eq!(
             query_encode("contes à lire & co"),
             "contes+%C3%A0+lire+%26+co"

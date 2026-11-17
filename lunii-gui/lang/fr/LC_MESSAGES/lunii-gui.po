@@ -1052,6 +1052,9 @@ msgstr "Nom ou adresse du podcast"
 msgid "Search a podcast by its name, or paste the address of its RSS feed, of its page or its Apple Podcasts link."
 msgstr "Cherchez un podcast par son nom, ou collez l'adresse de son flux RSS, de sa page ou son lien Apple Podcasts."
 
+msgid "Children's podcasts only (Apple Podcasts search)"
+msgstr "Podcasts pour enfants uniquement (recherche Apple Podcasts)"
+
 msgid "Search"
 msgstr "Rechercher"
 

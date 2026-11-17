@@ -233,6 +233,8 @@ export component MainWindow inherits Window {
     in property <string> podcast-add-message;
     in property <bool> podcast-add-error;
     in property <bool> podcast-add-can-follow;
+    in-out property <bool> podcast-add-kids-only: true;
+    callback podcast-add-kids-toggled();
     callback podcast-add-submit();
     callback podcast-add-choose(index: int);
     callback podcast-add-follow();
@@ -767,6 +769,8 @@ export component MainWindow inherits Window {
         message: root.podcast-add-message;
         message-error: root.podcast-add-error;
         can-follow: root.podcast-add-can-follow;
+        kids-only <=> root.podcast-add-kids-only;
+        kids-toggled => { root.podcast-add-kids-toggled(); }
         close => { root.dialog = DialogKind.none; }
         submit => { root.podcast-add-submit(); }
         choose(index) => { root.podcast-add-choose(index); }

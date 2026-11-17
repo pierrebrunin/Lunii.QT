@@ -401,7 +401,7 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
                 // covers
                 pump(queue, 1500);
             };
-            ui.set_podcast_add_query(term.into());
+            ui.set_podcast_add_query(term.as_str().into());
             ui.invoke_podcast_add_submit();
             wait(&queue);
             render(0, &shot("16-add-podcast-results"));
@@ -416,6 +416,13 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
                 pump(&queue, 300);
                 render(0, &shot("16-add-podcast-followed"));
             }
+            // the same search, not only children's podcasts
+            ui.invoke_podcast_add();
+            ui.set_podcast_add_query(term.into());
+            ui.set_podcast_add_kids_only(false);
+            ui.invoke_podcast_add_kids_toggled();
+            wait(&queue);
+            render(0, &shot("16-add-podcast-all"));
             ui.set_dialog(DialogKind::None);
         }
         ui.set_view(0);

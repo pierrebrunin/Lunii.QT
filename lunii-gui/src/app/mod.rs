@@ -299,6 +299,8 @@ impl App {
         on!(on_podcast_add, |app| app.podcast_add_open());
         on!(on_podcast_add_submit, |app| app.podcast_add_submit());
         on!(on_podcast_add_follow, |app| app.podcast_add_follow());
+        on!(on_podcast_add_kids_toggled, |app| app
+            .podcast_add_kids_toggled());
         on!(on_podcast_add_choose, |app, index| app
             .podcast_add_choose(index));
         on!(on_podcast_refresh, |app| app.podcast_refresh());
