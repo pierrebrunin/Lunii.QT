@@ -28,7 +28,7 @@ sevenz-rust2 = "0.25"
 symphonia = { version = "0.6", features = ["all-codecs", "all-formats"] }
 thiserror = "2"
 unicode-normalization = "0.1"
-ureq = { version = "3", features = ["json"] }
+ureq = { version = "3", features = ["json", "platform-verifier", "win-system-proxy"] }
 uuid = { version = "1", features = ["v5"] }
 walkdir = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }

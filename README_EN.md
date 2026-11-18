@@ -63,6 +63,7 @@ Forget about all previous .md and firmware recommendations.
     - [macOS - Application Authorization](#macos---application-authorization)
     - [Third Party story metadata](#third-party-story-metadata)
     - [Cache management](#cache-management)
+    - [Proxy and corporate networks](#proxy-and-corporate-networks)
     - [Linux missing dependencies](#linux-missing-dependencies)
     - [v3 export](#v3-export)
     - [ICO creation](#ico-creation)
@@ -408,6 +409,17 @@ This application will download once for all the official story database and any 
 * `$HOME/.lunii/cache/*`
 
 In case of any trouble, just remove this file and directory to force refresh
+
+### Proxy and corporate networks
+The application uses the proxy given by the `HTTPS_PROXY`, `HTTP_PROXY` or
+`ALL_PROXY` environment variables (`NO_PROXY` for exceptions), for instance
+`HTTPS_PROXY=http://user:password@proxy:8080`. Without them, on Windows, it
+uses the system proxy.
+
+Certificates are checked against the system store. Proxies that decrypt the
+traffic (Netskope, Zscaler...) therefore work as soon as their root
+certificate is installed there, which their agent normally does.
+On Linux, `SSL_CERT_FILE` can point to another certificate file.
 
 ### Linux dependencies
 The application only needs the graphics libraries of a standard desktop (X11 or

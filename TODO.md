@@ -65,6 +65,13 @@ laissées pour plus tard. Retirer une entrée une fois traitée.
   lecture et l'enveloppe. Les fusionner demande de garder exactement le même
   ordre des nœuds (les fichiers d'index de l'appareil en dépendent).
 
+## Réseau
+
+- **Proxy** : seulement les variables d'environnement, et le proxy système
+  sous Windows (`http.rs`). Restent : un réglage dans l'interface, le proxy
+  système de macOS et de GNOME/KDE, les fichiers PAC, et le format Windows
+  par protocole (`http=hôte:port;https=…`), que `ureq` ne lit pas.
+
 ## Tests
 
 - **CLI** : aucun test. Quelques parcours de bout en bout sur une fausse Lunii

@@ -64,6 +64,7 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
     - [macOS - Authorisation de l'application](#macos---authorisation-de-lapplication)
     - [Métadonnées des histoires non-officielles](#métadonnées-des-histoires-non-officielles)
     - [Gestion du cache](#gestion-du-cache)
+    - [Proxy et réseau d'entreprise](#proxy-et-réseau-dentreprise)
     - [Dépendances manquantes sous Linux](#dépendances-manquantes-sous-linux)
     - [Exportation V3](#exportation-v3)
     - [Création de l'ICO](#création-de-lico)
@@ -416,6 +417,16 @@ Cette application téléchargera une fois pour toutes la base de données des hi
 
 En cas de problème, il suffit de supprimer ce fichier et ce répertoire pour forcer le rafraîchissement.
 
+### Proxy et réseau d'entreprise
+L'application utilise le proxy indiqué par les variables d'environnement
+`HTTPS_PROXY`, `HTTP_PROXY` ou `ALL_PROXY` (`NO_PROXY` pour les exceptions),
+par exemple `HTTPS_PROXY=http://utilisateur:motdepasse@proxy:8080`. Sans ces
+variables, sous Windows, elle reprend le proxy du système.
+
+Les certificats sont vérifiés avec le magasin du système. Les proxys qui
+déchiffrent le trafic (Netskope, Zscaler…) fonctionnent donc dès que leur
+certificat racine y est installé, ce que fait normalement leur agent.
+Sous Linux, `SSL_CERT_FILE` peut désigner un autre fichier de certificats.
 
 ### Dépendances sous Linux
 L'interface a seulement besoin des bibliothèques graphiques d'un bureau standard
