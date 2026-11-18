@@ -3023,7 +3023,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "lunii-cli"
-version = "4.0.0-beta.2"
+version = "4.0.0-beta.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -3036,7 +3036,7 @@ dependencies = [
 
 [[package]]
 name = "lunii-core"
-version = "4.0.0-beta.2"
+version = "4.0.0-beta.3"
 dependencies = [
  "ab_glyph",
  "aes",
@@ -3069,7 +3069,7 @@ dependencies = [
 
 [[package]]
 name = "lunii-gui"
-version = "4.0.0-beta.2"
+version = "4.0.0-beta.3"
 dependencies = [
  "anyhow",
  "arboard",
