@@ -34,7 +34,8 @@ pub fn secure_filename(filename: &str) -> String {
 }
 
 /// Writes the two index files of a device, `visible` and `hidden` (path,
-/// content), each one atomically (see [`crate::store::write_atomic`]).
+/// content), each one where it is on the disk (see
+/// [`crate::store::write_in_place`]).
 /// Interrupted between the two, a story moved from one to the other is in
 /// both, read once (the visible one wins, see `feed_stories`), rather than in
 /// none: the file gaining stories is written first. `unhiding`: stories go
@@ -50,7 +51,7 @@ pub fn write_pack_index(
         (hidden, visible)
     };
     for (path, data) in [first, second] {
-        crate::store::write_atomic(path, data)
+        crate::store::write_in_place(path, data)
             .with_context(|| format!("unable to write {}", path.display()))?;
     }
     Ok(())

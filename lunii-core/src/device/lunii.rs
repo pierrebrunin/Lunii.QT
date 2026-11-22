@@ -725,7 +725,7 @@ impl LuniiDevice {
             cfg.extend_from_slice(&(index as u16).to_le_bytes());
             cfg.extend_from_slice(&value.to_le_bytes());
         }
-        crate::store::write_atomic(&self.mount_point.join(".cfg"), &cfg)?;
+        crate::store::write_in_place(&self.mount_point.join(".cfg"), &cfg)?;
         Ok(())
     }
 

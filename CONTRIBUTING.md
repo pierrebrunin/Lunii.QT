@@ -26,8 +26,9 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   │                        import.rs (téléchargement d'un épisode, archives à importer),
 │   │                        state.rs (podcasts suivis)
 │   ├── src/settings.rs      réglages (~/.lunii/settings.json)
-│   ├── src/store.rs         écritures sûres : fichier temporaire puis renommage,
-│   │                        verrou, fichier illisible mis de côté (.corrupted)
+│   ├── src/store.rs         écritures sûres : fichier temporaire puis renommage
+│   │                        (~/.lunii), réécriture sur place (appareils), verrou,
+│   │                        fichier illisible mis de côté (.corrupted)
 │   ├── src/firmware.rs      téléchargement des firmwares
 │   ├── src/tools.rs         import base STUdio, téléchargements, mise à jour
 │   └── tests/               scénarios complets sur de faux appareils
@@ -63,8 +64,11 @@ les pistes des albums). Chaque requête en arrière-plan porte un ticket
 (`tickets.rs`) : une nouvelle requête du même sujet rend les réponses des
 précédentes périmées, ignorées.
 
-Les fichiers de `~/.lunii` et les index des appareils sont écrits par
-`store::write_atomic` : un arrêt en pleine écriture laisse l'ancien contenu.
+Les fichiers de `~/.lunii` sont écrits par `store::write_atomic` : un arrêt
+en pleine écriture laisse l'ancien contenu. Sur un appareil, jamais de
+fichier temporaire renommé : les index et réglages sont réécrits à leur place
+sur le disque (`store::write_in_place`). Une Flam qui reconstruisait son
+`library.cache` a écrasé un index écrit dans un bloc qu'elle croyait libre.
 Un fichier de configuration illisible est renommé en `.corrupted`, avec un
 avertissement, au lieu d'être écrasé.
 

@@ -1,9 +1,12 @@
 //! Safe file writes, for the files of the application (`~/.lunii`) and the
-//! indexes of the devices.
+//! small files of the devices (indexes, settings).
 //!
 //! - [`write_atomic`]: a file is written next to its target, synced, then
-//!   renamed over it. Interrupted (crash, device unplugged), the target keeps
-//!   its previous content instead of being truncated.
+//!   renamed over it. Interrupted (crash), the target keeps its previous
+//!   content instead of being truncated. Not on a device: see
+//!   [`write_in_place`].
+//! - [`write_in_place`]: a small file of a device is rewritten where it is on
+//!   the disk.
 //! - [`read_json`]: an unreadable file is set aside (`<name>.corrupted`) with
 //!   a warning, instead of being treated as empty and overwritten.
 //! - [`lock`]: serializes the read-modify-write cycles of a file, between the
@@ -51,6 +54,24 @@ pub fn write_atomic(path: &Path, data: &[u8]) -> io::Result<()> {
         let _ = std::fs::remove_file(&tmp);
     }
     result
+}
+
+/// Rewrites `path` (a small file of a device: index, settings) where it is
+/// on the disk, then syncs it.
+///
+/// A rename would put the new content in blocks the storyteller may still
+/// believe free: a Flam rebuilding its `library.cache` overwrote the index
+/// written this way. Rewritten in place, a file of up to one cluster (4 KB:
+/// about 110 stories in an index) keeps its block, nothing is allocated.
+pub fn write_in_place(path: &Path, data: &[u8]) -> io::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)?;
+    file.write_all(data)?;
+    file.set_len(data.len() as u64)?;
+    file.sync_all()
 }
 
 /// Sets an unreadable file aside, as `<name>.corrupted` (replacing an older
@@ -130,6 +151,27 @@ mod tests {
             .map(|e| e.unwrap().file_name())
             .collect();
         assert_eq!(names, vec![std::ffi::OsString::from("a.json")]);
+    }
+
+    /// Same file (same inode), new content, shorter or longer.
+    #[test]
+    fn in_place_write_keeps_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("list");
+        write_in_place(&path, b"first content, quite long").unwrap();
+        #[cfg(unix)]
+        let inode = {
+            use std::os::unix::fs::MetadataExt;
+            || std::fs::metadata(&path).unwrap().ino()
+        };
+        #[cfg(unix)]
+        let before = inode();
+        write_in_place(&path, b"short").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"short");
+        write_in_place(&path, b"longer than before").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"longer than before");
+        #[cfg(unix)]
+        assert_eq!(inode(), before, "rewritten, not replaced");
     }
 
     #[test]
