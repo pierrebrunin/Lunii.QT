@@ -99,6 +99,13 @@ pub struct OpenedDevice {
     pub stories: Vec<StoryInfo>,
 }
 
+/// Why a device could not be opened.
+pub enum OpenError {
+    /// neither a Lunii nor a Flam (no `.md` / `.mdf`): removed from the list
+    NotRecognized(PathBuf),
+    Failed(String),
+}
+
 /// The stories of the device, with all the UI displays of them (reads the
 /// device: on its thread).
 pub fn snapshot(dev: &dyn Device) -> Vec<StoryInfo> {
@@ -205,13 +212,47 @@ pub enum Event {
     /// the time, devices and their names)
     DevicesWatched(Ticket, Vec<PathBuf>, Vec<String>),
     /// Background device opening done (device or error)
-    DeviceOpened(Ticket, Result<Box<OpenedDevice>, String>),
+    DeviceOpened(Ticket, Result<Box<OpenedDevice>, OpenError>),
     Finished,
     /// Duration measured on the device (story, seconds; `None`: not
     /// measurable)
     Duration(Ticket, Uuid, Option<u32>),
     /// The durations asked are all measured
     DurationsDone,
+}
+
+impl Event {
+    /// Its name, for the log (see `watchdog`).
+    pub fn name(&self) -> &'static str {
+        match self {
+            Event::Log(..) => "Log",
+            Event::Status(..) => "Status",
+            Event::ShowLog => "ShowLog",
+            Event::Total(..) => "Total",
+            Event::Episode(..) => "Episode",
+            Event::ImportPlan(..) => "ImportPlan",
+            Event::Feed(..) => "Feed",
+            Event::PodcastSearch(..) => "PodcastSearch",
+            Event::PodcastChecked(..) => "PodcastChecked",
+            Event::PodcastArtwork(..) => "PodcastArtwork",
+            Event::Story(..) => "Story",
+            Event::File(..) => "File",
+            Event::Stories(..) => "Stories",
+            Event::QuickChanged(..) => "QuickChanged",
+            Event::NightModeSaved(..) => "NightModeSaved",
+            Event::DbRefreshed(..) => "DbRefreshed",
+            Event::DbLoaded(..) => "DbLoaded",
+            Event::FirmwareFiles(..) => "FirmwareFiles",
+            Event::UpdateCheck(..) => "UpdateCheck",
+            Event::Details(..) => "Details",
+            Event::DevicesFound(..) => "DevicesFound",
+            Event::DevicesWatched(..) => "DevicesWatched",
+            Event::DeviceOpened(..) => "DeviceOpened",
+            Event::Finished => "Finished",
+            Event::Duration(..) => "Duration",
+            Event::DurationsDone => "DurationsDone",
+        }
+    }
 }
 
 pub type Sink = Arc<dyn Fn(Event) + Send + Sync>;

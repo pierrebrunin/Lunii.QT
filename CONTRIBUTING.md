@@ -44,6 +44,7 @@ l'historique git, jusqu'au commit `c8afe43`.
     ├── src/worker.rs        tâches longues en arrière-plan
     ├── src/device_actor.rs  thread propriétaire de l'appareil ouvert
     ├── src/tickets.rs       réponses périmées des requêtes en arrière-plan
+    ├── src/watchdog.rs      fenêtre qui ne répond plus : durée et cause dans le journal
     ├── src/i18n.rs          traductions des messages côté Rust (un test vérifie que les
     │                        messages de lunii-core sont tous traduits)
     ├── src/logfile.rs       fichier de log persistant et logger de la façade `log`

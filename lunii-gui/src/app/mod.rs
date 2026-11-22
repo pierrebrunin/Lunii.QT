@@ -413,6 +413,10 @@ impl App {
     // -----------------------------------------------------------------------
 
     pub fn handle_event(self: &Rc<Self>, event: Event) {
+        crate::watchdog::handling(event.name(), || self.dispatch(event));
+    }
+
+    fn dispatch(self: &Rc<Self>, event: Event) {
         let ui = self.ui();
         match event {
             Event::Log(level, msg) => self.log(level, &msg),

@@ -12,6 +12,7 @@ mod logfile;
 #[cfg(feature = "screenshot")]
 mod screenshot;
 mod tickets;
+mod watchdog;
 mod worker;
 
 fn main() -> anyhow::Result<()> {
@@ -34,6 +35,7 @@ fn main() -> anyhow::Result<()> {
     let app = app::App::new(&ui);
 
     ui.show()?;
+    watchdog::spawn();
     app.start();
     slint::run_event_loop()?;
     app.shutdown();

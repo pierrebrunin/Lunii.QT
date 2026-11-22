@@ -1,6 +1,7 @@
 //! The device: search, opening, information, quick changes (move, hide).
 
 use super::*;
+use crate::worker::OpenError;
 
 /// The devices found, and the one opened.
 #[derive(Default)]
@@ -409,20 +410,8 @@ impl App {
         self.close_device();
         let ui = self.ui();
 
-        if !device::is_lunii(&path) && !device::is_flam(&path) {
-            self.log(
-                Level::Error,
-                &format!("{} is not a recognized device.", path.display()),
-            );
-            let mut devices = self.state.borrow().devices.paths.clone();
-            devices.remove(index as usize);
-            let labels = device_labels(&devices);
-            self.set_devices(devices, labels);
-            self.set_device_index(-1);
-            return;
-        }
-
-        // read in the background (all the stories): see `device_opened`
+        // read in the background (all the stories, its kind too: a device
+        // just plugged in may be slow to answer), see `device_opened`
         let scan = self.next_scan();
         let label = self
             .state
@@ -445,6 +434,13 @@ impl App {
         let sink = sink();
         std::thread::spawn(move || {
             // everything that reads the device (all the stories) is done here
+            if !device::is_lunii(&path) && !device::is_flam(&path) {
+                sink(Event::DeviceOpened(
+                    scan,
+                    Err(OpenError::NotRecognized(path)),
+                ));
+                return;
+            }
             let opened = device::open_device(&ctx, &path)
                 .map(|dev| {
                     Box::new(worker::OpenedDevice {
@@ -453,7 +449,7 @@ impl App {
                         dev,
                     })
                 })
-                .map_err(|e| format!("{e:#}"));
+                .map_err(|e| OpenError::Failed(format!("{e:#}")));
             sink(Event::DeviceOpened(scan, opened));
         });
     }
@@ -461,7 +457,7 @@ impl App {
     pub(super) fn device_opened(
         &self,
         scan: Ticket,
-        opened: Result<Box<worker::OpenedDevice>, String>,
+        opened: Result<Box<worker::OpenedDevice>, OpenError>,
     ) {
         if !self.is_current(scan) {
             return;
@@ -470,7 +466,21 @@ impl App {
         ui.set_scanning(false);
         let worker::OpenedDevice { dev, info, stories } = match opened {
             Ok(d) => *d,
-            Err(e) => {
+            Err(OpenError::NotRecognized(path)) => {
+                ui.set_list_placeholder("".into());
+                self.status("");
+                self.log(
+                    Level::Error,
+                    &format!("{} is not a recognized device.", path.display()),
+                );
+                let mut devices = self.state.borrow().devices.paths.clone();
+                devices.retain(|d| *d != path);
+                let labels = device_labels(&devices);
+                self.set_devices(devices, labels);
+                self.set_device_index(-1);
+                return;
+            }
+            Err(OpenError::Failed(e)) => {
                 let error = tr("🛑 PermissionError : Unable to open this device");
                 ui.set_list_placeholder("".into());
                 self.log(Level::Error, &e);

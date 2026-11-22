@@ -1249,3 +1249,15 @@ msgstr "Filtrer les épisodes par titre"
 
 msgid "No episode matches the filter."
 msgstr "Aucun épisode ne correspond au filtre."
+
+msgid "while handling {}"
+msgstr "pendant le traitement de {}"
+
+msgid "in an action of the window"
+msgstr "pendant une action de la fenêtre"
+
+msgid "The window has not responded for {} s, {}"
+msgstr "La fenêtre ne répond plus depuis {} s, {}"
+
+msgid "The window did not respond for {} s, {}"
+msgstr "La fenêtre n'a pas répondu pendant {} s, {}"
