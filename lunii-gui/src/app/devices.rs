@@ -620,7 +620,7 @@ impl App {
                 if let Some(row) = self.focus_moved(&ids)
                     && scroll
                 {
-                    self.ui().invoke_ensure_visible(row as i32);
+                    self.ui().invoke_scroll_to_row(row as i32);
                 }
             }
         }

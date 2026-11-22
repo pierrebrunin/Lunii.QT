@@ -254,8 +254,8 @@ export component MainWindow inherits Window {
     min-width: 500px;
     min-height: 400px;
 
-    public function ensure-visible(row: int) {
-        table.ensure-visible(row);
+    public function scroll-to-row(row: int) {
+        table.scroll-to-row(row);
     }
 
     // a dialog is open: the menus (and their shortcuts) are disabled

@@ -57,7 +57,7 @@ pub fn init() {
 pub fn write(line: &str) {
     let mut guard = FILE.lock().unwrap();
     if let Some(f) = guard.as_mut() {
-        let now = jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S%.3f");
+        let now = jiff::ZonedDateTime::now().strftime("%Y-%m-%d %H:%M:%S%.3f");
         // a full disk must not break the application: the file is just dropped
         if writeln!(f, "{now} {line}").is_err() {
             *guard = None;

@@ -224,7 +224,7 @@ impl App {
             row
         };
         self.selection_changed();
-        self.ui().invoke_ensure_visible(row as i32);
+        self.ui().invoke_scroll_to_row(row as i32);
     }
 
     /// Selected stories (UUID strings), in display order.
