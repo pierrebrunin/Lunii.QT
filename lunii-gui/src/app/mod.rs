@@ -31,7 +31,7 @@ mod podcast;
 mod progress;
 mod stories;
 
-pub(crate) use devices::{DevInfo, QuickChange};
+pub(crate) use devices::{DevInfo, QuickChange, Space};
 #[cfg(feature = "screenshot")]
 pub(crate) use progress::transfer_text;
 use stories::*;
@@ -502,6 +502,7 @@ impl App {
                 self.rebuild_rows();
             }
             Event::QuickChanged(ticket, done, change) => self.quick_changed(ticket, *done, change),
+            Event::Space(ticket, space) => self.space_measured(ticket, space),
             Event::NightModeSaved(ticket, result) => self.night_mode_saved(ticket, result),
             Event::DbLoaded(ok) => {
                 if !ok {
@@ -544,6 +545,8 @@ impl App {
                 ui.set_abort_visible(false);
                 self.selection_changed();
                 self.podcasts_refresh_device();
+                // the task may have written or removed stories
+                self.refresh_space();
                 if !sized {
                     // the stories may have changed (album edited, episodes
                     // appended, story moved...)

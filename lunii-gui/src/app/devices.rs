@@ -16,6 +16,16 @@ pub(super) struct Devices {
     pub(super) opened: Option<DeviceActor>,
     /// details of `opened`
     pub(super) info: Option<DevInfo>,
+    /// its space is being measured (see `refresh_space`), and measured again
+    /// once done (`true`: asked meanwhile)
+    pub(super) measuring_space: Option<bool>,
+}
+
+/// Free and total space of a device, in bytes.
+#[derive(Clone, Copy)]
+pub(crate) struct Space {
+    pub(crate) free: u64,
+    pub(crate) total: Option<u64>,
 }
 
 /// Cached details of the opened device.
@@ -34,6 +44,8 @@ pub(crate) struct DevInfo {
     /// export all possible (Flam, Lunii v1/v2, or v3 with device key)
     pub(super) export_all: bool,
     pub(super) config: Option<Vec<u16>>,
+    /// measured in the background (see `refresh_space`): `None` until then
+    pub(super) space: Option<Space>,
 }
 
 /// Details of an opened device (reads it: in the background).
@@ -69,6 +81,7 @@ pub(super) fn describe_device(dev: &dyn Device, path: &Path) -> DevInfo {
         config: lunii
             .filter(|l| l.night_mode_supported())
             .map(|l| l.config.clone()),
+        space: None,
     }
 }
 
@@ -127,9 +140,19 @@ impl App {
         };
         ui.set_snu(dev.snu.clone().into());
         ui.set_hw_version(dev.hw_text.clone().into());
-        let free = lunii_core::format::megabytes(free_space(&dev.mount).unwrap_or(0));
-        ui.set_free_space(format!("{free} MB").into());
-        ui.set_low_space(free < 500);
+        // measured in the background: the first measure of a FAT partition
+        // reads its whole allocation table (about 10 s on a Flam)
+        match dev.space {
+            Some(space) => {
+                let free = lunii_core::format::megabytes(space.free);
+                ui.set_free_space(format!("{free} MB").into());
+                ui.set_low_space(free < 500);
+            }
+            None => {
+                ui.set_free_space("".into());
+                ui.set_low_space(false);
+            }
+        }
         let count = st.list.visible.len();
         ui.set_story_count(if count > 0 {
             format!("{count} {}", tr("stories")).into()
@@ -145,10 +168,13 @@ impl App {
         // updated with the stories (see `Event::Stories`)
         let details = dev.info.clone();
         let mb = |bytes: u64| lunii_core::format::megabytes(bytes).to_string();
-        let space = match (free_space(&dev.mount), total_space(&dev.mount)) {
-            (Ok(free), Ok(total)) => trf("{} MB free of {} MB", &[&mb(free), &mb(total)]),
-            (Ok(free), Err(_)) => format!("{} MB", mb(free)),
-            _ => "?".into(),
+        let space = match dev.space {
+            Some(Space {
+                free,
+                total: Some(total),
+            }) => trf("{} MB free of {} MB", &[&mb(free), &mb(total)]),
+            Some(Space { free, total: None }) => format!("{} MB", mb(free)),
+            None => "?".into(),
         };
         let hidden = st.list.stories.iter().filter(|s| s.hidden).count();
         let stories = if hidden > 0 {
@@ -454,6 +480,52 @@ impl App {
         });
     }
 
+    /// Measures the space of the opened device in the background, see
+    /// `space_measured` (asked during a measure: measured again after it).
+    pub(super) fn refresh_space(&self) {
+        let (mount, ticket) = {
+            let mut st = self.state.borrow_mut();
+            let Some(mount) = st.devices.info.as_ref().map(|d| d.mount.clone()) else {
+                return;
+            };
+            if let Some(again) = st.devices.measuring_space.as_mut() {
+                *again = true;
+                return;
+            }
+            st.devices.measuring_space = Some(false);
+            (mount, st.tickets.current(Topic::Device))
+        };
+        let sink = sink();
+        std::thread::spawn(move || {
+            let space = free_space(&mount).ok().map(|free| Space {
+                free,
+                total: total_space(&mount).ok(),
+            });
+            sink(Event::Space(ticket, space));
+        });
+    }
+
+    pub(super) fn space_measured(&self, ticket: Ticket, space: Option<Space>) {
+        let again = {
+            let mut st = self.state.borrow_mut();
+            let again = st.devices.measuring_space.take() == Some(true);
+            if !st.tickets.is_current(ticket) {
+                // another device: its own measure
+                drop(st);
+                self.refresh_space();
+                return;
+            }
+            if let Some(info) = st.devices.info.as_mut() {
+                info.space = space;
+            }
+            again
+        };
+        self.update_device_status();
+        if again {
+            self.refresh_space();
+        }
+    }
+
     pub(super) fn device_opened(
         &self,
         scan: Ticket,
@@ -515,6 +587,7 @@ impl App {
         );
         self.rebuild_rows();
         self.status("");
+        self.refresh_space();
         self.follow_device_podcasts();
 
         if sizes_unknown {

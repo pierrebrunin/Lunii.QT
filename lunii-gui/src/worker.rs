@@ -219,6 +219,8 @@ pub enum Event {
     Duration(Ticket, Uuid, Option<u32>),
     /// The durations asked are all measured
     DurationsDone,
+    /// Space of the device opened with this ticket (`None`: not measurable)
+    Space(Ticket, Option<crate::app::Space>),
 }
 
 impl Event {
@@ -251,6 +253,7 @@ impl Event {
             Event::Finished => "Finished",
             Event::Duration(..) => "Duration",
             Event::DurationsDone => "DurationsDone",
+            Event::Space(..) => "Space",
         }
     }
 }
