@@ -22,6 +22,7 @@ pub mod mp3;
 pub mod podcast;
 pub mod report;
 pub mod settings;
+pub mod store;
 pub mod story;
 pub mod tools;
 

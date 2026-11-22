@@ -119,8 +119,8 @@ impl LuniiDevice {
             dev.config = config;
             dev.night_mode_supported = true;
         }
+        // read only: the index is written by the changes asked for
         dev.stories = feed_stories(ctx, mount_point);
-        dev.update_pack_index()?;
         Ok(dev)
     }
 
@@ -725,7 +725,7 @@ impl LuniiDevice {
             cfg.extend_from_slice(&(index as u16).to_le_bytes());
             cfg.extend_from_slice(&value.to_le_bytes());
         }
-        std::fs::write(self.mount_point.join(".cfg"), cfg)?;
+        crate::store::write_atomic(&self.mount_point.join(".cfg"), &cfg)?;
         Ok(())
     }
 
@@ -825,11 +825,20 @@ impl Device for LuniiDevice {
         }
         let pi_path = self.mount_point.join(".pi");
         let pi_hidden_path = self.mount_point.join(".pi.hidden");
-        let _ = std::fs::remove_file(&pi_path);
-        let _ = std::fs::remove_file(&pi_hidden_path);
-        std::fs::write(pi_path, pi)?;
-        std::fs::write(pi_hidden_path, pi_hidden)?;
-        Ok(())
+        let was_hidden: Vec<Uuid> = std::fs::read(&pi_hidden_path)
+            .map(|d| {
+                d.as_chunks::<16>()
+                    .0
+                    .iter()
+                    .map(|c| Uuid::from_bytes(*c))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let unhiding = self
+            .stories
+            .iter()
+            .any(|s| !s.hidden && was_hidden.contains(&s.uuid));
+        common::write_pack_index((&pi_path, &pi), (&pi_hidden_path, &pi_hidden), unhiding)
     }
 
     fn import_story(&mut self, ctx: &Context, path: &Path) -> Result<()> {
@@ -939,7 +948,7 @@ fn feed_stories_file(
         let uuid = Uuid::from_bytes(*chunk);
         ctx.debug(format!("> {uuid}"));
         if list.contains_uuid(&uuid) {
-            ctx.warn("Found duplicate story, cleaning...");
+            ctx.warn("Found duplicate story, ignored");
             continue;
         }
         let mut story = Story::with_flags(uuid, hidden, false);

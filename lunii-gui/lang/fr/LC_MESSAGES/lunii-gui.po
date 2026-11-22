@@ -159,8 +159,17 @@ msgstr "🚧 Suppresion {} - {}..."
 msgid "Reading Flam loaded stories..."
 msgstr "Lecture des histoires chargées dans la Flam..."
 
-msgid "Found duplicate story, cleaning..."
-msgstr "Histoire dupliquée identifiée, nettoyage..."
+msgid "Found duplicate story, ignored"
+msgstr "Histoire en double dans l'index, ignorée"
+
+msgid "Unreadable file {}, kept as {}"
+msgstr "Fichier illisible {}, conservé sous {}"
+
+msgid "Unreadable file {}, unable to keep it: {}"
+msgstr "Fichier illisible {}, impossible de le conserver : {}"
+
+msgid "Unable to read {}: {}"
+msgstr "Impossible de lire {} : {}"
 
 msgid "Read {} stories"
 msgstr "{} histoires lues"
@@ -889,6 +898,9 @@ msgstr "impossible d'égaliser le volume de {}"
 
 msgid "⏳ The storyteller is busy, try again once the current task is done"
 msgstr "⏳ La conteuse est occupée, réessayez une fois la tâche en cours terminée"
+
+msgid "🛑 The storyteller is no longer available"
+msgstr "🛑 La conteuse n'est plus disponible"
 
 msgid "7z read error: {}"
 msgstr "Erreur de lecture 7z : {}"

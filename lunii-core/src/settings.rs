@@ -1,15 +1,19 @@
 //! Application settings, in `~/.lunii/settings.json`.
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use serde_json::{Map, Value};
 
 use crate::constants::{cfg_dir, ensure_cfg_dir};
+use crate::store;
+
+fn settings_file() -> PathBuf {
+    cfg_dir().join("settings.json")
+}
 
 fn load() -> Map<String, Value> {
-    std::fs::read(cfg_dir().join("settings.json"))
-        .ok()
-        .and_then(|d| serde_json::from_slice(&d).ok())
-        .unwrap_or_default()
+    store::read_json(&settings_file()).unwrap_or_default()
 }
 
 /// A boolean setting (`false` if unset).
@@ -31,12 +35,11 @@ pub fn set_number(name: &str, value: f64) -> Result<()> {
 }
 
 fn set(name: &str, value: Value) -> Result<()> {
+    ensure_cfg_dir()?;
+    let path = settings_file();
+    let _lock = store::lock(&path)?;
     let mut settings = load();
     settings.insert(name.into(), value);
-    let dir = ensure_cfg_dir()?;
-    std::fs::write(
-        dir.join("settings.json"),
-        serde_json::to_vec_pretty(&settings)?,
-    )?;
+    store::write_atomic(&path, &serde_json::to_vec_pretty(&settings)?)?;
     Ok(())
 }

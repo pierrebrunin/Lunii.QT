@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::constants::*;
 use crate::http;
+use crate::store;
 
 const EMBEDDED_THIRD_PARTY_DB: &str = include_str!("../../res/unofficial.json");
 
@@ -50,24 +51,18 @@ fn fetch_official_db() -> Result<()> {
     )?;
 
     let db = resp.get("response").cloned().unwrap_or(Value::Null);
-    std::fs::write(file_official_db(), serde_json::to_vec(&db)?)?;
+    store::write_atomic(&file_official_db(), &serde_json::to_vec(&db)?)?;
     Ok(())
 }
 
+/// A database file (`None` if missing; set aside if unreadable, see
+/// [`store::read_json`]).
 fn load_db_file(path: &std::path::Path) -> Option<IndexMap<String, Value>> {
-    let content = std::fs::read(path).ok()?;
-    let parsed: Map<String, Value> = match serde_json::from_slice(&content) {
-        Ok(m) => m,
-        Err(_) => {
-            // corrupted file, removing it
-            let _ = std::fs::remove_file(path);
-            return None;
-        }
-    };
+    let parsed: Map<String, Value> = store::read_json(path)?;
     let mut out = IndexMap::new();
     for (_, value) in parsed {
         let Some(uuid) = value.get("uuid").and_then(Value::as_str) else {
-            let _ = std::fs::remove_file(path);
+            store::set_aside(path);
             return None;
         };
         out.insert(uuid.to_uppercase(), value);
@@ -99,7 +94,7 @@ fn load_db_unlocked(reload: bool) -> bool {
     let third_party_file = file_third_party_db();
     if !third_party_file.is_file() {
         let _ = ensure_cfg_dir();
-        let _ = std::fs::write(&third_party_file, EMBEDDED_THIRD_PARTY_DB);
+        let _ = store::write_atomic(&third_party_file, EMBEDDED_THIRD_PARTY_DB.as_bytes());
     }
     let third_party = load_db_file(&third_party_file).unwrap_or_default();
 
@@ -116,19 +111,11 @@ pub fn thirdparty_add_story(
     description: Option<&str>,
 ) -> Result<()> {
     let _guard = FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    ensure_cfg_dir()?;
     let path = file_third_party_db();
-    let mut stories: Map<String, Value> = Map::new();
-    if path.is_file() {
-        match std::fs::read(&path)
-            .ok()
-            .and_then(|c| serde_json::from_slice(&c).ok())
-        {
-            Some(m) => stories = m,
-            None => {
-                let _ = std::fs::remove_file(&path);
-            }
-        }
-    }
+    // the CLI may change it too
+    let _lock = store::lock(&path)?;
+    let mut stories: Map<String, Value> = store::read_json(&path).unwrap_or_default();
 
     stories.insert(
         uuid.simple().to_string(),
@@ -139,8 +126,7 @@ pub fn thirdparty_add_story(
         }),
     );
 
-    ensure_cfg_dir()?;
-    std::fs::write(&path, serde_json::to_vec(&Value::Object(stories))?)?;
+    store::write_atomic(&path, &serde_json::to_vec(&Value::Object(stories))?)?;
 
     load_db_unlocked(false);
     Ok(())
@@ -151,7 +137,7 @@ pub fn thirdparty_add_story(
 pub fn thirdparty_set_thumb(uuid: &Uuid, image_data: &[u8]) -> Result<()> {
     let dir = cache_dir();
     std::fs::create_dir_all(&dir)?;
-    std::fs::write(dir.join(db_key(uuid)), image_data)?;
+    store::write_atomic(&dir.join(db_key(uuid)), image_data)?;
     Ok(())
 }
 
@@ -161,7 +147,7 @@ pub fn thirdparty_add_thumb(uuid: &Uuid, image_data: &[u8]) -> Result<()> {
     std::fs::create_dir_all(&dir)?;
     let res_file = dir.join(db_key(uuid));
     if !res_file.is_file() {
-        std::fs::write(res_file, image_data)?;
+        store::write_atomic(&res_file, image_data)?;
     }
     Ok(())
 }
@@ -364,7 +350,7 @@ pub fn story_picture(uuid: &Uuid, reload: bool) -> Option<Vec<u8>> {
             .map_err(anyhow::Error::from)
             .and_then(http::bytes);
         if let Ok(data) = data {
-            let _ = std::fs::write(&res_file, &data);
+            let _ = store::write_atomic(&res_file, &data);
             image_data = Some(data);
         }
     }

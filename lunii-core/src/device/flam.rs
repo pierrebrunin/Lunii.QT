@@ -119,8 +119,8 @@ impl FlamDevice {
             dev.fw_comm
         ));
 
+        // read only: the lists are written by the changes asked for
         dev.stories = feed_stories(ctx, mount_point);
-        dev.update_pack_index()?;
         Ok(dev)
     }
 
@@ -503,8 +503,7 @@ impl Device for FlamDevice {
         let lib_path = self.mount_point.join(LIB_BASEDIR);
         let list_path = lib_path.join("list");
         let list_hidden_path = lib_path.join("list.hidden");
-        let _ = std::fs::remove_file(&list_path);
-        let _ = std::fs::remove_file(&list_hidden_path);
+        // rebuilt by the firmware from the lists
         let _ = std::fs::remove_file(self.mount_point.join(LIB_CACHE));
         std::fs::create_dir_all(&lib_path)?;
 
@@ -515,9 +514,22 @@ impl Device for FlamDevice {
             target.push_str(&story.uuid.to_string());
             target.push('\n');
         }
-        std::fs::write(list_path, list)?;
-        std::fs::write(list_hidden_path, hidden)?;
-        Ok(())
+        let was_hidden: Vec<Uuid> = std::fs::read_to_string(&list_hidden_path)
+            .map(|c| {
+                c.lines()
+                    .filter_map(|l| Uuid::parse_str(l.trim()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let unhiding = self
+            .stories
+            .iter()
+            .any(|s| !s.hidden && was_hidden.contains(&s.uuid));
+        common::write_pack_index(
+            (&list_path, list.as_bytes()),
+            (&list_hidden_path, hidden.as_bytes()),
+            unhiding,
+        )
     }
 
     fn import_story(&mut self, ctx: &Context, path: &Path) -> Result<()> {
@@ -637,7 +649,7 @@ fn feed_list(ctx: &Context, path: &Path, hidden: bool, list: &mut StoryList) -> 
         };
         ctx.debug(format!("> {uuid}"));
         if list.contains_uuid(&uuid) {
-            ctx.warn("Found duplicate story, cleaning...");
+            ctx.warn("Found duplicate story, ignored");
             continue;
         }
         list.push(Story::with_flags(uuid, hidden, false));

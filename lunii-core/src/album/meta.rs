@@ -141,7 +141,7 @@ pub fn read(story_dir: &Path) -> Option<AlbumInfo> {
 
 pub fn write(story_dir: &Path, info: &AlbumInfo) -> Result<()> {
     let path = story_dir.join(FILE_ALBUM);
-    std::fs::write(&path, serde_json::to_vec_pretty(&info.to_json())?)
+    crate::store::write_atomic(&path, &serde_json::to_vec_pretty(&info.to_json())?)
         .with_context(|| format!("unable to write {}", path.display()))
 }
 

@@ -243,6 +243,71 @@ fn hide_move_nm_remove_recover_cleanup() {
     assert!(root.join(".content/00000002").exists());
 }
 
+/// Opening a device only reads it: its index is not rewritten, even when it
+/// lists a story twice (written again by the next change).
+#[test]
+fn opening_writes_nothing() {
+    setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let id = Uuid::parse_str("bbbbbbbb-0000-4000-8000-000000000001").unwrap();
+    for root in [lunii_v2(tmp.path()), flam(tmp.path())] {
+        let mut dev = open_device(&ctx(), &root).unwrap();
+        let archive = if dev.version() == DeviceVersion::FlamV1 {
+            flam_plain_story(tmp.path(), id, "F")
+        } else {
+            plain_story(tmp.path(), id, "L")
+        };
+        dev.import_story(&ctx(), &archive).unwrap();
+        // the story listed twice
+        let (index, twice) = if dev.version() == DeviceVersion::FlamV1 {
+            ("etc/library/list", format!("{id}\n{id}\n").into_bytes())
+        } else {
+            (".pi", [id.as_bytes().as_slice(); 2].concat())
+        };
+        std::fs::write(root.join(index), &twice).unwrap();
+        let before = tree(&root);
+        let mut dev = open_device(&ctx(), &root).unwrap();
+        assert_eq!(dev.stories().len(), 1);
+        assert_eq!(tree(&root), before, "{}", root.display());
+        // the next change writes it again
+        dev.move_stories(&[id], 0).unwrap();
+        assert_ne!(std::fs::read(root.join(index)).unwrap(), twice);
+    }
+}
+
+/// Hiding or showing a story writes the index file gaining it first: if the
+/// device is unplugged between the two files, the story is listed in both
+/// (read once), never in none.
+#[test]
+fn hide_and_show_keep_the_story_listed() {
+    setup();
+    let tmp = tempfile::tempdir().unwrap();
+    let id = Uuid::parse_str("bbbbbbbb-0000-4000-8000-000000000002").unwrap();
+    let root = lunii_v2(tmp.path());
+    let mut dev = open_device(&ctx(), &root).unwrap();
+    dev.import_story(&ctx(), &plain_story(tmp.path(), id, "H"))
+        .unwrap();
+    // interrupted after the first file: as if both had it
+    std::fs::write(root.join(".pi.hidden"), id.as_bytes()).unwrap();
+    let dev = open_device(&ctx(), &root).unwrap();
+    assert_eq!(dev.stories().len(), 1);
+    assert!(!dev.stories()[0].hidden, "the visible index wins");
+    std::fs::write(root.join(".pi.hidden"), []).unwrap();
+
+    let mut dev = open_device(&ctx(), &root).unwrap();
+    dev.toggle_hidden(&ctx(), &[id]).unwrap();
+    assert_eq!(std::fs::read(root.join(".pi")).unwrap(), b"");
+    assert_eq!(
+        std::fs::read(root.join(".pi.hidden")).unwrap(),
+        id.as_bytes()
+    );
+    dev.toggle_hidden(&ctx(), &[id]).unwrap();
+    assert_eq!(std::fs::read(root.join(".pi")).unwrap(), id.as_bytes());
+    assert_eq!(std::fs::read(root.join(".pi.hidden")).unwrap(), b"");
+    // no temporary file left on the device
+    assert!(tree(&root).keys().all(|k| !k.ends_with(".tmp")));
+}
+
 #[test]
 fn night_mode_config_roundtrip() {
     setup();

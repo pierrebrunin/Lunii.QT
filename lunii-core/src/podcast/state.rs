@@ -7,10 +7,14 @@ pub(super) fn state_file() -> PathBuf {
 }
 
 pub(super) fn load_state() -> BTreeMap<String, Value> {
-    std::fs::read(state_file())
-        .ok()
-        .and_then(|d| serde_json::from_slice(&d).ok())
-        .unwrap_or_default()
+    crate::store::read_json(&state_file()).unwrap_or_default()
+}
+
+/// Exclusive access to the state for a read-modify-write cycle: the import
+/// of a podcast (worker) and the Podcasts view change it at the same time.
+fn lock_state() -> Result<crate::store::FileLock> {
+    ensure_cfg_dir()?;
+    Ok(crate::store::lock(&state_file())?)
 }
 
 /// GUIDs of the episodes already imported in the album `uuid`.
@@ -153,6 +157,7 @@ fn entry(previous: Option<&Value>, podcast: &Podcast, episodes: Value) -> Value 
 /// Adds `podcast` to the followed podcasts (kept if already followed, even
 /// under another address).
 pub fn follow(podcast: &Podcast) -> Result<()> {
+    let _lock = lock_state()?;
     let mut podcast = podcast.clone();
     let mut state = load_state();
     if let Some(feed) = followed_feed(&state, &podcast) {
@@ -173,6 +178,7 @@ pub fn follow(podcast: &Podcast) -> Result<()> {
 /// kept, but no longer updated). Remembered as such: its album found on a
 /// device does not follow it again.
 pub fn unfollow(album: &Uuid) -> Result<()> {
+    let _lock = lock_state()?;
     let mut state = load_state();
     if let Some(entry) = state.get_mut(&album.to_string())
         && let Some(map) = entry.as_object_mut()
@@ -196,6 +202,7 @@ pub fn follow_album(source: &crate::album::meta::PodcastSource, title: &str) -> 
         page_url: None,
         episodes: Vec::new(),
     };
+    let _lock = lock_state()?;
     let mut state = load_state();
     if followed_feed(&state, &podcast).is_some() {
         return Ok(false);
@@ -210,12 +217,13 @@ pub fn follow_album(source: &crate::album::meta::PodcastSource, title: &str) -> 
 
 pub(super) fn save_state(state: &BTreeMap<String, Value>) -> Result<()> {
     ensure_cfg_dir()?;
-    std::fs::write(state_file(), serde_json::to_vec_pretty(state)?)?;
+    crate::store::write_atomic(&state_file(), &serde_json::to_vec_pretty(state)?)?;
     Ok(())
 }
 
 /// Records the episodes of the album (`reset`: a new album, previous records dropped).
 pub fn record_imported(podcast: &Podcast, guids: &[String], reset: bool) -> Result<()> {
+    let _lock = lock_state()?;
     let uuid = podcast.album_uuid();
     let mut known = if reset {
         Vec::new()

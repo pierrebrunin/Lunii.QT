@@ -3054,6 +3054,7 @@ dependencies = [
  "roxmltree",
  "rubato",
  "rusty_mp3",
+ "serde",
  "serde_json",
  "sevenz-rust2",
  "symphonia",

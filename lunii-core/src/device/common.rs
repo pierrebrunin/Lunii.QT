@@ -33,6 +33,29 @@ pub fn secure_filename(filename: &str) -> String {
         .collect()
 }
 
+/// Writes the two index files of a device, `visible` and `hidden` (path,
+/// content), each one atomically (see [`crate::store::write_atomic`]).
+/// Interrupted between the two, a story moved from one to the other is in
+/// both, read once (the visible one wins, see `feed_stories`), rather than in
+/// none: the file gaining stories is written first. `unhiding`: stories go
+/// from the hidden file to the visible one.
+pub fn write_pack_index(
+    visible: (&Path, &[u8]),
+    hidden: (&Path, &[u8]),
+    unhiding: bool,
+) -> Result<()> {
+    let (first, second) = if unhiding {
+        (visible, hidden)
+    } else {
+        (hidden, visible)
+    };
+    for (path, data) in [first, second] {
+        crate::store::write_atomic(path, data)
+            .with_context(|| format!("unable to write {}", path.display()))?;
+    }
+    Ok(())
+}
+
 /// Writes `data` in 10KB chunks, reporting speed and progress every 250ms.
 pub fn write_with_progress(ctx: &Context, target: &Path, data: &[u8]) -> Result<()> {
     const TIME_SPAN_S: f64 = 0.250;
