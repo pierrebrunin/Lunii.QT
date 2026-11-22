@@ -16,6 +16,19 @@ lto = true
 codegen-units = 1
 strip = true
 
+# local tries of an optimised build: release without its whole-program
+# optimisation (slow to build, kept for the packages)
+[profile.fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+
+# line numbers only: panics still say where, smaller binary and target dir
+# (`debug = true` again to inspect variables in a debugger)
+[profile.dev]
+debug = "line-tables-only"
+
 # Image decoding / crypto are painfully slow in debug builds
 [profile.dev.package."*"]
 opt-level = 2
+debug = false

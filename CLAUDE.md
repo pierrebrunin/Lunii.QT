@@ -11,8 +11,7 @@ Avant de proposer un commit, les mêmes que la CI, depuis la racine :
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo check -p lunii-gui --features screenshot --locked
+cargo clippy --workspace --all-targets --features lunii-gui/screenshot --locked -- -D warnings
 cargo test --workspace --locked
 ```
 

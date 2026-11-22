@@ -101,6 +101,7 @@ renommé en `~/.lunii` au premier lancement.
 
 ```bash
 cargo build --release          # target/release/lunii (interface) et lunii-cli
+cargo build --profile fast     # optimisé, bien plus rapide à compiler (essais locaux)
 cargo run -p lunii-gui         # lance l'interface (debug)
 cargo run -p lunii-cli -- --help
 ```
@@ -111,8 +112,7 @@ Avant de pousser, les mêmes vérifications que la CI (`.github/workflows/ci.yml
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo check -p lunii-gui --features screenshot --locked
+cargo clippy --workspace --all-targets --features lunii-gui/screenshot --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
