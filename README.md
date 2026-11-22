@@ -85,12 +85,12 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
 <img src="./res/screenshot_interface.png" width="600">  
 
 1. La **barre de menu**. Elle vous informera lorsqu'une mise à jour de l'application est disponible  
-   (il suffit d'aller dans Menu About/Update to v2.X.X)
+   (il suffit d'aller dans Menu About/Update to v2.X.X)  
+   **Fichier / Rafraichir la DB officielle** met à jour la liste des histoires et leurs descriptions depuis le Luniistore. Utilisez-le lorsque certaines histoires officielles ne sont pas reconnues.
 2. Les vues **Histoires** et **Podcasts**.  
    La Lunii/Flam connectée se choisit dans le menu **Appareil**, qui relance aussi la détection (Rafraichir les appareils). Une conteuse branchée pendant que l'application tourne est détectée toute seule, et ouverte si aucune ne l'est ; débranchée, elle est retirée. Son emplacement et ses informations techniques sont dans Fichier / Informations sur l'appareil, ou d'un clic sur la barre d'état.
 3. Gestion du **Mode nuit** ([ici](#mode-nuit)), affichée seulement si la Lunii branchée le gère (Flam exclue)
-4. Actualisation de la **base de données Officielle** : Met à jour la liste des histoires et leurs descriptions depuis le Luniistore. Utilisez ce bouton lorsque certaines histoires officielles ne sont pas reconnues.
-5. La **liste de vos histoires** avec leur durée. Le menu **Affichage** permet d'afficher aussi leur taille, le mode nuit (MN), leur base de données (DB) et leur UUID, masqués par défaut.  
+4. La **liste de vos histoires** avec leur durée. Le menu **Affichage** permet d'afficher aussi leur taille, le mode nuit (MN), leur base de données (DB) et leur UUID, masqués par défaut.  
    L'UUID : Un identifiant unique permettant de lier les histoires à leur dossier sur la Lunii/Flam. Les huit derniers caractères de l'UUID composent le nom du dossier de l'histoire.
 
    **DB** signifie **Base de données**. Cette application prend en charge deux bases de données différentes
@@ -98,13 +98,13 @@ Les Flams <u>pourront</u> sauvegarder et restaurer leurs histoires mais ne fonct
         (Toutes les métadonnées proviennent des serveurs de Lunii).
      - **T** - base de données **T**ierce, également connue sous Non officielles ou Custom  
         (Ces métadonnées ne peuvent pas être récupérées, elles sont complétées lors de l'importation de l'histoire)
-6. La colonne **MN** (☾) indique que **l'histoire supporte le Mode Nuit**. Masquée par défaut, elle s'affiche par Affichage / Afficher le mode nuit (MN), sur une Lunii qui le gère. Il est possible de forcer ce status depuis le menu contextuel
-7. **Histoires cachées** (les entrées grisées dans la liste).   
+5. La colonne **MN** (☾) indique que **l'histoire supporte le Mode Nuit**. Masquée par défaut, elle s'affiche par Affichage / Afficher le mode nuit (MN), sur une Lunii qui le gère. Il est possible de forcer ce status depuis le menu contextuel
+6. **Histoires cachées** (les entrées grisées dans la liste).   
    Cette fonctionnalité est activable par le biais du menu contextuel sur une histoire.  
    Son usage est double:  
    1. Masquer certaines histoires pour éviter que l'enfant ne passe trop de temps à sélectionner une histoire le soir. Cela évite de la supprimer et la recopier de nouveau.  
    2. Eviter la suppresion d'histoires non officielles pendant une synchronisation avec l'application Luniistore. Les histoires cachées sont toujours physiquement présente dans l'appareil, mais ne seront pas visible par Luniistore. N'oubliez pas de bien "cacher" vos histoires avant de cliquer sur "synchroniser" !
-8. Dans la **barre d'état**, vous trouverez  
+7. Dans la **barre d'état**, vous trouverez  
    * Votre SNU (numéro de série),
    * La version du firmware de votre Lunii/Flam
    * L'espace disponible sur la SD

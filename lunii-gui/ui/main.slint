@@ -394,11 +394,6 @@ export component MainWindow inherits Window {
                 horizontal-stretch: 1;
             }
             if root.view != 0: Rectangle { horizontal-stretch: 1; }
-            IconButton {
-                icon: @image-url("../../res/refresh_db.png");
-                enabled: !root.busy;
-                clicked => { root.action(Action.refresh-db); }
-            }
         }
 
         // ---------------------------------------------------------------- views

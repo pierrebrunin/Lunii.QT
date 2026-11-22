@@ -85,12 +85,12 @@ Forget about all previous .md and firmware recommendations.
 <img src="./res/screenshot_interface.png" width="600">  
 
 1. The **menu bar**. It will notify you when an update is available  
-   (just get it with Menu About/Update to v2.X.X)
+   (just get it with Menu About/Update to v2.X.X)  
+   **File / Refresh official DB** updates the list of stories and related information from the official Lunii Store. Use it when some official stories are not recognized.
 2. The **Stories** and **Podcasts** views.  
    The connected Lunii/Flam is chosen in the **Device** menu, which also runs the detection again (Refresh connected devices). A storyteller plugged in while the application is running is detected by itself, and opened if none is; unplugged, it is removed. Its location and technical details are in File / Device information, or a click on the status bar.
 3. Configuring **Night mode** ([here](#night-mode)), shown only when the connected Lunii supports it (not on Flam)
-4. **Official DB refresh** : Updates the list of stories and related information from the official Lunii Store. Use it when some official are not recognized.
-5. The **list of your stories** with their duration. The **View** menu also shows their size, night mode (NM), Database (DB) origin and UUID, hidden by default.  
+4. The **list of your stories** with their duration. The **View** menu also shows their size, night mode (NM), Database (DB) origin and UUID, hidden by default.  
    The UUID: This unique identifier allows you to associate stories with their folder on the Lunii, thanks to the last eight characters that make up the name of the folder associated with that story.
 
    * **DB** stands for **Database**. This application supports two different databases
@@ -99,15 +99,15 @@ Forget about all previous .md and firmware recommendations.
      - **T** - **T**hirdparty Database, also known as Unofficial or Custom Stories  
         _(Those metadata can't be fetched. They are completed upon story import)_
 
-6. The **NM** column (☾) indicates that **the story supports Night Mode**. Hidden by default, it is shown by View / Show night mode (NM), on a Lunii that supports it. You can force this status from the context menu.
+5. The **NM** column (☾) indicates that **the story supports Night Mode**. Hidden by default, it is shown by View / Show night mode (NM), on a Lunii that supports it. You can force this status from the context menu.
 
-7. **Hidden stories** (the greyed-out entries in the list).  
+6. **Hidden stories** (the greyed-out entries in the list).  
    This feature can be activated via the context menu on a story.  
    It has two uses:  
    1. Hide certain stories to prevent the child from spending too much time choosing a story at night. This avoids having to delete and copy them again later.  
    2. Prevent the deletion of unofficial stories during synchronization with the Luniistore application. Hidden stories are still physically present on the device, but will not be visible to Luniistore. Don't forget to "hide" your stories before clicking "synchronize"!
 
-8. The **status bar**, you'll find 
+7. The **status bar**, you'll find 
    * your SNU (serial number)
    * the firmware version of your Lunii/Flam
    * the available space  

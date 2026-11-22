@@ -29,11 +29,10 @@ FRAMES = [
     ((4, 5, 334, 32), (341, 8)),  # 1 menu bar
     ((104, 43, 268, 81), (274, 51)),  # 2 Stories / Podcasts views
     ((5, 45, 62, 78), (68, 51)),  # 3 night mode
-    ((962, 44, 997, 80), (944, 51)),  # 4 official database refresh
-    ((5, 84, 656, 619), (631, 594)),  # 5 story list
-    ((444, 88, 490, hidden_bottom), (495, 92)),  # 6 night mode column
-    ((7, hidden_top, 650, hidden_bottom), (631, hidden_bottom + 9)),  # 7 hidden stories
-    ((377, 621, 968, 647), (355, 625)),  # 8 status bar
+    ((5, 84, 656, 619), (631, 594)),  # 4 story list
+    ((444, 88, 490, hidden_bottom), (495, 92)),  # 5 night mode column
+    ((7, hidden_top, 650, hidden_bottom), (631, hidden_bottom + 9)),  # 6 hidden stories
+    ((377, 621, 968, 647), (355, 625)),  # 7 status bar
 ]
 
 
