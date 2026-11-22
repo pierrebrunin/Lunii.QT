@@ -105,19 +105,16 @@ fn track_title(title: &str, index: usize) -> String {
 
 impl App {
     /// Shows the tracks of `uuid` in the details panel if it is an album
-    /// (`false` otherwise, or when the device is busy).
+    /// (`false` otherwise), as read with the stories.
     pub(super) fn album_load(&self, uuid: Uuid) -> bool {
-        let found = (|| {
-            let dev = self.state.borrow().devices.opened.clone()?;
-            let dev = Self::lock_device(&dev).ok()?;
-            let story = dev.stories().get(&uuid.to_string())?.clone();
-            let info = dev.album_info(&story)?;
-            Some(AlbumEdit::new(
-                uuid,
-                info,
-                dev.album_track_count(&story).is_some(),
-            ))
-        })();
+        let found = self
+            .state
+            .borrow()
+            .list
+            .stories
+            .iter()
+            .find(|s| s.uuid == uuid)
+            .and_then(|s| Some(AlbumEdit::new(uuid, s.album_info.clone()?, s.album)));
         let ui = self.ui();
         let shown = found.is_some();
         if let Some(edit) = &found {

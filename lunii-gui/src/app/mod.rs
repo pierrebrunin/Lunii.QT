@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use lunii_core::constants::*;
@@ -16,9 +16,11 @@ use lunii_core::{Context, Device, Level};
 use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use uuid::Uuid;
 
+use crate::device_actor::{DeviceActor, DeviceHandle};
 use crate::i18n::{tr, trf};
 use crate::logfile;
-use crate::worker::{self, Event, GuiReporter, SharedDevice, Sink, StoryInfo, Task};
+use crate::tickets::{Ticket, Tickets, Topic};
+use crate::worker::{self, Event, GuiReporter, Sink, StoryInfo, Task};
 use crate::{DialogKind, EpisodeRow, InfoRow, LogLine, MainWindow, StoryRow, Theme};
 
 mod actions;
@@ -29,7 +31,7 @@ mod podcast;
 mod progress;
 mod stories;
 
-pub(crate) use devices::DevInfo;
+pub(crate) use devices::{DevInfo, QuickChange};
 #[cfg(feature = "screenshot")]
 pub(crate) use progress::transfer_text;
 use stories::*;
@@ -63,6 +65,8 @@ pub fn log_from_facade(level: Level, message: &str) {
 /// State of the window, by domain (each one defined with the code using it).
 #[derive(Default)]
 struct State {
+    /// requests in the background: their outdated answers are ignored
+    tickets: Tickets,
     devices: devices::Devices,
     list: stories::List,
     durations: stories::Durations,
@@ -454,11 +458,11 @@ impl App {
                     0.0
                 });
             }
-            Event::Duration(generation, uuid, duration) => {
+            Event::Duration(ticket, uuid, duration) => {
                 // only its row changes (the list keeps its scrolling)
                 let row = {
                     let mut st = self.state.borrow_mut();
-                    if generation != st.durations.generation {
+                    if !st.tickets.is_current(ticket) {
                         return;
                     }
                     st.durations.measured.insert(uuid, duration);
@@ -479,33 +483,32 @@ impl App {
                 self.state.borrow_mut().durations.measuring = false;
                 self.ensure_durations();
             }
-            Event::DeviceStories(device, stories) => {
+            Event::Stories(ticket, stories, details) => {
                 // another device may have been opened meanwhile
-                let current = self.state.borrow().devices.opened.clone();
-                if current.is_some_and(|d| Arc::ptr_eq(&d, &device)) {
-                    self.state.borrow_mut().list.stories = stories;
-                    self.rebuild_rows();
+                if !self.is_current(ticket) {
+                    return;
                 }
-            }
-            Event::Stories(stories) => {
-                self.state.borrow_mut().list.stories = stories;
+                {
+                    let mut st = self.state.borrow_mut();
+                    st.list.stories = stories;
+                    if let Some(info) = st.devices.info.as_mut() {
+                        info.info = details;
+                    }
+                }
                 self.rebuild_rows();
             }
+            Event::QuickChanged(ticket, done, change) => self.quick_changed(ticket, *done, change),
+            Event::NightModeSaved(ticket, result) => self.night_mode_saved(ticket, result),
             Event::DbLoaded(ok) => {
                 if !ok {
                     self.log(Level::Warn, "Failed to fetch official DB");
                 }
-                let device = self.state.borrow().devices.opened.clone();
-                // the names may have changed: list read again in the background
-                // (busy: the task refreshes the list at its end)
-                if let (Some(dev), false) = (device, ui.get_busy()) {
+                // the names may have changed: list read again on the device
+                // thread (busy: the task refreshes the list at its end)
+                if let (Some((handle, ticket)), false) = (self.device_handle(), ui.get_busy()) {
                     let sink = sink();
-                    std::thread::spawn(move || {
-                        let stories = match Self::lock_device(&dev) {
-                            Ok(d) => worker::snapshot(d.as_ref()),
-                            Err(_) => return,
-                        };
-                        sink(Event::DeviceStories(dev, stories));
+                    let _ = handle.run(move |dev| {
+                        sink(Event::Stories(ticket, worker::snapshot(dev), dev.info()));
                     });
                 }
             }
@@ -525,7 +528,7 @@ impl App {
                 self.stop_transfer();
                 // the album shown may have changed
                 self.state.borrow_mut().list.details_uuid = None;
-                if let Some((handle, _)) = self.state.borrow_mut().task.worker.take() {
+                if let Some((Some(handle), _)) = self.state.borrow_mut().task.worker.take() {
                     let _ = handle.join();
                 }
                 // a failed size computation is not retried in a loop
@@ -568,12 +571,19 @@ impl App {
         }
     }
 
-    /// Joins the running task (application exit).
+    /// Joins the running task (application exit): stopped, then waited for
+    /// on its thread, or on the thread of the device.
     pub fn shutdown(&self) {
         let worker = self.state.borrow_mut().task.worker.take();
         if let Some((handle, ctx)) = worker {
             ctx.request_abort();
-            let _ = handle.join();
+            if let Some(handle) = handle {
+                let _ = handle.join();
+            }
+        }
+        let device = self.state.borrow_mut().devices.opened.take();
+        if let Some(device) = device {
+            device.join();
         }
     }
 

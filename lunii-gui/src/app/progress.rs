@@ -5,7 +5,9 @@ use super::*;
 /// The running task.
 #[derive(Default)]
 pub(super) struct TaskState {
-    pub(super) worker: Option<(std::thread::JoinHandle<()>, Context)>,
+    /// its context, and its thread when it runs without the device (the
+    /// tasks on the device run on the device thread)
+    pub(super) worker: Option<(Option<std::thread::JoinHandle<()>>, Context)>,
     pub(super) transfer: Option<Transfer>,
     /// the task computes the sizes
     pub(super) sizing: bool,
@@ -41,7 +43,7 @@ impl App {
             return;
         }
         let ctx = self.ctx();
-        let device = self.state.borrow().devices.opened.clone();
+        let device = self.device_handle();
         let audio = lunii_core::convert::audio::AudioOptions {
             normalize_volume: self.ui().get_normalize_volume(),
         };

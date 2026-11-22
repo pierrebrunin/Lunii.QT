@@ -1,11 +1,13 @@
 //! Background tasks.
 //!
-//! A task runs in its own thread and talks to the UI with [`Event`]s, delivered
-//! in order on the Slint event loop.
+//! A task runs on the thread of the opened device (see `device_actor`), or
+//! in a thread of its own when it does not need one, and talks to the UI with
+//! [`Event`]s, delivered in order on the Slint event loop.
 
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 use lunii_core::constants::DeviceVersion;
@@ -15,7 +17,9 @@ use lunii_core::podcast::{self, Episode, Podcast, SearchResult};
 use lunii_core::{Aborted, Context, Device, Level, Reporter, album, db, report, tools};
 use uuid::Uuid;
 
+use crate::device_actor::DeviceHandle;
 use crate::i18n::{tr, trf};
+use crate::tickets::Ticket;
 
 /// Progress expected for the import of `path`: the uncompressed size of the
 /// archive (or of the folder). Converted files are counted with their source
@@ -63,8 +67,6 @@ impl Drop for TempDir {
     }
 }
 
-pub type SharedDevice = Arc<Mutex<Box<dyn Device>>>;
-
 /// What the UI needs to display a story.
 #[derive(Debug, Clone)]
 pub struct StoryInfo {
@@ -83,6 +85,11 @@ pub struct StoryInfo {
     /// album of a podcast: its episodes are added and removed from the
     /// Podcasts view
     pub podcast: bool,
+    /// track titles of an album (albums of sub-folders included), read with
+    /// the stories: the UI does not read the device
+    pub album_info: Option<album::meta::AlbumInfo>,
+    /// folder of the story on the device (durations measured there)
+    pub dir: PathBuf,
 }
 
 /// A device opened in the background, with what the UI needs (read there too).
@@ -92,23 +99,68 @@ pub struct OpenedDevice {
     pub stories: Vec<StoryInfo>,
 }
 
+/// The stories of the device, with all the UI displays of them (reads the
+/// device: on its thread).
 pub fn snapshot(dev: &dyn Device) -> Vec<StoryInfo> {
     dev.stories()
         .iter()
-        .map(|s| StoryInfo {
-            uuid: s.uuid,
-            str_uuid: s.str_uuid(),
-            name: s.name(),
-            night_mode: s.nm,
-            official: s.is_official(),
-            hidden: s.hidden,
-            exportable: dev.story_exportable(s),
-            size: s.size,
-            duration: db::story_duration(&s.uuid),
-            album: dev.album_track_count(s).is_some(),
-            podcast: dev.album_info(s).is_some_and(|i| i.podcast.is_some()),
+        .map(|s| {
+            let album_info = dev.album_info(s);
+            StoryInfo {
+                uuid: s.uuid,
+                str_uuid: s.str_uuid(),
+                name: s.name(),
+                night_mode: s.nm,
+                official: s.is_official(),
+                hidden: s.hidden,
+                exportable: dev.story_exportable(s),
+                size: s.size,
+                duration: db::story_duration(&s.uuid),
+                album: dev.album_track_count(s).is_some(),
+                podcast: album_info.as_ref().is_some_and(|i| i.podcast.is_some()),
+                album_info,
+                dir: dev.story_path(s),
+            }
         })
         .collect()
+}
+
+/// A quick change of the device (on its thread), and the stories after it:
+/// their order and flags from the device, the rest from `known` (read again
+/// only when a story is not in it: no album read for a move).
+pub fn quick_change(
+    dev: &mut dyn Device,
+    ctx: &Context,
+    known: &HashSet<Uuid>,
+    op: impl FnOnce(&mut dyn Device, &Context) -> anyhow::Result<()>,
+) -> QuickResult {
+    let result = op(dev, ctx).map_err(|e| format!("{e:#}"));
+    let order: Vec<(Uuid, bool, bool, PathBuf)> = dev
+        .stories()
+        .iter()
+        .map(|s| (s.uuid, s.hidden, s.nm, dev.story_path(s)))
+        .collect();
+    let stories = order
+        .iter()
+        .any(|(u, ..)| !known.contains(u))
+        .then(|| snapshot(dev));
+    QuickResult {
+        result,
+        order,
+        stories,
+        details: dev.info(),
+    }
+}
+
+/// Result of [`quick_change`].
+pub struct QuickResult {
+    pub result: Result<(), String>,
+    /// the stories in their order: UUID, hidden, night mode, folder
+    pub order: Vec<(Uuid, bool, bool, PathBuf)>,
+    /// all the stories read again (a story was not known)
+    pub stories: Option<Vec<StoryInfo>>,
+    /// `Device::info()` after the change
+    pub details: String,
 }
 
 pub enum Event {
@@ -125,35 +177,39 @@ pub enum Event {
     ImportPlan(u64),
     /// Podcast feed loaded (requested address, podcast or error)
     Feed(String, Result<Box<Podcast>, String>),
-    /// "Add a podcast" dialog (request number): podcasts found
-    PodcastSearch(u32, Result<Vec<SearchResult>, String>),
+    /// "Add a podcast" dialog: podcasts found
+    PodcastSearch(Ticket, Result<Vec<SearchResult>, String>),
     /// "Add a podcast" dialog: feed checked
-    PodcastChecked(u32, Result<Box<Podcast>, String>),
-    /// "Add a podcast" dialog: cover of the result at this index
-    PodcastArtwork(u32, usize, Vec<u8>),
+    PodcastChecked(Ticket, Result<Box<Podcast>, String>),
+    /// "Add a podcast" dialog: cover of the result at this index (ticket of
+    /// the search, or of the check of an address)
+    PodcastArtwork(Ticket, usize, Vec<u8>),
     Story(String, usize, usize),
     File(String, u64, u64),
-    Stories(Vec<StoryInfo>),
-    /// Stories read again outside a task: kept only if this device is still
-    /// the one opened
-    DeviceStories(SharedDevice, Vec<StoryInfo>),
+    /// The stories of the device opened with this ticket, read again, and
+    /// its `Device::info()`
+    Stories(Ticket, Vec<StoryInfo>, String),
+    /// A quick change of the device opened with this ticket is done
+    QuickChanged(Ticket, Box<QuickResult>, crate::app::QuickChange),
+    /// Night mode settings written (the new ones, or the error)
+    NightModeSaved(Ticket, Result<Vec<u16>, String>),
     DbRefreshed(bool),
     /// Databases loaded at startup
     DbLoaded(bool),
     FirmwareFiles(AuthToken, Vec<String>),
     UpdateCheck(Option<String>),
     Details(Uuid, String, Option<Vec<u8>>),
-    /// Background device search done (search id, devices and their names)
-    DevicesFound(u32, Vec<PathBuf>, Vec<String>),
-    /// Devices plugged in now, checked in the background (search id at the
-    /// time, devices and their names)
-    DevicesWatched(u32, Vec<PathBuf>, Vec<String>),
-    /// Background device opening done (search id, device or error)
-    DeviceOpened(u32, Result<Box<OpenedDevice>, String>),
+    /// Background device search done (devices and their names)
+    DevicesFound(Ticket, Vec<PathBuf>, Vec<String>),
+    /// Devices plugged in now, checked in the background (ticket current at
+    /// the time, devices and their names)
+    DevicesWatched(Ticket, Vec<PathBuf>, Vec<String>),
+    /// Background device opening done (device or error)
+    DeviceOpened(Ticket, Result<Box<OpenedDevice>, String>),
     Finished,
-    /// Duration measured on the device (generation of the measures, story,
-    /// seconds; `None`: not measurable)
-    Duration(u32, Uuid, Option<u32>),
+    /// Duration measured on the device (story, seconds; `None`: not
+    /// measurable)
+    Duration(Ticket, Uuid, Option<u32>),
     /// The durations asked are all measured
     DurationsDone,
 }
@@ -233,14 +289,17 @@ pub enum Task {
     },
 }
 
-struct Runner {
+struct Runner<'d> {
     ctx: Context,
     sink: Sink,
-    device: Option<SharedDevice>,
+    /// the device, when the task runs on its thread
+    device: RefCell<Option<&'d mut dyn Device>>,
+    /// the ticket of the device opened (its stories sent with it)
+    ticket: Option<Ticket>,
     audio: AudioOptions,
 }
 
-impl Runner {
+impl Runner<'_> {
     fn emit(&self, e: Event) {
         (self.sink)(e);
     }
@@ -250,16 +309,15 @@ impl Runner {
     }
 
     fn refresh(&self) {
-        if let Some(dev) = &self.device {
-            let dev = dev.lock().unwrap();
-            self.emit(Event::Stories(snapshot(dev.as_ref())));
+        let snapshot = self.with_device(|d| (snapshot(d), d.info()));
+        if let (Some((stories, details)), Some(ticket)) = (snapshot, self.ticket) {
+            self.emit(Event::Stories(ticket, stories, details));
         }
     }
 
     fn with_device<T>(&self, f: impl FnOnce(&mut dyn Device) -> T) -> Option<T> {
-        let dev = self.device.as_ref()?;
-        let mut dev = dev.lock().unwrap();
-        Some(f(dev.as_mut()))
+        let mut dev = self.device.borrow_mut();
+        Some(f(dev.as_deref_mut()?))
     }
 
     /// Like `with_device`, for tasks that can't run without a device.
@@ -795,19 +853,22 @@ impl Runner {
     }
 }
 
-/// Runs a task in a new thread. `Event::Finished` is always sent at the end.
+/// Runs a task on the thread of `device` (opened with this ticket), or
+/// without one in a new thread (its handle returned). `Event::Finished` is
+/// always sent at the end.
 pub fn spawn(
     task: Task,
-    device: Option<SharedDevice>,
+    device: Option<(DeviceHandle, Ticket)>,
     audio: AudioOptions,
     ctx: Context,
     sink: Sink,
-) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || {
+) -> Option<std::thread::JoinHandle<()>> {
+    let run = move |device: Option<&mut dyn Device>, ticket: Option<Ticket>, sink: Sink| {
         let runner = Runner {
             ctx,
             sink,
-            device,
+            device: RefCell::new(device),
+            ticket,
             audio,
         };
         if let Err(e) = runner.run(task) {
@@ -820,7 +881,21 @@ pub fn spawn(
             }
         }
         runner.emit(Event::Finished);
-    })
+    };
+    match device {
+        Some((handle, ticket)) => {
+            let fallback = sink.clone();
+            if !handle.run(move |dev| run(Some(dev), Some(ticket), sink)) {
+                // the device thread is gone: the task ends at once
+                fallback(Event::Status(tr(
+                    "🛑 The storyteller is no longer available",
+                )));
+                fallback(Event::Finished);
+            }
+            None
+        }
+        None => Some(std::thread::spawn(move || run(None, None, sink))),
+    }
 }
 
 /// An error of lunii-core, translated for the user.
@@ -830,11 +905,11 @@ fn tr_error(e: anyhow::Error) -> String {
 
 /// Measures the duration of stories from their audio files (not a task: only
 /// reads a little of each file).
-pub fn measure_durations(generation: u32, stories: Vec<(Uuid, PathBuf)>, sink: Sink) {
+pub fn measure_durations(ticket: Ticket, stories: Vec<(Uuid, PathBuf)>, sink: Sink) {
     std::thread::spawn(move || {
         for (uuid, dir) in stories {
             let duration = lunii_core::mp3::story_duration(&dir);
-            sink(Event::Duration(generation, uuid, duration));
+            sink(Event::Duration(ticket, uuid, duration));
         }
         sink(Event::DurationsDone);
     });
@@ -863,7 +938,7 @@ pub fn fetch_feed(url: String, sink: Sink) {
 
 /// Searches podcasts by name (Apple Podcasts; `kids_only`: Kids & Family
 /// genre), then downloads their covers.
-pub fn search_podcasts(token: u32, term: String, country: String, kids_only: bool, sink: Sink) {
+pub fn search_podcasts(ticket: Ticket, term: String, country: String, kids_only: bool, sink: Sink) {
     std::thread::spawn(move || {
         let results = podcast::search(&term, &country, kids_only).map_err(tr_error);
         let artworks: Vec<(usize, String)> = results
@@ -872,7 +947,7 @@ pub fn search_podcasts(token: u32, term: String, country: String, kids_only: boo
             .enumerate()
             .filter_map(|(i, r)| r.artwork_url.clone().map(|u| (i, u)))
             .collect();
-        sink(Event::PodcastSearch(token, results));
+        sink(Event::PodcastSearch(ticket, results));
         // a few at a time
         for chunk in artworks.chunks(8) {
             std::thread::scope(|scope| {
@@ -880,7 +955,7 @@ pub fn search_podcasts(token: u32, term: String, country: String, kids_only: boo
                     let sink = &sink;
                     scope.spawn(move || {
                         if let Some(data) = podcast::download_artwork(url) {
-                            sink(Event::PodcastArtwork(token, *index, data));
+                            sink(Event::PodcastArtwork(ticket, *index, data));
                         }
                     });
                 }
@@ -891,7 +966,7 @@ pub fn search_podcasts(token: u32, term: String, country: String, kids_only: boo
 
 /// Loads a feed to follow (`address`: typed by the user, may be a page or an
 /// Apple Podcasts link; its cover is then downloaded as result 0).
-pub fn check_feed(token: u32, url: String, address: bool, sink: Sink) {
+pub fn check_feed(ticket: Ticket, url: String, address: bool, sink: Sink) {
     std::thread::spawn(move || {
         let mut result = if address {
             podcast::fetch(&url)
@@ -908,9 +983,9 @@ pub fn check_feed(token: u32, url: String, address: bool, sink: Sink) {
             .filter(|_| address)
             .and_then(|p| p.image_url.clone());
         let result = result.map(Box::new).map_err(tr_error);
-        sink(Event::PodcastChecked(token, result));
+        sink(Event::PodcastChecked(ticket, result));
         if let Some(data) = image.and_then(|u| podcast::download_artwork(&u)) {
-            sink(Event::PodcastArtwork(token, 0, data));
+            sink(Event::PodcastArtwork(ticket, 0, data));
         }
     });
 }

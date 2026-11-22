@@ -8,11 +8,11 @@ pub(super) struct Devices {
     pub(super) paths: Vec<PathBuf>,
     /// names of `paths` in the selector
     pub(super) labels: Vec<String>,
-    /// id of the last device search / opening: older results are ignored
-    pub(super) scan: u32,
     /// a background check for plugged / unplugged devices is running
     pub(super) watching: bool,
-    pub(super) opened: Option<SharedDevice>,
+    /// the opened device, on its thread (opened with the current
+    /// `Topic::Device` ticket)
+    pub(super) opened: Option<DeviceActor>,
     /// details of `opened`
     pub(super) info: Option<DevInfo>,
 }
@@ -141,13 +141,8 @@ impl App {
     pub(super) fn device_info(&self) -> Option<(Vec<(String, String)>, String)> {
         let st = self.state.borrow();
         let dev = st.devices.info.as_ref()?;
-        // fresh details (story count...), the cached ones while a task runs
-        let details = st
-            .devices
-            .opened
-            .as_ref()
-            .and_then(|d| Self::lock_device(d).ok().map(|d| d.info()))
-            .unwrap_or_else(|| dev.info.clone());
+        // updated with the stories (see `Event::Stories`)
+        let details = dev.info.clone();
         let mb = |bytes: u64| lunii_core::format::megabytes(bytes).to_string();
         let space = match (free_space(&dev.mount), total_space(&dev.mount)) {
             (Ok(free), Ok(total)) => trf("{} MB free of {} MB", &[&mb(free), &mb(total)]),
@@ -243,11 +238,23 @@ impl App {
         st.devices.labels = labels;
     }
 
-    /// A new device search / opening: its id, the previous ones are outdated.
-    pub(super) fn next_scan(&self) -> u32 {
-        let mut st = self.state.borrow_mut();
-        st.devices.scan = st.devices.scan.wrapping_add(1);
-        st.devices.scan
+    /// A new device search / opening: the previous ones are outdated, and
+    /// so is everything about the device opened.
+    pub(super) fn next_scan(&self) -> Ticket {
+        self.state.borrow_mut().tickets.issue(Topic::Device)
+    }
+
+    /// The opened device: its thread, and the ticket of its opening.
+    pub(super) fn device_handle(&self) -> Option<(DeviceHandle, Ticket)> {
+        let st = self.state.borrow();
+        let handle = st.devices.opened.as_ref()?.handle();
+        Some((handle, st.tickets.current(Topic::Device)))
+    }
+
+    /// An answer about the device opened with `ticket`: is it still the one
+    /// opened?
+    pub(super) fn is_current(&self, ticket: Ticket) -> bool {
+        self.state.borrow().tickets.is_current(ticket)
     }
 
     /// Searches the devices in the background (slow drives, network mounts:
@@ -282,7 +289,8 @@ impl App {
             if std::mem::replace(&mut st.devices.watching, true) {
                 return;
             }
-            st.devices.scan
+            // not a new request: the device opened stays current
+            st.tickets.current(Topic::Device)
         };
         let sink = sink();
         std::thread::spawn(move || {
@@ -293,13 +301,13 @@ impl App {
 
     /// The devices plugged in now: the list follows them. The opened device
     /// unplugged is closed; a new one is opened when none is.
-    pub(super) fn devices_watched(&self, scan: u32, devices: Vec<PathBuf>, labels: Vec<String>) {
+    pub(super) fn devices_watched(&self, scan: Ticket, devices: Vec<PathBuf>, labels: Vec<String>) {
         let ui = self.ui();
         let (known, opened) = {
             let mut st = self.state.borrow_mut();
             st.devices.watching = false;
             // a search, an opening or a task started meanwhile
-            if scan != st.devices.scan || ui.get_scanning() || ui.get_busy() {
+            if !st.tickets.is_current(scan) || ui.get_scanning() || ui.get_busy() {
                 return;
             }
             let opened = st.devices.info.as_ref().map(|d| d.mount.clone());
@@ -340,8 +348,8 @@ impl App {
         }
     }
 
-    pub(super) fn devices_found(&self, scan: u32, devices: Vec<PathBuf>, labels: Vec<String>) {
-        if scan != self.state.borrow().devices.scan {
+    pub(super) fn devices_found(&self, scan: Ticket, devices: Vec<PathBuf>, labels: Vec<String>) {
+        if !self.is_current(scan) {
             return;
         }
         let ui = self.ui();
@@ -364,6 +372,7 @@ impl App {
     pub(super) fn close_device(&self) {
         {
             let mut st = self.state.borrow_mut();
+            // its thread ends once its jobs are done (not waited for)
             st.devices.opened = None;
             st.devices.info = None;
             st.list.stories.clear();
@@ -451,10 +460,10 @@ impl App {
 
     pub(super) fn device_opened(
         &self,
-        scan: u32,
+        scan: Ticket,
         opened: Result<Box<worker::OpenedDevice>, String>,
     ) {
-        if scan != self.state.borrow().devices.scan {
+        if !self.is_current(scan) {
             return;
         }
         let ui = self.ui();
@@ -481,7 +490,7 @@ impl App {
 
         {
             let mut st = self.state.borrow_mut();
-            st.devices.opened = Some(Arc::new(Mutex::new(dev)));
+            st.devices.opened = Some(DeviceActor::spawn(dev));
             st.devices.info = Some(info);
             st.list.stories = stories;
         }
@@ -507,72 +516,112 @@ impl App {
         }
     }
 
-    /// The device, for a quick change on the UI thread. Never waits: `None`
-    /// (and a message) while a task holds it, the UI would freeze until its end.
-    pub(super) fn lock_device(
-        dev: &SharedDevice,
-    ) -> Result<std::sync::MutexGuard<'_, Box<dyn Device>>, std::sync::TryLockError<()>> {
-        match dev.try_lock() {
-            Ok(guard) => Ok(guard),
-            // a task panicked holding it: the device state is still usable
-            Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
-            Err(std::sync::TryLockError::WouldBlock) => Err(std::sync::TryLockError::WouldBlock),
+    /// A quick change of the device (move, hide, night mode), on its thread:
+    /// see `quick_changed`. Not while a task runs (it would only be done at
+    /// its end).
+    pub(super) fn device_op(
+        &self,
+        change: QuickChange,
+        op: impl FnOnce(&mut dyn Device, &Context) -> anyhow::Result<()> + Send + 'static,
+    ) {
+        let Some((handle, ticket)) = self.device_handle() else {
+            return;
+        };
+        if self.ui().get_busy() {
+            self.status(&tr(
+                "⏳ The storyteller is busy, try again once the current task is done",
+            ));
+            return;
+        }
+        let known: HashSet<Uuid> = self
+            .state
+            .borrow()
+            .list
+            .stories
+            .iter()
+            .map(|s| s.uuid)
+            .collect();
+        let ctx = self.ctx();
+        let sink = sink();
+        let sent = handle.run(move |dev| {
+            let result = worker::quick_change(dev, &ctx, &known, op);
+            sink(Event::QuickChanged(ticket, Box::new(result), change));
+        });
+        if !sent {
+            self.status(&tr("🛑 The storyteller is no longer available"));
         }
     }
 
-    /// Applies a quick change on the device (on the UI thread).
-    pub(super) fn device_op(
+    /// A quick change done: the list follows the device.
+    pub(super) fn quick_changed(
         &self,
-        op: impl FnOnce(&mut dyn Device, &Context) -> anyhow::Result<()>,
-    ) -> bool {
-        let Some(dev) = self.state.borrow().devices.opened.clone() else {
-            return false;
-        };
-        let ctx = self.ctx();
-        let (result, stories) = {
-            let Ok(mut dev) = Self::lock_device(&dev) else {
-                self.status(&tr(
-                    "⏳ The storyteller is busy, try again once the current task is done",
-                ));
-                return false;
-            };
-            let result = op(dev.as_mut(), &ctx);
-            // order and hidden state from the device; the rest is unchanged
-            // (no disk read on the UI thread: albums, names...)
-            let mut known: HashMap<Uuid, StoryInfo> = self
-                .state
-                .borrow_mut()
-                .list
-                .stories
-                .drain(..)
-                .map(|s| (s.uuid, s))
-                .collect();
-            let reordered: Option<Vec<StoryInfo>> = dev
-                .stories()
-                .iter()
-                .map(|s| {
-                    known.remove(&s.uuid).map(|info| StoryInfo {
-                        hidden: s.hidden,
-                        ..info
+        ticket: Ticket,
+        done: worker::QuickResult,
+        change: QuickChange,
+    ) {
+        if !self.is_current(ticket) {
+            return;
+        }
+        let worker::QuickResult {
+            result,
+            order,
+            stories,
+            details,
+        } = done;
+        {
+            let mut st = self.state.borrow_mut();
+            let stories = stories.unwrap_or_else(|| {
+                // order and flags from the device; the rest is unchanged
+                let mut known: HashMap<Uuid, StoryInfo> =
+                    st.list.stories.drain(..).map(|s| (s.uuid, s)).collect();
+                order
+                    .into_iter()
+                    .filter_map(|(uuid, hidden, night_mode, dir)| {
+                        known.remove(&uuid).map(|info| StoryInfo {
+                            hidden,
+                            night_mode,
+                            dir,
+                            ..info
+                        })
                     })
-                })
-                .collect();
-            // a story not listed yet: read again
-            let stories = reordered.unwrap_or_else(|| worker::snapshot(dev.as_ref()));
-            (result, stories)
-        };
-        self.state.borrow_mut().list.stories = stories;
+                    .collect()
+            });
+            st.list.stories = stories;
+            if let Some(info) = st.devices.info.as_mut() {
+                info.info = details;
+            }
+        }
         // a measure may have failed on a story moved meanwhile (hide)
         if self.state.borrow().durations.measuring {
             self.forget_durations();
         }
         self.rebuild_rows();
-        match result {
-            Ok(()) => true,
-            Err(e) => {
-                self.log(Level::Error, &format!("{e:#}"));
-                false
+        if let Err(e) = &result {
+            self.log(Level::Error, e);
+        }
+        match change {
+            QuickChange::Flags if result.is_ok() => self.status(&tr("✅ Stories updated...")),
+            QuickChange::Flags => {
+                self.status(&tr("🛑 Unable to update story ..."));
+                self.show_log();
+            }
+            QuickChange::Move { ids, scroll } => {
+                // keep the first moved story in view
+                if let Some(row) = self.focus_moved(&ids)
+                    && scroll
+                {
+                    self.ui().invoke_ensure_visible(row as i32);
+                }
             }
         }
     }
+}
+
+/// What a quick change of the device is, for what follows it.
+pub(crate) enum QuickChange {
+    /// hidden or night mode flags: a message
+    Flags,
+    /// stories moved: the first one becomes the current row (`scroll`: and
+    /// is brought into view)
+    Move { ids: Vec<Uuid>, scroll: bool },
 }

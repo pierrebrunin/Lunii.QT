@@ -26,6 +26,8 @@ l'historique git, jusqu'au commit `c8afe43`.
 │   │                        import.rs (téléchargement d'un épisode, archives à importer),
 │   │                        state.rs (podcasts suivis)
 │   ├── src/settings.rs      réglages (~/.lunii/settings.json)
+│   ├── src/store.rs         écritures sûres : fichier temporaire puis renommage,
+│   │                        verrou, fichier illisible mis de côté (.corrupted)
 │   ├── src/firmware.rs      téléchargement des firmwares
 │   ├── src/tools.rs         import base STUdio, téléchargements, mise à jour
 │   └── tests/               scénarios complets sur de faux appareils
@@ -40,6 +42,8 @@ l'historique git, jusqu'au commit `c8afe43`.
     │                        enum Action), podcast.rs (vue Podcasts), album.rs
     │                        (pistes d'un album), log_panel.rs (journal)
     ├── src/worker.rs        tâches longues en arrière-plan
+    ├── src/device_actor.rs  thread propriétaire de l'appareil ouvert
+    ├── src/tickets.rs       réponses périmées des requêtes en arrière-plan
     ├── src/i18n.rs          traductions des messages côté Rust (un test vérifie que les
     │                        messages de lunii-core sont tous traduits)
     ├── src/logfile.rs       fichier de log persistant et logger de la façade `log`
@@ -47,8 +51,21 @@ l'historique git, jusqu'au commit `c8afe43`.
 ```
 
 Les appareils rendent compte des opérations longues par le trait `Reporter`
-(logs + progression), et s'interrompent par `Context::request_abort()` :
-l'interface lance ces opérations dans un thread (`worker.rs`).
+(logs + progression), et s'interrompent par `Context::request_abort()`.
+
+Dans l'interface, l'appareil ouvert appartient à un thread
+(`device_actor.rs`) : les tâches (`worker.rs`) et les modifications rapides
+(déplacer, masquer, mode nuit) y sont envoyées et exécutées l'une après
+l'autre, leurs résultats reviennent en événements. L'interface ne lit jamais
+l'appareil : elle affiche la copie de ses histoires (`worker::snapshot`, avec
+les pistes des albums). Chaque requête en arrière-plan porte un ticket
+(`tickets.rs`) : une nouvelle requête du même sujet rend les réponses des
+précédentes périmées, ignorées.
+
+Les fichiers de `~/.lunii` et les index des appareils sont écrits par
+`store::write_atomic` : un arrêt en pleine écriture laisse l'ancien contenu.
+Un fichier de configuration illisible est renommé en `.corrupted`, avec un
+avertissement, au lieu d'être écrasé.
 
 Le répertoire de configuration est `~/.lunii` : bases, cache, clés v3 et
 sauvegardes `.md` / `.mdf`. Celui des versions précédentes, `~/.lunii-qt`, est
@@ -505,8 +522,9 @@ lunii-cli firmware --email moi@exemple.fr -o .
 trouvé), `-v` affiche les messages de debug, `Ctrl-C` interrompt proprement
 l'opération en cours.
 
-Comme dans les versions précédentes, l'ouverture d'un appareil réécrit son index
-(`.pi` / `etc/library/list`).
+Contrairement aux versions précédentes, l'ouverture d'un appareil ne modifie
+rien : son index (`.pi` / `etc/library/list`) n'est réécrit que par une
+modification demandée (import, suppression, déplacement…).
 
 ## Différences avec la version 3.1
 

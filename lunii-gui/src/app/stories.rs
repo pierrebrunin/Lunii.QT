@@ -59,9 +59,6 @@ pub(super) struct Durations {
     pub(super) measured: HashMap<Uuid, Option<u32>>,
     /// a measure is running
     pub(super) measuring: bool,
-    /// incremented when the measures are forgotten: those still running
-    /// (stories maybe changed or moved meanwhile) are ignored
-    pub(super) generation: u32,
 }
 
 impl App {
@@ -71,40 +68,29 @@ impl App {
         if !self.ui().get_show_duration() {
             return;
         }
-        let (device, missing) = {
-            let st = self.state.borrow();
-            if st.durations.measuring {
+        // a task is running: measured once it is done (its end lists the stories)
+        if self.ui().get_busy() {
+            return;
+        }
+        let (dirs, ticket) = {
+            let mut st = self.state.borrow_mut();
+            if st.durations.measuring || st.devices.opened.is_none() {
                 return;
             }
-            let missing: HashSet<Uuid> = st
+            let dirs: Vec<(Uuid, PathBuf)> = st
                 .list
                 .stories
                 .iter()
                 .filter(|s| s.duration.is_none() && !st.durations.measured.contains_key(&s.uuid))
-                .map(|s| s.uuid)
+                .map(|s| (s.uuid, s.dir.clone()))
                 .collect();
-            (st.devices.opened.clone(), missing)
-        };
-        let Some(device) = device.filter(|_| !missing.is_empty()) else {
-            return;
-        };
-        // a task is running: measured once it is done (its end lists the stories)
-        let Ok(dev) = Self::lock_device(&device) else {
-            return;
-        };
-        let dirs: Vec<(Uuid, PathBuf)> = dev
-            .stories()
-            .iter()
-            .filter(|s| missing.contains(&s.uuid))
-            .map(|s| (s.uuid, dev.story_path(s)))
-            .collect();
-        drop(dev);
-        let generation = {
-            let mut st = self.state.borrow_mut();
+            if dirs.is_empty() {
+                return;
+            }
             st.durations.measuring = true;
-            st.durations.generation
+            (dirs, st.tickets.current(Topic::Durations))
         };
-        worker::measure_durations(generation, dirs, sink());
+        worker::measure_durations(ticket, dirs, sink());
     }
 
     /// The stories may have changed (task, quick change, other device): their
@@ -116,7 +102,9 @@ impl App {
                 return;
             }
             st.durations.measured.clear();
-            st.durations.generation += 1;
+            // the measures still running (stories maybe changed or moved
+            // meanwhile) are ignored
+            st.tickets.issue(Topic::Durations);
         }
         self.rebuild_rows();
     }
@@ -381,15 +369,18 @@ impl App {
         if ids.is_empty() {
             return;
         }
-        self.device_op(|d, _| d.move_stories(&ids, offset));
-        // keep the first moved story in view
-        if let Some(row) = self.focus_moved(&ids) {
-            self.ui().invoke_ensure_visible(row as i32);
-        }
+        let moved = ids.clone();
+        self.device_op(
+            QuickChange::Move {
+                ids: moved,
+                scroll: true,
+            },
+            move |d, _| d.move_stories(&ids, offset),
+        );
     }
 
     /// After a move: the first moved story shown becomes the current row.
-    fn focus_moved(&self, ids: &[Uuid]) -> Option<usize> {
+    pub(super) fn focus_moved(&self, ids: &[Uuid]) -> Option<usize> {
         let row = self.state.borrow_mut().list.focus_first(ids)?;
         self.selection_changed();
         Some(row)
@@ -416,8 +407,14 @@ impl App {
         if ids.is_empty() {
             return;
         }
-        self.device_op(|d, _| d.move_stories_before(&ids, before));
-        self.focus_moved(&ids);
+        let moved = ids.clone();
+        self.device_op(
+            QuickChange::Move {
+                ids: moved,
+                scroll: false,
+            },
+            move |d, _| d.move_stories_before(&ids, before),
+        );
     }
 
     /// Computes the missing story sizes when they are displayed. A task
@@ -455,6 +452,8 @@ mod tests {
             duration: None,
             album: false,
             podcast: false,
+            album_info: None,
+            dir: PathBuf::new(),
         };
         List {
             stories: (0..5).map(story).collect(),

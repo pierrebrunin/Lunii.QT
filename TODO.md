@@ -8,30 +8,16 @@ laissées pour plus tard. Retirer une entrée une fois traitée.
 - **Découper `App::connect()`** (`app/mod.rs`, ~160 lignes) par écran : liste,
   podcasts, dialogues. Même idée pour les branches longues de
   `App::action()` (`app/actions.rs`, ~200 lignes).
-- **Un seul mécanisme pour ignorer les résultats périmés** : `devices.scan`,
-  `durations.generation` et les jetons de la recherche de podcasts font la
-  même chose de trois façons.
+- **État de l'interface en « état + messages »** : `App` modifie
+  `RefCell<State>` et la fenêtre depuis chaque gestionnaire. Une fonction
+  `update(état, message)` sans Slint rendrait l'interface testable. Les
+  tickets (`tickets.rs`) et le thread de l'appareil (`device_actor.rs`) en
+  sont la première étape : l'interface ne lit plus l'appareil.
 - **Âge conseillé des podcasts** : aucun flux RSS ne le donne. Les pages
   Radio France l'ont dans `<meta name="ad:rubriques">`
   (`podcasts-enfants-a-partir-de-{3,6,9}-ans`, parfois plusieurs : garder le
   plus petit). Ailleurs, seulement du texte libre (« dès 5 ans »,
   « ages 4-10 » dans `itunes:keywords`), rare et peu fiable.
-
-## Fichiers de configuration
-
-- **Écritures non atomiques, fichiers illisibles remis à zéro** :
-  `podcasts.json` (`podcast/state.rs`), `settings.json` (`settings.rs`) et
-  `third-party.db` (`db.rs`) sont écrits par `std::fs::write`. Un arrêt en
-  pleine écriture laisse un fichier tronqué. À la lecture suivante, il est
-  traité comme vide (`unwrap_or_default`) puis écrasé, ou supprimé
-  (`third-party.db`) : podcasts suivis, épisodes déjà importés ou titres des
-  histoires tierces perdus sans message. Piste : une écriture commune
-  (fichier temporaire puis `rename`) et, si la lecture échoue, renommer le
-  fichier en `.corrompu` avec un avertissement au lieu de l'écraser.
-- **`podcasts.json` sans verrou** : le worker (`record_imported` pendant un
-  import de podcast) et l'interface (`follow`, `unfollow`) le lisent, le
-  modifient et le réécrivent chacun de leur côté. Une modification peut
-  écraser l'autre. `db.rs` a déjà un `FILE_LOCK` pour ce cas.
 
 ## Erreurs ignorées
 
@@ -42,11 +28,12 @@ laissées pour plus tard. Retirer une entrée une fois traitée.
 
 ## Appareils
 
-- **Index réécrit en deux temps** : `update_pack_index` (Lunii `.pi`, Flam
-  `etc/library/list`) supprime l'index puis l'écrit. Si l'appareil est
-  débranché entre les deux, l'index est vide. Les histoires restent
-  récupérables (Appareil / Histoires perdues), mais écrire un fichier
-  temporaire puis le renommer éviterait ce cas.
+- **Opérations calculées puis exécutées** : chaque opération (import,
+  modification d'album, suppression) calculerait d'abord la liste des
+  fichiers à écrire, renommer et supprimer, puis l'exécuterait. On en
+  tirerait un vrai `--dry-run`, un total d'octets exact pour la progression
+  et des tests sans écriture. La modification d'album prépare déjà ses
+  fichiers dans un dossier temporaire.
 - **Rembourrage sur Flam** : une histoire Lunii mise sur une Flam a ses
   `ri` / `si` / `li` complétés à un multiple de 16 octets (AES) ; l'export en
   clair depuis la Flam garde ce rembourrage (test

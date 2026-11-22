@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use super::{App, decode_image, format_duration, sink};
 use crate::i18n::{tr, trf};
+use crate::tickets::{Ticket, Topic};
 use crate::worker::{self, Task};
 use crate::{DialogKind, EpisodeRow, FollowedRow, PodcastResult};
 
@@ -52,12 +53,10 @@ pub(super) struct Podcasts {
 /// "Add a podcast" dialog: a search (several results) or an address (one).
 #[derive(Default)]
 struct AddDialog {
-    /// number of the last request: the answers of the previous ones are ignored
-    token: u32,
-    /// search results (empty for an address)
+    /// search results (empty for an address); their covers keep coming once
+    /// one is chosen (`Topic::PodcastSearch`, while a feed is checked with
+    /// `Topic::PodcastCheck`)
     results: Vec<SearchResult>,
-    /// request of these results (their covers keep coming once one is chosen)
-    search_token: u32,
     /// rows displayed
     rows: Rc<VecModel<PodcastResult>>,
     /// feed checked, followed by "Follow"
@@ -125,12 +124,14 @@ impl App {
     /// device, that can be removed.
     fn album_episodes(&self, podcast: &Podcast) -> (HashSet<String>, HashSet<String>) {
         let uuid = podcast.album_uuid();
-        let info = (|| {
-            let dev = self.state.borrow().devices.opened.clone()?;
-            let dev = Self::lock_device(&dev).ok()?;
-            let story = dev.stories().get(&uuid.to_string())?.clone();
-            dev.album_info(&story)
-        })();
+        let info = self
+            .state
+            .borrow()
+            .list
+            .stories
+            .iter()
+            .find(|s| s.uuid == uuid)
+            .and_then(|s| s.album_info.clone());
         let Some(info) = info else {
             return (podcast::imported_episodes(&uuid), HashSet::new());
         };
@@ -153,18 +154,14 @@ impl App {
     /// The podcasts of the albums on the device, followed if they are not
     /// known yet: imported from another computer.
     pub(super) fn follow_device_podcasts(&self) {
-        let found: Vec<(lunii_core::album::meta::PodcastSource, String)> = (|| {
-            let dev = self.state.borrow().devices.opened.clone()?;
-            let dev = Self::lock_device(&dev).ok()?;
-            Some(
-                dev.stories()
-                    .0
-                    .iter()
-                    .filter_map(|s| Some((dev.album_info(s)?.podcast?, s.name())))
-                    .collect(),
-            )
-        })()
-        .unwrap_or_default();
+        let found: Vec<(lunii_core::album::meta::PodcastSource, String)> = self
+            .state
+            .borrow()
+            .list
+            .stories
+            .iter()
+            .filter_map(|s| Some((s.album_info.as_ref()?.podcast.clone()?, s.name.clone())))
+            .collect();
         let mut added = false;
         for (source, title) in found {
             match podcast::follow_album(&source, &title) {
@@ -337,8 +334,9 @@ impl App {
         let ui = self.ui();
         let rows = {
             let mut st = self.state.borrow_mut();
+            st.tickets.issue(Topic::PodcastSearch);
+            st.tickets.issue(Topic::PodcastCheck);
             let add = &mut st.podcasts.add;
-            add.token += 1;
             add.results.clear();
             add.podcast = None;
             add.rows.set_vec(Vec::new());
@@ -360,13 +358,17 @@ impl App {
         ui.set_podcast_add_error(error);
     }
 
-    /// A new request: the answers of the previous one will be ignored.
-    fn podcast_add_request(&self) -> u32 {
+    /// A new request of `topic`: the answers of the previous ones will be
+    /// ignored, and so will be those of a feed being checked.
+    fn podcast_add_request(&self, topic: Topic) -> Ticket {
         let mut st = self.state.borrow_mut();
-        let add = &mut st.podcasts.add;
-        add.token += 1;
-        add.podcast = None;
-        add.token
+        st.podcasts.add.podcast = None;
+        let check = st.tickets.issue(Topic::PodcastCheck);
+        if topic == Topic::PodcastCheck {
+            check
+        } else {
+            st.tickets.issue(topic)
+        }
     }
 
     /// Enter / 🔍: an address is loaded, words are searched.
@@ -376,7 +378,8 @@ impl App {
         if query.is_empty() {
             return;
         }
-        let token = self.podcast_add_request();
+        // the results shown are replaced (their covers no longer wanted)
+        let search = self.podcast_add_request(Topic::PodcastSearch);
         {
             let mut st = self.state.borrow_mut();
             st.podcasts.add.results.clear();
@@ -387,11 +390,12 @@ impl App {
         ui.set_podcast_add_working(true);
         if podcast::is_address(&query) {
             self.podcast_add_message(&tr("Checking the address..."), false);
-            worker::check_feed(token, query, true, sink());
+            let check = self.state.borrow().tickets.current(Topic::PodcastCheck);
+            worker::check_feed(check, query, true, sink());
         } else {
             self.podcast_add_message(&tr("Searching..."), false);
             let kids_only = ui.get_podcast_add_kids_only();
-            worker::search_podcasts(token, query, store_country(), kids_only, sink());
+            worker::search_podcasts(search, query, store_country(), kids_only, sink());
         }
     }
 
@@ -408,8 +412,12 @@ impl App {
         }
     }
 
-    pub(super) fn podcast_add_found(&self, token: u32, results: Result<Vec<SearchResult>, String>) {
-        if token != self.state.borrow().podcasts.add.token {
+    pub(super) fn podcast_add_found(
+        &self,
+        ticket: Ticket,
+        results: Result<Vec<SearchResult>, String>,
+    ) {
+        if !self.is_current(ticket) {
             return;
         }
         self.ui().set_podcast_add_working(false);
@@ -447,7 +455,6 @@ impl App {
         let mut st = self.state.borrow_mut();
         st.podcasts.add.rows.set_vec(rows);
         st.podcasts.add.results = results;
-        st.podcasts.add.search_token = token;
     }
 
     /// A search result clicked: its feed is checked.
@@ -469,17 +476,17 @@ impl App {
         }) else {
             return;
         };
-        let token = self.podcast_add_request();
+        let check = self.podcast_add_request(Topic::PodcastCheck);
         let ui = self.ui();
         ui.set_podcast_add_selected(index);
         ui.set_podcast_add_can_follow(false);
         ui.set_podcast_add_working(true);
         self.podcast_add_message(&tr("Loading..."), false);
-        worker::check_feed(token, address, page, sink());
+        worker::check_feed(check, address, page, sink());
     }
 
-    pub(super) fn podcast_add_checked(&self, token: u32, result: Result<Box<Podcast>, String>) {
-        if token != self.state.borrow().podcasts.add.token {
+    pub(super) fn podcast_add_checked(&self, ticket: Ticket, result: Result<Box<Podcast>, String>) {
+        if !self.is_current(ticket) {
             return;
         }
         let ui = self.ui();
@@ -533,16 +540,16 @@ impl App {
         self.podcast_add_message(&message, error);
     }
 
-    pub(super) fn podcast_add_artwork(&self, token: u32, index: usize, data: &[u8]) {
+    pub(super) fn podcast_add_artwork(&self, ticket: Ticket, index: usize, data: &[u8]) {
         let st = self.state.borrow();
         let add = &st.podcasts.add;
         // the covers of the results shown, or the one of the podcast at an
         // address (its only row; not the one of a result being checked)
-        let wanted = if add.results.is_empty() {
-            token == add.token
-        } else {
-            token == add.search_token
-        };
+        let wanted = st.tickets.is_current(ticket)
+            && match ticket.topic {
+                Topic::PodcastSearch => true,
+                _ => add.results.is_empty(),
+            };
         if !wanted {
             return;
         }

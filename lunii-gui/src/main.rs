@@ -6,10 +6,12 @@
 slint::include_modules!();
 
 mod app;
+mod device_actor;
 mod i18n;
 mod logfile;
 #[cfg(feature = "screenshot")]
 mod screenshot;
+mod tickets;
 mod worker;
 
 fn main() -> anyhow::Result<()> {

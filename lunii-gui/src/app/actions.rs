@@ -1,8 +1,9 @@
 //! Menu entries and shortcuts (`Action`).
 
-use super::{App, RELEASES_URL, dirs_home, has_supported_ext};
+use super::{App, QuickChange, RELEASES_URL, dirs_home, has_supported_ext, sink};
 use crate::i18n::tr;
-use crate::worker::Task;
+use crate::tickets::Ticket;
+use crate::worker::{Event, Task};
 use crate::{Action, DialogKind};
 use lunii_core::Level;
 use lunii_core::constants::*;
@@ -40,8 +41,9 @@ impl App {
             Action::MoveBottom => self.move_selection(2),
             Action::Hide | Action::NightMode => {
                 let ids = self.selected_ids();
-                let ok = self.device_op(|d, ctx| {
-                    if action == Action::Hide {
+                let hide = action == Action::Hide;
+                self.device_op(QuickChange::Flags, move |d, ctx| {
+                    if hide {
                         return d.toggle_hidden(ctx, &ids);
                     }
                     match d.as_lunii_mut() {
@@ -49,12 +51,6 @@ impl App {
                         None => Ok(()),
                     }
                 });
-                if ok {
-                    self.status(&tr("✅ Stories updated..."));
-                } else {
-                    self.status(&tr("🛑 Unable to update story ..."));
-                    self.show_log();
-                }
             }
             Action::Import => {
                 let Some(files) = rfd::FileDialog::new()
@@ -287,28 +283,53 @@ impl App {
         ui.set_dialog(DialogKind::NightMode);
     }
 
+    /// The night mode settings of the dialog, written on the device thread
+    /// (see `night_mode_saved`).
     pub(super) fn save_night_mode(&self) {
         let ui = self.ui();
-        let Some(dev) = self.state.borrow().devices.opened.clone() else {
+        let Some((handle, ticket)) = self.device_handle() else {
             return;
         };
-        let result = {
-            let Ok(mut dev) = Self::lock_device(&dev) else {
-                self.status(&tr(
-                    "⏳ The storyteller is busy, try again once the current task is done",
-                ));
-                return;
-            };
+        if ui.get_busy() {
+            self.status(&tr(
+                "⏳ The storyteller is busy, try again once the current task is done",
+            ));
+            return;
+        }
+        let values = [
+            (LUNII_CFGPOS_NM_ENABLED, ui.get_nm_enabled() as u16),
+            (
+                LUNII_CFGPOS_NM_VOL_LIMIT,
+                if ui.get_nm_limit() { 30 } else { 0 },
+            ),
+            (LUNII_CFGPOS_NM_AUTOPLAY, ui.get_nm_autoplay() as u16),
+            (LUNII_CFGPOS_NM_STORYCOUNT, ui.get_nm_max_stories() as u16),
+            (LUNII_CFGPOS_NM_TURNOFF_NM, ui.get_nm_turnoff() as u16),
+        ];
+        let sink = sink();
+        let sent = handle.run(move |dev| {
             let Some(lunii) = dev.as_lunii_mut() else {
                 return;
             };
-            lunii.config[LUNII_CFGPOS_NM_ENABLED] = ui.get_nm_enabled() as u16;
-            lunii.config[LUNII_CFGPOS_NM_VOL_LIMIT] = if ui.get_nm_limit() { 30 } else { 0 };
-            lunii.config[LUNII_CFGPOS_NM_AUTOPLAY] = ui.get_nm_autoplay() as u16;
-            lunii.config[LUNII_CFGPOS_NM_STORYCOUNT] = ui.get_nm_max_stories() as u16;
-            lunii.config[LUNII_CFGPOS_NM_TURNOFF_NM] = ui.get_nm_turnoff() as u16;
-            lunii.update_config().map(|_| lunii.config.clone())
-        };
+            for (position, value) in values {
+                lunii.config[position] = value;
+            }
+            let result = lunii
+                .update_config()
+                .map(|_| lunii.config.clone())
+                .map_err(|e| format!("{e:#}"));
+            sink(Event::NightModeSaved(ticket, result));
+        });
+        if !sent {
+            self.status(&tr("🛑 The storyteller is no longer available"));
+        }
+    }
+
+    pub(super) fn night_mode_saved(&self, ticket: Ticket, result: Result<Vec<u16>, String>) {
+        if !self.is_current(ticket) {
+            return;
+        }
+        let ui = self.ui();
         match result {
             Ok(config) => {
                 ui.set_nm_active(config[LUNII_CFGPOS_NM_ENABLED] == 1);
@@ -317,7 +338,7 @@ impl App {
                 }
             }
             Err(e) => {
-                self.log(Level::Error, &format!("{e:#}"));
+                self.log(Level::Error, &e);
                 self.show_log();
             }
         }
