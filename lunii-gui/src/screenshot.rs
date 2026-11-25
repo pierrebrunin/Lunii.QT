@@ -350,7 +350,11 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
         let xml = std::fs::read_to_string(feed)?;
         let url = "https://example.org/feed.xml";
         let podcast = lunii_core::podcast::parse_feed(url, &xml)?;
-        lunii_core::podcast::follow(&podcast)?;
+        // the followed podcasts are kept on the (first) device
+        let root = std::env::var_os("LUNII_DEVICES")
+            .and_then(|list| std::env::split_paths(&list).next())
+            .ok_or_else(|| anyhow::anyhow!("LUNII_SHOT_FEED needs LUNII_DEVICES"))?;
+        lunii_core::podcast::follow(&root, &podcast)?;
         app.handle_event(crate::worker::Event::Feed(
             url.into(),
             Ok(Box::new(podcast)),
@@ -359,7 +363,7 @@ pub fn run(out: PathBuf) -> anyhow::Result<()> {
         ui.invoke_view_changed();
         pump(&queue, 200);
         render(0, &shot("14-podcasts"));
-        let index = lunii_core::podcast::saved_podcasts()
+        let index = lunii_core::podcast::saved_podcasts(&root)
             .iter()
             .position(|p| p.feed_url == url)
             .unwrap_or(0);

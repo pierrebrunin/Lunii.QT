@@ -532,6 +532,7 @@ export component MainWindow inherits Window {
                 filter-edited => { root.podcast-filter-edited(); }
                 can-import: root.story-actions && root.can-import;
                 interactive: !root.busy;
+                device: root.device-ready;
                 add => { root.podcast-add(); }
                 select(index) => { root.podcast-select(index); }
                 refresh => { root.podcast-refresh(); }

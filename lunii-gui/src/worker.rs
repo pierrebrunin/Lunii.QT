@@ -667,7 +667,14 @@ impl Runner<'_> {
                 self.refresh();
                 result?;
                 if !as_stories {
-                    podcast::record_imported(podcast, std::slice::from_ref(&ep.guid), !in_album)?;
+                    self.on_device(|d| {
+                        podcast::record_imported(
+                            d.mount_point(),
+                            podcast,
+                            std::slice::from_ref(&ep.guid),
+                            !in_album,
+                        )
+                    })?;
                     in_album = true;
                     // and on the device: seen from any computer
                     if let Some(Err(e)) = self.with_device(|d| {
@@ -1009,8 +1016,9 @@ pub fn search_podcasts(ticket: Ticket, term: String, country: String, kids_only:
 }
 
 /// Loads a feed to follow (`address`: typed by the user, may be a page or an
-/// Apple Podcasts link; its cover is then downloaded as result 0).
-pub fn check_feed(ticket: Ticket, url: String, address: bool, sink: Sink) {
+/// Apple Podcasts link; its cover is then downloaded as result 0). `root`:
+/// the device whose followed podcasts it may already be.
+pub fn check_feed(ticket: Ticket, url: String, address: bool, root: Option<PathBuf>, sink: Sink) {
     std::thread::spawn(move || {
         let mut result = if address {
             podcast::fetch(&url)
@@ -1018,8 +1026,8 @@ pub fn check_feed(ticket: Ticket, url: String, address: bool, sink: Sink) {
             podcast::parse_feed_url(&url)
         };
         // already followed under another address: that one
-        if let Ok(p) = result.as_mut() {
-            podcast::match_followed(p);
+        if let (Ok(p), Some(root)) = (result.as_mut(), root.as_deref()) {
+            podcast::match_followed(root, p);
         }
         let image = result
             .as_ref()

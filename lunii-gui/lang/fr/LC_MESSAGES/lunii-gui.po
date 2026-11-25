@@ -1052,6 +1052,9 @@ msgstr "Podcasts"
 msgid "Click + to add a podcast: search it by its name, or paste its address."
 msgstr "Cliquez sur + pour ajouter un podcast : cherchez-le par son nom, ou collez son adresse."
 
+msgid "Connect a storyteller: the followed podcasts are kept on it."
+msgstr "Branchez une conteuse : les podcasts suivis sont enregistrés dessus."
+
 msgid "Choose a podcast on the left, or add one with +."
 msgstr "Choisissez un podcast à gauche, ou ajoutez-en un avec +."
 

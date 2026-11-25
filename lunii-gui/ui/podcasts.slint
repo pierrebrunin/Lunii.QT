@@ -56,6 +56,8 @@ export component PodcastsView inherits HorizontalLayout {
     in property <bool> can-import;
     // no task running
     in property <bool> interactive;
+    // a device is opened: the followed podcasts are kept on it
+    in property <bool> device;
     // "+": the dialog adding a podcast
     callback add();
     callback select(index: int);
@@ -105,6 +107,7 @@ export component PodcastsView inherits HorizontalLayout {
             Button {
                 text: "+";
                 width: 36px;
+                enabled: root.device;
                 clicked => { root.add(); }
             }
         }
@@ -115,7 +118,8 @@ export component PodcastsView inherits HorizontalLayout {
             if root.followed.length == 0: Text {
                 x: 10px;
                 width: parent.width - 20px;
-                text: @tr("Click + to add a podcast: search it by its name, or paste its address.");
+                text: root.device ? @tr("Click + to add a podcast: search it by its name, or paste its address.")
+                    : @tr("Connect a storyteller: the followed podcasts are kept on it.");
                 wrap: word-wrap;
                 color: Theme.hidden-text;
                 vertical-alignment: center;

@@ -2,6 +2,7 @@
 //! background), the episodes of the selected one and their import.
 
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 use std::rc::Rc;
 
@@ -15,6 +16,9 @@ use crate::i18n::{tr, trf};
 use crate::tickets::{Ticket, Topic};
 use crate::worker::{self, Task};
 use crate::{DialogKind, EpisodeRow, FollowedRow, PodcastResult};
+
+/// No device opened: no followed podcasts.
+const NO_DEVICE: &str = "Connect a storyteller: the followed podcasts are kept on it.";
 
 /// Setting: the search shows all podcasts, not only children's ones.
 const SEARCH_ALL_SETTING: &str = "podcast_search_all";
@@ -67,7 +71,10 @@ impl App {
     /// The Podcasts view is shown: followed podcasts reloaded, their feeds
     /// loaded once.
     pub(super) fn podcasts_show(&self) {
-        let followed = podcast::saved_podcasts();
+        let followed = self
+            .podcast_root()
+            .map(|root| podcast::saved_podcasts(&root))
+            .unwrap_or_default();
         let to_load: Vec<String> = {
             let mut st = self.state.borrow_mut();
             let p = &mut st.podcasts;
@@ -103,6 +110,12 @@ impl App {
         self.podcast_add_open();
     }
 
+    /// Root of the opened device, where the followed podcasts are kept.
+    fn podcast_root(&self) -> Option<PathBuf> {
+        let st = self.state.borrow();
+        st.devices.info.as_ref().map(|d| d.mount.clone())
+    }
+
     /// The followed podcast selected in the list.
     fn podcast_current(&self) -> Option<SavedPodcast> {
         let index = usize::try_from(self.ui().get_podcast_current()).ok()?;
@@ -119,8 +132,8 @@ impl App {
     }
 
     /// Episodes in the album of `podcast` on the device: as its `album.json`
-    /// records them, or as this computer remembers them (albums imported
-    /// before, or device busy); and those whose track is known on the
+    /// records them, or as the `podcasts.json` of the device remembers them
+    /// (albums imported before); and those whose track is known on the
     /// device, that can be removed.
     fn album_episodes(&self, podcast: &Podcast) -> (HashSet<String>, HashSet<String>) {
         let uuid = podcast.album_uuid();
@@ -132,8 +145,13 @@ impl App {
             .iter()
             .find(|s| s.uuid == uuid)
             .and_then(|s| s.album_info.clone());
+        let recorded = || {
+            self.podcast_root()
+                .map(|root| podcast::imported_episodes(&root, &uuid))
+                .unwrap_or_default()
+        };
         let Some(info) = info else {
-            return (podcast::imported_episodes(&uuid), HashSet::new());
+            return (recorded(), HashSet::new());
         };
         if let Some(episodes) = podcast::album_episodes(&info) {
             return (episodes.clone(), episodes);
@@ -146,14 +164,17 @@ impl App {
             .filter(|e| info.tracks.contains(&e.title))
             .map(|e| e.guid.clone())
             .collect();
-        let mut imported = podcast::imported_episodes(&uuid);
+        let mut imported = recorded();
         imported.extend(by_title.iter().cloned());
         (imported, by_title)
     }
 
-    /// The podcasts of the albums on the device, followed if they are not
-    /// known yet: imported from another computer.
+    /// The device just opened: the podcasts of its albums followed if they
+    /// are not known yet, and the Podcasts view brought up to date.
     pub(super) fn follow_device_podcasts(&self) {
+        let Some(root) = self.podcast_root() else {
+            return;
+        };
         let found: Vec<(lunii_core::album::meta::PodcastSource, String)> = self
             .state
             .borrow()
@@ -162,11 +183,9 @@ impl App {
             .iter()
             .filter_map(|s| Some((s.album_info.as_ref()?.podcast.clone()?, s.name.clone())))
             .collect();
-        let mut added = false;
         for (source, title) in found {
-            match podcast::follow_album(&source, &title) {
+            match podcast::follow_album(&root, &source, &title) {
                 Ok(true) => {
-                    added = true;
                     self.log(
                         lunii_core::Level::Info,
                         &trf("Podcast found on the device, followed: {}", &[&title]),
@@ -176,9 +195,7 @@ impl App {
                 Err(e) => self.log(lunii_core::Level::Warn, &format!("{e:#}")),
             }
         }
-        if added {
-            self.podcasts_refresh_device();
-        }
+        self.podcasts_refresh_device();
     }
 
     /// Episodes of `podcast` on the device as stories of their own.
@@ -332,6 +349,10 @@ impl App {
     /// "+": the dialog adding a podcast, empty.
     pub(super) fn podcast_add_open(&self) {
         let ui = self.ui();
+        if self.podcast_root().is_none() {
+            self.status(&format!("🛑 {}", tr(NO_DEVICE)));
+            return;
+        }
         let rows = {
             let mut st = self.state.borrow_mut();
             st.tickets.issue(Topic::PodcastSearch);
@@ -391,7 +412,7 @@ impl App {
         if podcast::is_address(&query) {
             self.podcast_add_message(&tr("Checking the address..."), false);
             let check = self.state.borrow().tickets.current(Topic::PodcastCheck);
-            worker::check_feed(check, query, true, sink());
+            worker::check_feed(check, query, true, self.podcast_root(), sink());
         } else {
             self.podcast_add_message(&tr("Searching..."), false);
             let kids_only = ui.get_podcast_add_kids_only();
@@ -482,7 +503,7 @@ impl App {
         ui.set_podcast_add_can_follow(false);
         ui.set_podcast_add_working(true);
         self.podcast_add_message(&tr("Loading..."), false);
-        worker::check_feed(check, address, page, sink());
+        worker::check_feed(check, address, page, self.podcast_root(), sink());
     }
 
     pub(super) fn podcast_add_checked(&self, ticket: Ticket, result: Result<Box<Podcast>, String>) {
@@ -566,7 +587,11 @@ impl App {
         };
         let ui = self.ui();
         ui.set_dialog(DialogKind::None);
-        if let Err(e) = podcast::follow(&p) {
+        let Some(root) = self.podcast_root() else {
+            self.status(&format!("🛑 {}", tr(NO_DEVICE)));
+            return;
+        };
+        if let Err(e) = podcast::follow(&root, &p) {
             self.status(&format!("🛑 {e:#}"));
             return;
         }
@@ -641,7 +666,11 @@ impl App {
 
     /// `entry` no longer followed: false if it could not be recorded.
     fn podcast_unfollow_done(&self, entry: &SavedPodcast) -> bool {
-        if let Err(e) = podcast::unfollow(&entry.album) {
+        let result = match self.podcast_root() {
+            Some(root) => podcast::unfollow(&root, &entry.album),
+            None => Err(anyhow::anyhow!(tr(NO_DEVICE))),
+        };
+        if let Err(e) = result {
             self.status(&format!("🛑 {e:#}"));
             return false;
         }
@@ -896,7 +925,9 @@ impl App {
             return;
         }
         // followed from now on (imported as stories: not recorded otherwise)
-        let _ = podcast::follow(&podcast);
+        if let Some(root) = self.podcast_root() {
+            let _ = podcast::follow(&root, &podcast);
+        }
         self.rebuild_podcast_rows();
         self.status(&if episodes.is_empty() {
             tr("Removing episodes...")

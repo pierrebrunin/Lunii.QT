@@ -129,7 +129,7 @@ pub fn write_new_album(
 
 /// Episodes in the album of a podcast, as its `album.json` on the device
 /// records them. `None` for an album imported before they were recorded
-/// there: see [`imported_episodes`] (this computer only).
+/// there: see [`imported_episodes`].
 pub fn album_episodes(info: &album::meta::AlbumInfo) -> Option<HashSet<String>> {
     info.podcast.as_ref()?;
     Some(
@@ -161,7 +161,7 @@ pub fn record_on_device(
     let count = info.tracks.len();
     info.episodes.resize(count, String::new());
     if info.podcast.is_none() {
-        let known = imported_episodes(&uuid);
+        let known = imported_episodes(dev.mount_point(), &uuid);
         for (title, guid) in info.tracks.iter().zip(info.episodes.iter_mut()) {
             if guid.is_empty()
                 && let Some(ep) = podcast

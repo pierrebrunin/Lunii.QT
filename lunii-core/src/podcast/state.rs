@@ -1,25 +1,34 @@
-//! Followed podcasts and imported episodes (`~/.lunii/podcasts.json`).
+//! Followed podcasts and imported episodes, on the device: `podcasts.json`
+//! at its root (plain JSON, ignored by the storytellers). The followed
+//! podcasts go with the storyteller, from one computer to another; nothing
+//! is kept on the computer.
+
+use std::sync::{Mutex, MutexGuard};
 
 use super::*;
 
-pub(super) fn state_file() -> PathBuf {
-    cfg_dir().join("podcasts.json")
+/// Name of the file at the root of the device.
+pub const PODCASTS_FILE: &str = "podcasts.json";
+
+pub(super) fn state_file(root: &Path) -> PathBuf {
+    root.join(PODCASTS_FILE)
 }
 
-pub(super) fn load_state() -> BTreeMap<String, Value> {
-    crate::store::read_json(&state_file()).unwrap_or_default()
+pub(super) fn load_state(root: &Path) -> BTreeMap<String, Value> {
+    crate::store::read_json(&state_file(root)).unwrap_or_default()
 }
 
 /// Exclusive access to the state for a read-modify-write cycle: the import
 /// of a podcast (worker) and the Podcasts view change it at the same time.
-fn lock_state() -> Result<crate::store::FileLock> {
-    ensure_cfg_dir()?;
-    Ok(crate::store::lock(&state_file())?)
+/// Within the application only: no lock file written on the device.
+fn lock_state() -> MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// GUIDs of the episodes already imported in the album `uuid`.
-pub fn imported_episodes(uuid: &Uuid) -> HashSet<String> {
-    load_state()
+pub fn imported_episodes(root: &Path, uuid: &Uuid) -> HashSet<String> {
+    load_state(root)
         .get(&uuid.to_string())
         .and_then(|p| p.get("episodes"))
         .and_then(Value::as_array)
@@ -32,7 +41,7 @@ pub fn imported_episodes(uuid: &Uuid) -> HashSet<String> {
         .unwrap_or_default()
 }
 
-/// A podcast imported as an album, from `~/.lunii/podcasts.json`.
+/// A followed podcast, from the `podcasts.json` of the device.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SavedPodcast {
     pub album: Uuid,
@@ -42,8 +51,8 @@ pub struct SavedPodcast {
 
 /// The followed podcasts: added in the Podcasts view, imported as albums or
 /// found on a device, by title.
-pub fn saved_podcasts() -> Vec<SavedPodcast> {
-    let mut list: Vec<SavedPodcast> = load_state()
+pub fn saved_podcasts(root: &Path) -> Vec<SavedPodcast> {
+    let mut list: Vec<SavedPodcast> = load_state(root)
         .into_iter()
         .filter(|(_, p)| !unfollowed(p))
         .filter_map(|(uuid, p)| {
@@ -121,8 +130,8 @@ fn followed_feed(state: &BTreeMap<String, Value>, podcast: &Podcast) -> Option<S
 
 /// Gives `podcast` the address under which it is already followed, if it
 /// is: the same album, the episodes already imported known.
-pub fn match_followed(podcast: &mut Podcast) {
-    if let Some(feed) = followed_feed(&load_state(), podcast)
+pub fn match_followed(root: &Path, podcast: &mut Podcast) {
+    if let Some(feed) = followed_feed(&load_state(root), podcast)
         && feed != podcast.feed_url
     {
         let previous = std::mem::replace(&mut podcast.feed_url, feed);
@@ -156,10 +165,10 @@ fn entry(previous: Option<&Value>, podcast: &Podcast, episodes: Value) -> Value 
 
 /// Adds `podcast` to the followed podcasts (kept if already followed, even
 /// under another address).
-pub fn follow(podcast: &Podcast) -> Result<()> {
-    let _lock = lock_state()?;
+pub fn follow(root: &Path, podcast: &Podcast) -> Result<()> {
+    let _lock = lock_state();
     let mut podcast = podcast.clone();
-    let mut state = load_state();
+    let mut state = load_state(root);
     if let Some(feed) = followed_feed(&state, &podcast) {
         podcast.feed_url = feed;
     }
@@ -171,20 +180,20 @@ pub fn follow(podcast: &Podcast) -> Result<()> {
         .unwrap_or_else(|| json!([]));
     let value = entry(previous, &podcast, episodes);
     state.insert(key, value);
-    save_state(&state)
+    save_state(root, &state)
 }
 
 /// Removes a podcast from the followed podcasts (its album on a device is
 /// kept, but no longer updated). Remembered as such: its album found on a
 /// device does not follow it again.
-pub fn unfollow(album: &Uuid) -> Result<()> {
-    let _lock = lock_state()?;
-    let mut state = load_state();
+pub fn unfollow(root: &Path, album: &Uuid) -> Result<()> {
+    let _lock = lock_state();
+    let mut state = load_state(root);
     if let Some(entry) = state.get_mut(&album.to_string())
         && let Some(map) = entry.as_object_mut()
     {
         map.insert("unfollowed".into(), true.into());
-        save_state(&state)?;
+        save_state(root, &state)?;
     }
     Ok(())
 }
@@ -192,7 +201,11 @@ pub fn unfollow(album: &Uuid) -> Result<()> {
 /// Follows the podcast of an album found on a device, unless it is known
 /// (followed, or no longer followed, under any of its addresses). `true` if
 /// it is followed from now on.
-pub fn follow_album(source: &crate::album::meta::PodcastSource, title: &str) -> Result<bool> {
+pub fn follow_album(
+    root: &Path,
+    source: &crate::album::meta::PodcastSource,
+    title: &str,
+) -> Result<bool> {
     let podcast = Podcast {
         feed_url: source.feed.clone(),
         aliases: source.aliases.clone(),
@@ -202,8 +215,8 @@ pub fn follow_album(source: &crate::album::meta::PodcastSource, title: &str) -> 
         page_url: None,
         episodes: Vec::new(),
     };
-    let _lock = lock_state()?;
-    let mut state = load_state();
+    let _lock = lock_state();
+    let mut state = load_state(root);
     if followed_feed(&state, &podcast).is_some() {
         return Ok(false);
     }
@@ -211,24 +224,32 @@ pub fn follow_album(source: &crate::album::meta::PodcastSource, title: &str) -> 
         podcast.album_uuid().to_string(),
         entry(None, &podcast, json!([])),
     );
-    save_state(&state)?;
+    save_state(root, &state)?;
     Ok(true)
 }
 
-pub(super) fn save_state(state: &BTreeMap<String, Value>) -> Result<()> {
-    ensure_cfg_dir()?;
-    crate::store::write_atomic(&state_file(), &serde_json::to_vec_pretty(state)?)?;
+/// Written where it is on the card, as the other small files of a device
+/// (see [`crate::store::write_in_place`]).
+pub(super) fn save_state(root: &Path, state: &BTreeMap<String, Value>) -> Result<()> {
+    let path = state_file(root);
+    crate::store::write_in_place(&path, &serde_json::to_vec_pretty(state)?)
+        .with_context(|| format!("unable to write {}", path.display()))?;
     Ok(())
 }
 
 /// Records the episodes of the album (`reset`: a new album, previous records dropped).
-pub fn record_imported(podcast: &Podcast, guids: &[String], reset: bool) -> Result<()> {
-    let _lock = lock_state()?;
+pub fn record_imported(
+    root: &Path,
+    podcast: &Podcast,
+    guids: &[String],
+    reset: bool,
+) -> Result<()> {
+    let _lock = lock_state();
     let uuid = podcast.album_uuid();
     let mut known = if reset {
         Vec::new()
     } else {
-        let mut v: Vec<String> = imported_episodes(&uuid).into_iter().collect();
+        let mut v: Vec<String> = imported_episodes(root, &uuid).into_iter().collect();
         v.sort();
         v
     };
@@ -237,10 +258,10 @@ pub fn record_imported(podcast: &Podcast, guids: &[String], reset: bool) -> Resu
             known.push(g.clone());
         }
     }
-    let mut state = load_state();
+    let mut state = load_state(root);
     let value = entry(state.get(&uuid.to_string()), podcast, json!(known));
     state.insert(uuid.to_string(), value);
-    save_state(&state)
+    save_state(root, &state)
 }
 
 #[cfg(test)]

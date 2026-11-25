@@ -3,8 +3,9 @@
 //! A podcast becomes an album story (see [`crate::album`]), its episodes the
 //! tracks, in chronological order. The album UUID is derived from the feed
 //! address: the episodes of a podcast already on the device are appended to its
-//! album. The episodes already imported are remembered in
-//! `~/.lunii/podcasts.json`.
+//! album. The followed podcasts are remembered on the device
+//! (`podcasts.json` at its root), the episodes of an album in its
+//! `album.json`.
 //!
 //! Only standards are used, no site in particular. The address can be:
 //! - the feed itself (RSS 2.0 with the iTunes tags, or Atom);
@@ -38,7 +39,6 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use crate::album::{self, ALBUM_NAMESPACE, Track};
-use crate::constants::{cfg_dir, ensure_cfg_dir};
 use crate::convert::audio::{self, AudioOptions};
 use crate::http;
 use crate::report::{Context, check_abort};

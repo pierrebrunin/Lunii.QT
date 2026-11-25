@@ -300,7 +300,7 @@ directement la fenêtre d'ajout) :
   sont sur l'appareil (album ou histoires), et son nombre d'épisodes. Les
   flux publient aussi des annonces ou d'autres émissions : l'application ne
   tente pas de deviner les « nouveaux » épisodes. Ils sont
-  enregistrés dans `~/.lunii/podcasts.json`, comme les épisodes importés ;
+  enregistrés sur l'appareil, dans `podcasts.json` à sa racine ;
 - **à droite, les épisodes** du podcast sélectionné, à cocher par leur case (Tous /
   Aucun, sur les épisodes affichés), un filtre sur le titre, le mode d'import, puis **Importer (n)**. ↻ recharge le flux, **Ne plus
   suivre** retire le podcast de la liste (voir plus bas pour ce qui est sur
@@ -333,8 +333,11 @@ directement la fenêtre d'ajout) :
   l'ordinateur qui les a importés, et suivent les modifications de l'album
   (piste retirée : l'épisode redevient importable). Chaque appareil a ainsi
   son propre état.
-- **Sur l'ordinateur**, `~/.lunii/podcasts.json` retient les podcasts suivis.
-  Un podcast dont l'album est sur l'appareil branché est suivi
+- **Les podcasts suivis** sont retenus sur l'appareil, dans `podcasts.json` à
+  sa racine (JSON en clair, ignoré par les conteuses, réécrit à sa place
+  comme les index) : ils suivent la conteuse d'un ordinateur à l'autre, rien
+  n'est gardé sur l'ordinateur. Sans appareil branché, la liste est vide et
+  « + » désactivé. Un podcast dont l'album est sur l'appareil branché est suivi
   automatiquement s'il est inconnu (album importé depuis un autre ordinateur).
   « Ne plus suivre » est retenu : l'album trouvé sur un appareil ne le fait
   pas suivre de nouveau. Si l'album, ou des épisodes importés comme

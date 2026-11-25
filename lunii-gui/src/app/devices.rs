@@ -414,6 +414,8 @@ impl App {
         ui.set_nm_available(false);
         ui.set_nm_active(false);
         self.rebuild_rows();
+        // its followed podcasts with it
+        self.podcasts_refresh_device();
     }
 
     pub(crate) fn select_device(&self, index: i32) {
